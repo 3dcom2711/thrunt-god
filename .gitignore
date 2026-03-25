@@ -4,6 +4,9 @@ TO-DOS.md
 CLAUDE.md
 /research.claude/
 commands.html
+.env
+.env.*
+!.env.example
 
 # Local test installs
 .claude/
