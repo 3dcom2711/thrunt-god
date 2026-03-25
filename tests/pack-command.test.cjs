@@ -11,6 +11,10 @@ const path = require('path');
 
 const { createTempProject, cleanup, runThruntTools } = require('./helpers.cjs');
 
+function normalizePathSeparators(value) {
+  return String(value).replace(/\\/g, '/');
+}
+
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
@@ -66,7 +70,7 @@ describe('pack command surface', () => {
     assert.strictEqual(pack.source, 'local');
     assert.strictEqual(pack.title, 'Local Override');
     assert.strictEqual(output.overrides.length, 1);
-    assert.match(output.paths.local, /\.planning\/packs$/);
+    assert.match(normalizePathSeparators(output.paths.local), /\.planning\/packs$/);
   });
 
   test('pack show resolves built-in and composed packs and returns found false for unknown ids', () => {
@@ -76,7 +80,10 @@ describe('pack command surface', () => {
 
     assert.strictEqual(packOutput.found, true);
     assert.strictEqual(packOutput.pack.id, 'starter.identity-session-anomaly');
-    assert.match(packOutput.pack.path, /thrunt-god\/packs\/examples\/identity-session-anomaly\.json$/);
+    assert.match(
+      normalizePathSeparators(packOutput.pack.path),
+      /thrunt-god\/packs\/examples\/identity-session-anomaly\.json$/
+    );
 
     const composed = runThruntTools(['pack', 'show', 'domain.identity-abuse'], tmpDir);
     assert.ok(composed.success, composed.error);
@@ -214,7 +221,10 @@ describe('pack command surface', () => {
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output.created, true);
-    assert.match(output.path, /\.planning\/packs\/custom\/okta-session-abuse\.json$/);
+    assert.match(
+      normalizePathSeparators(output.path),
+      /\.planning\/packs\/custom\/okta-session-abuse\.json$/
+    );
     assert.strictEqual(output.pack.id, 'custom.okta-session-abuse');
     assert.strictEqual(output.pack.examples.parameters.tenant, 'example-tenant');
     assert.ok(fs.existsSync(path.join(tmpDir, output.path)));
