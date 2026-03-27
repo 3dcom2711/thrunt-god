@@ -761,8 +761,14 @@ async function runCommand(command, args, cwd, raw) {
       } else if (subcommand === 'list') {
         const options = parseNamedArgs(args, ['phase', 'status', 'format'], []);
         detection.cmdDetectionList(cwd, options, raw);
+      } else if (subcommand === 'generate') {
+        const options = parseNamedArgs(args, ['phase', 'candidate', 'format'], []);
+        detection.cmdDetectionGenerate(cwd, options, raw);
+      } else if (subcommand === 'backtest') {
+        const options = parseNamedArgs(args, ['phase', 'candidate'], []);
+        detection.cmdDetectionBacktest(cwd, options, raw);
       } else {
-        error('Unknown detection subcommand. Available: map, list');
+        error('Unknown detection subcommand. Available: map, list, generate, backtest');
       }
       break;
     }

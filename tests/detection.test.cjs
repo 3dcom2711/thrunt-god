@@ -1209,3 +1209,166 @@ describe('FORMAT_EXTENSIONS and makeBacktestId', () => {
     assert.match(id, /^BT-\d{14}-[A-F0-9]{8}$/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// CLI Integration tests: detection generate
+// ---------------------------------------------------------------------------
+
+describe('CLI: detection generate', () => {
+  let tmpDir;
+  let candidateId;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    const detection = require('../thrunt-god/bin/lib/detection.cjs');
+    const detectionsDir = path.join(tmpDir, '.planning', 'DETECTIONS');
+    fs.mkdirSync(detectionsDir, { recursive: true });
+
+    const candidate = detection.createDetectionCandidate({
+      source_finding_id: 'F-CLI-GEN',
+      source_phase: 'test-phase',
+      technique_ids: ['T1078'],
+      detection_logic: {
+        title: 'CLI generate test',
+        description: 'Test detection for CLI',
+        logsource: { category: 'authentication', product: 'azure' },
+        detection: { selection: { EventID: 4624 }, condition: 'selection' },
+        false_positives: ['Unknown'],
+      },
+      confidence: 'high',
+      evidence_links: [],
+      metadata: { author: 'test', status: 'draft', notes: '' },
+    });
+    candidateId = candidate.candidate_id;
+
+    fs.writeFileSync(
+      path.join(detectionsDir, `${candidate.candidate_id}.json`),
+      JSON.stringify(candidate, null, 2)
+    );
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('detection generate --phase test exits 0 and creates rule files', () => {
+    const result = runThruntTools(['detection', 'generate', '--phase', 'test'], tmpDir);
+    assert.ok(result.success, `Expected success but got error: ${result.error}`);
+
+    const rulesDir = path.join(tmpDir, '.planning', 'DETECTIONS', 'rules');
+    assert.ok(fs.existsSync(rulesDir), 'rules/ directory should exist');
+    const files = fs.readdirSync(rulesDir);
+    assert.ok(files.length >= 1, 'should have at least one rule file');
+  });
+
+  it('detection generate --candidate ID --raw returns valid JSON report', () => {
+    const result = runThruntTools(['detection', 'generate', '--candidate', candidateId, '--raw'], tmpDir);
+    assert.ok(result.success, `Expected success but got error: ${result.error}`);
+
+    const report = JSON.parse(result.output);
+    assert.equal(report.generated, 1);
+    assert.ok(report.rules.length === 1);
+    assert.equal(report.rules[0].candidate_id, candidateId);
+  });
+
+  it('detection generate --phase nonexistent exits 0 with empty report', () => {
+    const result = runThruntTools(['detection', 'generate', '--phase', 'nonexistent', '--raw'], tmpDir);
+    assert.ok(result.success, `Expected success but got error: ${result.error}`);
+
+    const report = JSON.parse(result.output);
+    assert.equal(report.generated, 0);
+    assert.equal(report.total_candidates, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI Integration tests: detection backtest
+// ---------------------------------------------------------------------------
+
+describe('CLI: detection backtest', () => {
+  let tmpDir;
+  let candidateId;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    const detection = require('../thrunt-god/bin/lib/detection.cjs');
+    const detectionsDir = path.join(tmpDir, '.planning', 'DETECTIONS');
+    fs.mkdirSync(detectionsDir, { recursive: true });
+
+    const candidate = detection.createDetectionCandidate({
+      source_finding_id: 'F-CLI-BT',
+      source_phase: 'test-phase',
+      technique_ids: ['T1078'],
+      detection_logic: {
+        title: 'CLI backtest test',
+        description: 'Test detection for backtest CLI',
+        logsource: { category: 'authentication', product: 'azure' },
+        detection: { selection: { EventID: 4624 }, condition: 'selection' },
+        false_positives: ['Unknown'],
+      },
+      confidence: 'high',
+      evidence_links: [],
+      metadata: { author: 'test', status: 'draft', notes: '' },
+    });
+    candidateId = candidate.candidate_id;
+
+    fs.writeFileSync(
+      path.join(detectionsDir, `${candidate.candidate_id}.json`),
+      JSON.stringify(candidate, null, 2)
+    );
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('detection backtest --phase test exits 0 and creates backtest files', () => {
+    const result = runThruntTools(['detection', 'backtest', '--phase', 'test'], tmpDir);
+    assert.ok(result.success, `Expected success but got error: ${result.error}`);
+
+    const backtestsDir = path.join(tmpDir, '.planning', 'DETECTIONS', 'backtests');
+    assert.ok(fs.existsSync(backtestsDir), 'backtests/ directory should exist');
+    const files = fs.readdirSync(backtestsDir).filter(f => f.endsWith('.json'));
+    assert.ok(files.length >= 1, 'should have at least one backtest file');
+  });
+
+  it('detection backtest --candidate ID --raw returns JSON with validation and noise_score', () => {
+    const result = runThruntTools(['detection', 'backtest', '--candidate', candidateId, '--raw'], tmpDir);
+    assert.ok(result.success, `Expected success but got error: ${result.error}`);
+
+    const summary = JSON.parse(result.output);
+    assert.equal(summary.backtested, 1);
+    assert.ok(summary.results.length === 1);
+    assert.ok(summary.results[0].validation);
+    assert.ok(summary.results[0].noise_score);
+    assert.ok(summary.results[0].noise_score.noise_risk);
+  });
+
+  it('updates candidate JSON with new promotion_readiness after backtest', () => {
+    const candidateFile = path.join(tmpDir, '.planning', 'DETECTIONS', `${candidateId}.json`);
+    const before = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
+    const originalReadiness = before.promotion_readiness;
+
+    runThruntTools(['detection', 'backtest', '--candidate', candidateId], tmpDir);
+
+    const after = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
+    // After backtest, promotion_readiness should be updated (different from original 0)
+    assert.ok(after.promotion_readiness >= 0 && after.promotion_readiness <= 1);
+    assert.notEqual(after.promotion_readiness, originalReadiness, 'readiness should change after backtest');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI Integration test: updated error message
+// ---------------------------------------------------------------------------
+
+describe('CLI: detection unknown subcommand (updated)', () => {
+  it('error message includes all four subcommands', () => {
+    const tmpDir = createTempProject();
+    const result = runThruntTools(['detection', 'unknown'], tmpDir);
+    assert.ok(!result.success);
+    assert.ok(result.error.includes('generate'), 'error should mention generate');
+    assert.ok(result.error.includes('backtest'), 'error should mention backtest');
+    cleanup(tmpDir);
+  });
+});

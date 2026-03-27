@@ -1060,6 +1060,126 @@ function backtestDetection(cwd, candidate) {
 }
 
 // ---------------------------------------------------------------------------
+// CLI Entry Points: Generation and Backtesting
+// ---------------------------------------------------------------------------
+
+/**
+ * CLI: detection generate -- generate detection rule files from candidates.
+ *
+ * Follows output(result, raw, humanText) convention:
+ * - --raw => output(report, raw) => JSON
+ * - no --raw => human-readable Markdown summary
+ */
+function cmdDetectionGenerate(cwd, options, raw) {
+  const report = generateDetectionRules(cwd, options || {});
+
+  if (raw) {
+    output(report, raw);
+    return;
+  }
+
+  const lines = [
+    '# Detection Generation Report',
+    '',
+    `**Total candidates:** ${report.total_candidates}`,
+    `**Generated:** ${report.generated}`,
+    `**Skipped:** ${report.skipped}`,
+    `**Errors:** ${report.errors}`,
+    '',
+  ];
+
+  if (report.rules.length > 0) {
+    lines.push('| Candidate ID | Format | File | Status |');
+    lines.push('|---|---|---|---|');
+    for (const rule of report.rules) {
+      lines.push(`| ${rule.candidate_id} | ${rule.format} | ${rule.file} | ${rule.status} |`);
+    }
+    lines.push('');
+  }
+
+  if (report.skipped_candidates.length > 0) {
+    lines.push('**Skipped candidates:**');
+    for (const s of report.skipped_candidates) {
+      lines.push(`- ${s.candidate_id}: ${s.reason}`);
+    }
+    lines.push('');
+  }
+
+  output(report, true, lines.join('\n'));
+}
+
+/**
+ * CLI: detection backtest -- run backtests on detection candidates.
+ *
+ * Follows output(result, raw, humanText) convention:
+ * - --raw => output(summary, raw) => JSON
+ * - no --raw => human-readable Markdown with pass/fail and noise breakdown
+ */
+function cmdDetectionBacktest(cwd, options, raw) {
+  let candidates = listDetectionCandidates(cwd, options || {});
+
+  if (options && options.candidate) {
+    candidates = candidates.filter(c => c.candidate_id === options.candidate);
+  }
+
+  const results = [];
+  const noiseBreakdown = { low: 0, medium: 0, high: 0 };
+  let passed = 0;
+  let failed = 0;
+
+  for (const candidate of candidates) {
+    const result = backtestDetection(cwd, candidate);
+    results.push(result);
+
+    if (result.validation.passed) {
+      passed++;
+    } else {
+      failed++;
+    }
+    const risk = result.noise_score.noise_risk;
+    noiseBreakdown[risk] = (noiseBreakdown[risk] || 0) + 1;
+  }
+
+  const summary = {
+    total_candidates: candidates.length,
+    backtested: results.length,
+    results,
+    summary: { passed, failed, noise_breakdown: noiseBreakdown },
+  };
+
+  if (raw) {
+    output(summary, raw);
+    return;
+  }
+
+  const lines = [
+    '# Detection Backtest Results',
+    '',
+    `**Backtested:** ${summary.backtested}`,
+    `**Passed:** ${passed}`,
+    `**Failed:** ${failed}`,
+    '',
+    '**Noise Breakdown:**',
+    `- Low: ${noiseBreakdown.low}`,
+    `- Medium: ${noiseBreakdown.medium}`,
+    `- High: ${noiseBreakdown.high}`,
+    '',
+  ];
+
+  if (results.length > 0) {
+    lines.push('| Candidate ID | Validation | Noise Risk | Delta |');
+    lines.push('|---|---|---|---|');
+    for (const r of results) {
+      const status = r.validation.passed ? 'PASS' : 'FAIL';
+      lines.push(`| ${r.candidate_id} | ${status} | ${r.noise_score.noise_risk} | ${r.promotion_readiness_delta} |`);
+    }
+    lines.push('');
+  }
+
+  output(summary, true, lines.join('\n'));
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -1071,6 +1191,8 @@ module.exports = {
   listDetectionCandidates,
   cmdDetectionMap,
   cmdDetectionList,
+  cmdDetectionGenerate,
+  cmdDetectionBacktest,
   toYaml,
   generateDetectionRules,
   backtestDetection,
