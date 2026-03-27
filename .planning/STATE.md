@@ -2,19 +2,19 @@
 thrunt_state_version: 1.0
 milestone: v1.2
 milestone_name: Evidence Integrity & Provenance
-current_phase: 13
-current_phase_name: receipt manifest canonicalization
-current_plan: 13-01
+current_phase: 14
+current_phase_name: hashing signatures provenance
+current_plan: 14-01 (planned, not started)
 status: validating
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-03-27T15:47:52.096Z"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-03-27T17:08:02.763Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 3
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 6
 ---
 
 # Hunt State
@@ -24,21 +24,21 @@ progress:
 See: .planning/MISSION.md (updated 2026-03-25)
 
 **Core value:** Turn THRUNT into an executable, evidence-grade threat hunting platform.
-**Current focus:** Phase 13 — receipt manifest canonicalization
+**Current focus:** Phase 14 — hashing, signatures & provenance
 
 ## Current Position
 
-Phase: 13 (receipt manifest canonicalization) — PLANNED, READY TO EXECUTE
-Plan: 1 of 1 (13-01-PLAN.md)
-Current Phase: 13
-Current Phase Name: receipt manifest canonicalization
+Phase: 14 (hashing, signatures & provenance) — PLANNED, READY TO EXECUTE
+Plan: 0 of 1 complete
+Current Phase: 14
+Current Phase Name: hashing signatures provenance
 Total Phases: 35
-Current Plan: 13-01
+Current Plan: 14-01 (planned, not started)
 Total Plans in Phase: 1
 Status: Phase complete — ready for validation
 Last activity: 2026-03-27
-Last Activity Description: Phase 13 plan created with 2 tasks — manifest.cjs module + writeRuntimeArtifacts integration
-Progress: [░░░░░░░░░░] 3%
+Last Activity Description: Created 14-01-PLAN.md — manifest hashing, provenance, signature hooks, integrity verification
+Progress: [█░░░░░░░░░] 6%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 3%
 - Trend: Baseline not established
 
 | Phase 13 P01 | 3min | 2 tasks | 7 files |
+| Phase 14 P01 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,9 +74,12 @@ Progress: [░░░░░░░░░░] 3%
 - [Phase 13]: Canonical EvidenceManifest in JSON with deterministic key ordering, SHA-256 content hashes, explicit null for missing fields, bidirectional artifact links, and manifest_version "1.0".
 - [Phase 13]: Manifests co-located in .planning/MANIFESTS/ (flat directory matching QUERIES/ and RECEIPTS/ pattern) since writeRuntimeArtifacts does not know the active phase.
 - [Phase 13]: manifest.cjs is a pure schema module with zero dependencies on evidence.cjs to avoid circular requires.
-- [Phase 13]: Canonical EvidenceManifest in JSON with deterministic key ordering, SHA-256 content hashes, explicit null for missing fields, bidirectional artifact links, and manifest_version 1.0
-- [Phase 13]: manifest.cjs is a pure schema module with zero dependencies on evidence.cjs to avoid circular requires
-- [Phase 13]: Manifests stored in .planning/MANIFESTS/ matching flat directory pattern of QUERIES/ and RECEIPTS/
+- [Phase 14]: Manifest-level hash (SHA-256) computed over canonical-serialized body excluding manifest_hash and signature fields. Mandatory on every manifest.
+- [Phase 14]: Agent-based provenance identity model with signer_type/signer_id/signer_context + execution environment (OS, Node, THRUNT version, runtime agent).
+- [Phase 14]: Signature hooks (beforeSign/afterSign) defined but not implemented — teams plug in their own crypto.
+- [Phase 14]: verifyManifestIntegrity returns structured failures, never throws. On-demand only.
+- [Phase 14]: MANIFEST_VERSION bumped from "1.0" to "1.1" for additive schema change.
+- [Phase 14]: verifyManifestIntegrity in manifest.cjs with documented fs exception; MANIFEST_VERSION 1.0 -> 1.1; provenance before hash; signature null placeholder
 
 ### Pending Todos
 
@@ -87,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T15:47:52.093Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-03-27T17:08:02.761Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
