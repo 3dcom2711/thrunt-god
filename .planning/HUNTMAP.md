@@ -58,7 +58,7 @@ THRUNT can certify connector readiness against live backends, then turn the resu
 - [x] **Phase 13: Receipt Manifest Canonicalization** - Standardize query logs, receipts, and evidence manifests (completed 2026-03-27)
 - [x] **Phase 14: Hashing, Signatures & Provenance** - Add tamper-evident integrity and signer metadata (completed 2026-03-27)
 - [x] **Phase 15: Evidence Export Bundles** - Package findings, receipts, and chain-of-custody data for handoff (completed 2026-03-27)
-- [ ] **Phase 16: Evidence Review & Publish Gates** - Make publication and escalation depend on evidence quality
+- [x] **Phase 16: Evidence Review & Publish Gates** - Make publication and escalation depend on evidence quality (completed 2026-03-27)
 
 ### Phase 12: Connector Certification & Live Readiness
 **Goal**: Add an operator-visible trust layer proving configured connectors can preflight and smoke-test against real backends safely
@@ -133,7 +133,7 @@ Plans:
 **Plans**: 1/1 planned
 
 Plans:
-- [ ] 16-01: Wire evidence quality gates into review, publish, and escalation flows
+- [x] 16-01: Wire evidence quality gates into review, publish, and escalation flows
 
 ## 📋 v1.3 Detection Promotion Pipeline (Planned)
 
