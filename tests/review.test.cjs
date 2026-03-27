@@ -650,3 +650,98 @@ describe('module exports', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Promotion coverage feedback in scoreEvidenceQuality
+// ---------------------------------------------------------------------------
+
+describe('promotion coverage feedback', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  function writePromotionReceipt(tmpDir, promotionId) {
+    const dir = path.join(tmpDir, '.planning', 'DETECTIONS', 'promotions');
+    fs.mkdirSync(dir, { recursive: true });
+    const receipt = {
+      promotion_id: promotionId,
+      candidate_id: `DET-TEST-${promotionId}`,
+      promoted_at: '2026-03-27T15:00:00.000Z',
+      promoted_by: 'test',
+      content_hash: 'sha256:test',
+    };
+    fs.writeFileSync(path.join(dir, `${promotionId}.json`), JSON.stringify(receipt, null, 2), 'utf-8');
+  }
+
+  it('returns bonus 0 when no promotions directory exists', () => {
+    const review = require('../thrunt-god/bin/lib/review.cjs');
+    const result = review.scoreEvidenceQuality(tmpDir, {});
+    assert.ok(result.promotion_coverage);
+    assert.equal(result.promotion_coverage.bonus, 0);
+    assert.equal(result.promotion_coverage.promoted_count, 0);
+    // Score should be unaffected (still 1.0 for vacuously-true project)
+    assert.equal(result.score, 1.0);
+  });
+
+  it('adds +0.05 bonus for 1 promoted detection', () => {
+    const review = require('../thrunt-god/bin/lib/review.cjs');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-AAA');
+    const result = review.scoreEvidenceQuality(tmpDir, {});
+    assert.equal(result.promotion_coverage.promoted_count, 1);
+    assert.equal(result.promotion_coverage.bonus, 0.05);
+    // Vacuously-true 1.0 + 0.05 = 1.05
+    assert.ok(result.score > 1.0, `Expected score > 1.0 but got ${result.score}`);
+  });
+
+  it('adds +0.10 bonus for 2 promoted detections', () => {
+    const review = require('../thrunt-god/bin/lib/review.cjs');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-AAA');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-BBB');
+    const result = review.scoreEvidenceQuality(tmpDir, {});
+    assert.equal(result.promotion_coverage.promoted_count, 2);
+    assert.equal(result.promotion_coverage.bonus, 0.10);
+  });
+
+  it('caps bonus at +0.15 for 3+ promoted detections', () => {
+    const review = require('../thrunt-god/bin/lib/review.cjs');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-AAA');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-BBB');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-CCC');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-DDD');
+    const result = review.scoreEvidenceQuality(tmpDir, {});
+    assert.equal(result.promotion_coverage.promoted_count, 4);
+    assert.equal(result.promotion_coverage.bonus, 0.15);
+    assert.equal(result.promotion_coverage.cap, 0.15);
+  });
+
+  it('includes promotion receipts list in promotion_coverage', () => {
+    const review = require('../thrunt-god/bin/lib/review.cjs');
+    writePromotionReceipt(tmpDir, 'PROM-20260327-XXX');
+    const result = review.scoreEvidenceQuality(tmpDir, {});
+    assert.ok(Array.isArray(result.promotion_coverage.receipts));
+    assert.ok(result.promotion_coverage.receipts.includes('PROM-20260327-XXX'));
+  });
+
+  it('score is floored at 0.0 and rounded to 4 decimal places', () => {
+    const review = require('../thrunt-god/bin/lib/review.cjs');
+    const result = review.scoreEvidenceQuality(tmpDir, {});
+    assert.ok(result.score >= 0);
+    const rounded = Math.round(result.score * 10000) / 10000;
+    assert.equal(result.score, rounded);
+  });
+
+  it('review.cjs does NOT import detection.cjs (no circular dependency)', () => {
+    const reviewSource = fs.readFileSync(
+      path.join(__dirname, '..', 'thrunt-god', 'bin', 'lib', 'review.cjs'),
+      'utf-8'
+    );
+    assert.ok(!reviewSource.includes("require('./detection.cjs')"), 'review.cjs must not import detection.cjs');
+    assert.ok(!reviewSource.includes('require("./detection.cjs")'), 'review.cjs must not import detection.cjs');
+  });
+});

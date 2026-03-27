@@ -162,6 +162,35 @@ function scanAllFindings(cwd, options) {
   return findings;
 }
 
+/**
+ * Read promotion receipts (PROM-*.json) directly from DETECTIONS/promotions/.
+ * Does NOT import detection.cjs to avoid circular dependency.
+ * Returns array of parsed receipt objects.
+ */
+function readPromotionReceipts(cwd) {
+  const promotionsDir = path.join(planningPaths(cwd).detections, 'promotions');
+  if (!fs.existsSync(promotionsDir)) return [];
+
+  const receipts = [];
+  try {
+    const files = fs.readdirSync(promotionsDir).filter(f =>
+      f.startsWith('PROM-') && f.endsWith('.json')
+    );
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(path.join(promotionsDir, file), 'utf-8');
+        receipts.push(JSON.parse(content));
+      } catch {
+        // Skip corrupt receipt files
+      }
+    }
+  } catch {
+    // Promotions directory unreadable
+  }
+
+  return receipts;
+}
+
 // ---------------------------------------------------------------------------
 // Core Functions
 // ---------------------------------------------------------------------------
@@ -320,9 +349,13 @@ function scoreEvidenceQuality(cwd, options) {
   // --- Chain of custody ---
   const chainOfCustody = buildChainOfCustody(cwd, options);
 
+  // --- Promotion coverage bonus ---
+  const promotionReceipts = readPromotionReceipts(cwd);
+  const promotionBonus = Math.min(0.15, promotionReceipts.length * 0.05);
+
   // --- Composite score ---
   const avgDimensions = (receiptScore + integrityScore + provenanceScore) / 3;
-  const score = Math.max(0, avgDimensions - contradictionPenalty);
+  const score = Math.max(0, avgDimensions - contradictionPenalty + promotionBonus);
   // Round to avoid floating-point noise
   const roundedScore = Math.round(score * 10000) / 10000;
 
@@ -348,6 +381,12 @@ function scoreEvidenceQuality(cwd, options) {
         total: provenanceTotal,
         with_signer: withSigner,
       },
+    },
+    promotion_coverage: {
+      promoted_count: promotionReceipts.length,
+      bonus: promotionBonus,
+      cap: 0.15,
+      receipts: promotionReceipts.map(r => r.promotion_id),
     },
     contradiction_penalty: contradictionPenalty,
     contradictions,
