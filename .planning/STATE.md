@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Evidence Integrity & Provenance
 current_phase: 13
 current_phase_name: receipt manifest canonicalization
-current_plan: Not started
-status: planning
-stopped_at: phase 12 connector certification complete; phase 13 ready for planning
-last_updated: "2026-03-25T22:40:00.000Z"
-last_activity: 2026-03-25
+current_plan: 13-01
+status: planned
+stopped_at: phase 13 planning complete; ready to execute 13-01
+last_updated: "2026-03-27T00:00:00.000Z"
+last_activity: 2026-03-27
 progress:
-  total_phases: 5
+  total_phases: 35
   completed_phases: 1
-  total_plans: 5
+  total_plans: 35
   completed_plans: 1
-  percent: 20
+  percent: 3
 ---
 
 # Hunt State
@@ -28,17 +28,17 @@ See: .planning/MISSION.md (updated 2026-03-25)
 
 ## Current Position
 
-Phase: 13 (receipt manifest canonicalization) — READY TO PLAN
-Plan: 0 of 1
+Phase: 13 (receipt manifest canonicalization) — PLANNED, READY TO EXECUTE
+Plan: 1 of 1 (13-01-PLAN.md)
 Current Phase: 13
 Current Phase Name: receipt manifest canonicalization
-Total Phases: 5
-Current Plan: Not started
+Total Phases: 35
+Current Plan: 13-01
 Total Plans in Phase: 1
-Status: Ready to plan Phase 13
-Last activity: 2026-03-25
-Last Activity Description: Phase 12 connector certification shipped; Phase 13 is the next active planning target
-Progress: [██░░░░░░░░] 20%
+Status: Phase 13 planned; ready to execute
+Last activity: 2026-03-27
+Last Activity Description: Phase 13 plan created with 2 tasks — manifest.cjs module + writeRuntimeArtifacts integration
+Progress: [░░░░░░░░░░] 3%
 
 ## Performance Metrics
 
@@ -68,6 +68,9 @@ Progress: [██░░░░░░░░] 20%
 - [Milestone v1.1]: Use the existing multi-milestone huntmap as the source of truth for the next active cycle rather than re-running milestone-definition questioning.
 - [Milestone v1.1]: Archive shipped milestone detail into `.planning/milestones/` and keep the live huntmap focused on the next active milestone.
 - [Phase 12]: Insert connector certification before evidence-manifest work so live backend trust is explicit before provenance features depend on it.
+- [Phase 13]: Canonical EvidenceManifest in JSON with deterministic key ordering, SHA-256 content hashes, explicit null for missing fields, bidirectional artifact links, and manifest_version "1.0".
+- [Phase 13]: Manifests co-located in .planning/MANIFESTS/ (flat directory matching QUERIES/ and RECEIPTS/ pattern) since writeRuntimeArtifacts does not know the active phase.
+- [Phase 13]: manifest.cjs is a pure schema module with zero dependencies on evidence.cjs to avoid circular requires.
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-25 12:00
-Stopped at: phase 12 connector certification complete; phase 13 ready for planning
+Last session: 2026-03-27
+Stopped at: phase 13 planning complete; ready to execute 13-01
 Resume file: None
