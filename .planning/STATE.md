@@ -5,15 +5,15 @@ milestone_name: Detection Promotion Pipeline
 current_phase: 19
 current_phase_name: promotion workflow integrations
 current_plan: 19-01 (planned, not started)
-status: planning
-stopped_at: Completed 19-01-PLAN.md (promotion gates, rejection, status, hooks, config, evidence feedback)
-last_updated: "2026-03-27T21:00:00.000Z"
+status: validating
+stopped_at: Completed 19-01-PLAN.md (promotion workflow & integrations)
+last_updated: "2026-03-27T20:59:55.417Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 67
 ---
 
@@ -35,7 +35,7 @@ Current Phase Name: promotion workflow integrations
 Total Phases: 35
 Current Plan: 19-01 (planned, not started)
 Total Plans in Phase: 1
-Status: Plan created — ready for execution
+Status: Phase complete — ready for validation
 Last activity: 2026-03-27
 Last Activity Description: Phase 19 plan created with three-gate promotion engine, rejection workflow, status CLI, hooks, config registration, and evidence quality feedback
 Progress: [██████░░░░] 67%
@@ -65,6 +65,7 @@ Progress: [██████░░░░] 67%
 | Phase 16 P01 | 6min | 2 tasks | 5 files |
 | Phase 17 P01 | 7min | 2 tasks | 5 files |
 | Phase 18 P01 | 6min | 2 tasks | 3 files |
+| Phase 19 P01 | 6min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,9 @@ Progress: [██████░░░░] 67%
 - [Phase 18]: Stub formats get default medium noise risk with stub: true flag rather than false precision
 - [Phase 18]: Expected outcomes default to null with warning; backtest results update candidate promotion_readiness with penalties
 - [Phase 18]: Atomic writes (tmp + rename) for backtest results to prevent partial JSON on crash
+- [Phase 19]: Three gates evaluated cheapest-first: backtest lookup, readiness threshold, analyst approval
+- [Phase 19]: review.cjs reads PROM-*.json via filesystem to avoid circular dependency with detection.cjs
+- [Phase 19]: Promotion bonus additive to composite score, not a 4th dimension in the average
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T21:00:00.000Z
-Stopped at: Completed 19-01-PLAN.md (promotion gates, rejection, status, hooks, config, evidence feedback)
+Last session: 2026-03-27T20:59:55.414Z
+Stopped at: Completed 19-01-PLAN.md (promotion workflow & integrations)
 Resume file: None
