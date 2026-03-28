@@ -851,6 +851,9 @@ function generateDetectionRules(cwd, options) {
   if (options && options.candidate) {
     candidates = candidates.filter(c => c.candidate_id === options.candidate);
   }
+  if (options && options.format) {
+    candidates = candidates.filter(c => c.target_format === options.format);
+  }
 
   const paths = planningPaths(cwd);
   const rulesDir = path.join(paths.detections, 'rules');
