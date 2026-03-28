@@ -28,6 +28,7 @@ const telemetry = require('./telemetry.cjs');
 // ---------------------------------------------------------------------------
 
 const CANDIDATE_VERSION = '1.0';
+const CANDIDATE_ID_PATTERN = /^DET-[A-Za-z0-9-]+$/;
 
 // ---------------------------------------------------------------------------
 // Internal Helpers
@@ -46,6 +47,20 @@ function makeCandidateId() {
 /** Current UTC timestamp in ISO-8601 format. */
 function nowUtc() {
   return new Date().toISOString();
+}
+
+function resolveCandidateFile(detectionsDir, candidateId) {
+  if (typeof candidateId !== 'string' || !CANDIDATE_ID_PATTERN.test(candidateId)) {
+    error(`Invalid candidate ID: ${candidateId}`);
+  }
+
+  const candidateFile = path.resolve(detectionsDir, `${candidateId}.json`);
+  const detectionsRoot = `${path.resolve(detectionsDir)}${path.sep}`;
+  if (!candidateFile.startsWith(detectionsRoot)) {
+    error(`Invalid candidate ID: ${candidateId}`);
+  }
+
+  return candidateFile;
 }
 
 // ---------------------------------------------------------------------------
@@ -1104,9 +1119,19 @@ function findLatestBacktest(candidateId, cwd) {
     const files = fs.readdirSync(backtestsDir).filter(f => f.endsWith('.json'));
     for (const file of files) {
       try {
-        const bt = JSON.parse(fs.readFileSync(path.join(backtestsDir, file), 'utf-8'));
+        const filePath = path.join(backtestsDir, file);
+        const bt = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
         if (bt.candidate_id === candidateId) {
-          backtests.push(bt);
+          const parsedTimestamp = Date.parse(bt.timestamp || '');
+          let sortTimestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0;
+          if (sortTimestamp === 0) {
+            try {
+              sortTimestamp = fs.statSync(filePath).mtimeMs;
+            } catch {
+              sortTimestamp = 0;
+            }
+          }
+          backtests.push({ ...bt, _sort_timestamp: sortTimestamp });
         }
       } catch {
         // Skip corrupt files
@@ -1117,8 +1142,13 @@ function findLatestBacktest(candidateId, cwd) {
   }
 
   if (backtests.length === 0) return null;
-  backtests.sort((a, b) => (b.backtest_id || '').localeCompare(a.backtest_id || ''));
-  return backtests[0];
+  backtests.sort((a, b) =>
+    (b._sort_timestamp || 0) - (a._sort_timestamp || 0) ||
+    (b.backtest_id || '').localeCompare(a.backtest_id || '')
+  );
+  const latest = { ...backtests[0] };
+  delete latest._sort_timestamp;
+  return latest;
 }
 
 // Gates evaluated cheapest-first: backtest_passed, readiness_threshold, analyst_approval
@@ -1353,7 +1383,7 @@ function cmdDetectionPromote(cwd, options, raw) {
   const detectionsDir = planningPaths(cwd).detections;
 
   if (options && options.candidate) {
-    const candidateFile = path.join(detectionsDir, `${options.candidate}.json`);
+    const candidateFile = resolveCandidateFile(detectionsDir, options.candidate);
     if (!fs.existsSync(candidateFile)) {
       error(`Candidate not found: ${options.candidate}`);
     }
@@ -1437,7 +1467,7 @@ function cmdDetectionReject(cwd, options, raw) {
   }
 
   const detectionsDir = planningPaths(cwd).detections;
-  const candidateFile = path.join(detectionsDir, `${options.candidate}.json`);
+  const candidateFile = resolveCandidateFile(detectionsDir, options.candidate);
   if (!fs.existsSync(candidateFile)) {
     error(`Candidate not found: ${options.candidate}`);
   }

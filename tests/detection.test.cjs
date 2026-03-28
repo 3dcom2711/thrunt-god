@@ -1469,6 +1469,33 @@ describe('checkPromotionGates', () => {
     assert.equal(result.all_passed, false);
     assert.ok(result.gates.some(g => g.gate === 'analyst_approval' && g.passed === false));
   });
+
+  it('uses the newest backtest timestamp instead of backtest_id ordering', () => {
+    const candidate = setupCandidateWithBacktest(tmpDir, { withBacktest: false });
+    const backtestsDir = path.join(tmpDir, '.planning', 'DETECTIONS', 'backtests');
+
+    fs.writeFileSync(path.join(backtestsDir, 'BT-OLD.json'), JSON.stringify({
+      backtest_id: 'BT-20260327150000-ZZZZZZZZ',
+      candidate_id: candidate.candidate_id,
+      timestamp: '2026-03-27T15:00:00.100Z',
+      validation: { passed: true, errors: [], warnings: [] },
+      noise_score: { noise_risk: 'low', score: 0.1 },
+    }, null, 2));
+
+    fs.writeFileSync(path.join(backtestsDir, 'BT-NEW.json'), JSON.stringify({
+      backtest_id: 'BT-20260327150000-AAAAAAAA',
+      candidate_id: candidate.candidate_id,
+      timestamp: '2026-03-27T15:00:00.900Z',
+      validation: { passed: false, errors: ['late failure'], warnings: [] },
+      noise_score: { noise_risk: 'high', score: 0.9 },
+    }, null, 2));
+
+    const result = detection.checkPromotionGates(candidate, tmpDir, { approve: true });
+    const backtestGate = result.gates.find(g => g.gate === 'backtest_passed');
+
+    assert.equal(backtestGate.passed, false);
+    assert.match(backtestGate.detail, /BT-20260327150000-AAAAAAAA/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1895,6 +1922,42 @@ describe('CLI: detection promote', () => {
     assert.equal(parsed.promoted, true);
     assert.ok(parsed.receipt);
   });
+
+  it('rejects traversal in --candidate before reading outside DETECTIONS', () => {
+    const detection = require('../thrunt-god/bin/lib/detection.cjs');
+    const planningDir = path.join(tmpDir, '.planning');
+    const detectionsDir = path.join(planningDir, 'DETECTIONS');
+    const backtestsDir = path.join(detectionsDir, 'backtests');
+    fs.mkdirSync(backtestsDir, { recursive: true });
+
+    const escapedCandidate = detection.createDetectionCandidate({
+      source_finding_id: 'F-CLI-ESCAPE-PROM',
+      technique_ids: ['T1078'],
+      detection_logic: {
+        title: 'Traversal promote test',
+        description: 'Test',
+        logsource: { category: 'authentication' },
+        detection: { selection: { EventID: 4624 }, condition: 'selection' },
+        false_positives: ['Unknown'],
+      },
+      confidence: 'high',
+      evidence_links: [{ type: 'receipt', id: 'RCT-001' }, { type: 'receipt', id: 'RCT-002' }, { type: 'receipt', id: 'RCT-003' }],
+      metadata: { author: 'test', status: 'draft', notes: '' },
+    });
+    escapedCandidate.promotion_readiness = 0.75;
+
+    fs.writeFileSync(path.join(planningDir, 'config.json'), JSON.stringify(escapedCandidate, null, 2));
+    fs.writeFileSync(path.join(backtestsDir, 'BT-CLI-ESCAPE-PROM.json'), JSON.stringify({
+      backtest_id: 'BT-CLI-ESCAPE-PROM',
+      candidate_id: escapedCandidate.candidate_id,
+      timestamp: '2026-03-27T15:00:00.000Z',
+      validation: { passed: true, errors: [], warnings: [] },
+    }, null, 2));
+
+    const result = runThruntTools(['detection', 'promote', '--candidate', '../config', '--approve', '--raw'], tmpDir);
+    assert.equal(result.success, false);
+    assert.match(result.error, /Invalid candidate ID/i);
+  });
 });
 
 describe('CLI: detection reject', () => {
@@ -1929,6 +1992,28 @@ describe('CLI: detection reject', () => {
     assert.equal(parsed.rejected, true);
     assert.ok(parsed.receipt);
     assert.equal(parsed.receipt.reason, 'high false positive rate');
+  });
+
+  it('rejects traversal in --candidate before reading outside DETECTIONS', () => {
+    const detection = require('../thrunt-god/bin/lib/detection.cjs');
+    const planningDir = path.join(tmpDir, '.planning');
+    const detectionsDir = path.join(planningDir, 'DETECTIONS');
+    fs.mkdirSync(detectionsDir, { recursive: true });
+
+    const escapedCandidate = detection.createDetectionCandidate({
+      source_finding_id: 'F-CLI-ESCAPE-REJ',
+      technique_ids: ['T1078'],
+      detection_logic: { title: 'Traversal reject test', description: 'Test', logsource: { category: 'auth' }, detection: { selection: {}, condition: 'selection' }, false_positives: ['Unknown'] },
+      confidence: 'medium',
+      evidence_links: [],
+      metadata: { author: 'test', status: 'draft', notes: '' },
+    });
+
+    fs.writeFileSync(path.join(planningDir, 'config.json'), JSON.stringify(escapedCandidate, null, 2));
+
+    const result = runThruntTools(['detection', 'reject', '--candidate', '../config', '--reason', 'high false positive rate', '--raw'], tmpDir);
+    assert.equal(result.success, false);
+    assert.match(result.error, /Invalid candidate ID/i);
   });
 });
 
