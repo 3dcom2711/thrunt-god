@@ -129,9 +129,11 @@ function scoreEntity(cwd, entityType, entityId) {
   const successRate = executionCount > 0 ? okCount / executionCount : 0;
 
   const falsePositives = feedback.filter(f => f.feedback_type === 'false_positive').length;
-  const noisePenalty = falsePositives * 0.1;
+  const lowYieldCount = feedback.filter(f => f.feedback_type === 'low_yield').length;
+  const highQualityCount = feedback.filter(f => f.feedback_type === 'high_quality').length;
+  const noisePenalty = (falsePositives * 0.1) + (lowYieldCount * 0.05);
 
-  let analystAdjustment = 0;
+  let analystAdjustment = highQualityCount * 0.05;
   for (const f of feedback) {
     if (f.feedback_type === 'correction' && f.score_adjustment) {
       analystAdjustment += f.score_adjustment;
@@ -155,6 +157,8 @@ function scoreEntity(cwd, entityType, entityId) {
     execution_count: executionCount,
     feedback_count: feedback.length,
     false_positive_count: falsePositives,
+    low_yield_count: lowYieldCount,
+    high_quality_count: highQualityCount,
     last_scored: nowUtc(),
   };
 }
@@ -241,7 +245,12 @@ function cmdScoreSummary(cwd, raw) {
     lines.push('No metrics or feedback recorded yet. Run hunts to generate scoring data.');
   }
 
-  output(result, raw, lines.join('\n'));
+  if (raw) {
+    output(result, raw);
+    return;
+  }
+
+  output(result, true, lines.join('\n'));
 }
 
 function cmdScoreEntity(cwd, entityType, entityId, raw) {
@@ -264,7 +273,12 @@ function cmdScoreEntity(cwd, entityType, entityId, raw) {
   lines.push(`  Executions:       ${score.execution_count}`);
   lines.push(`  Feedback Records: ${score.feedback_count}`);
 
-  output(score, raw, lines.join('\n'));
+  if (raw) {
+    output(score, raw);
+    return;
+  }
+
+  output(score, true, lines.join('\n'));
 }
 
 function cmdFeedbackSubmit(cwd, feedbackArgs, raw) {
@@ -286,7 +300,12 @@ function cmdFeedbackSubmit(cwd, feedbackArgs, raw) {
 
   try {
     const record = submitFeedback(cwd, input);
-    output(record, raw, `Feedback recorded: ${record.feedback_id} (${record.feedback_type} for ${record.entity_type}:${record.entity_id})`);
+    if (raw) {
+      output(record, raw);
+      return;
+    }
+
+    output(record, true, `Feedback recorded: ${record.feedback_id} (${record.feedback_type} for ${record.entity_type}:${record.entity_id})`);
   } catch (e) {
     error(e.message);
   }
@@ -317,7 +336,12 @@ function cmdFeedbackList(cwd, filterArgs, raw) {
     }
   }
 
-  output(records, raw, lines.join('\n'));
+  if (raw) {
+    output(records, raw);
+    return;
+  }
+
+  output(records, true, lines.join('\n'));
 }
 
 module.exports = {

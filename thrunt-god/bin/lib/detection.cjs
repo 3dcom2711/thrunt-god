@@ -1170,7 +1170,7 @@ function applyPromotionHooks(candidate, receipt, hooks) {
     result = hooks.beforePromote(result) || result;
   }
 
-  if (typeof hooks.afterPromote === 'function') {
+  if (receipt && typeof hooks.afterPromote === 'function') {
     hooks.afterPromote(result, receipt);
   }
 
@@ -1318,7 +1318,7 @@ function rejectDetection(cwd, candidate, options) {
 }
 
 function detectionStatus(cwd, options) {
-  const candidates = listDetectionCandidates(cwd, {});
+  const candidates = listDetectionCandidates(cwd, options || {});
 
   const byStatus = { draft: [], promoted: [], rejected: [] };
   for (const c of candidates) {

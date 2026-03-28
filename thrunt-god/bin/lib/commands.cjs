@@ -451,6 +451,7 @@ async function cmdRuntimeSmoke(cwd, args, raw) {
 
 async function cmdRuntimeExecute(cwd, args, raw) {
   const runtime = require('./runtime.cjs');
+  const telemetry = require('./telemetry.cjs');
   const config = loadConfig(cwd);
   const options = parseRuntimeArgs(args);
 
@@ -485,7 +486,13 @@ async function cmdRuntimeExecute(cwd, args, raw) {
     const results = [];
 
     for (const target of executionPlan.targets) {
-      const result = await runtime.executeQuerySpec(target.query_spec, registry, { cwd, config });
+      const result = await runtime.executeQuerySpec(target.query_spec, registry, {
+        cwd,
+        config,
+        artifacts: {
+          pack_id: executionPlan.pack.id,
+        },
+      });
       results.push({
         target: target.name,
         connector: target.connector,
@@ -495,6 +502,25 @@ async function cmdRuntimeExecute(cwd, args, raw) {
         artifacts: result.artifacts,
         pagination: result.pagination,
       });
+    }
+
+    try {
+      telemetry.recordPackExecution(
+        cwd,
+        executionPlan.pack.id,
+        executionPlan.pack.version || null,
+        executionPlan.targets.map(target => ({
+          connector_id: target.connector,
+          dataset_kind: target.dataset,
+        })),
+        results.map(item => ({
+          status: item.result.status,
+          counts: item.result.counts,
+          timing: item.result.timing,
+        }))
+      );
+    } catch {
+      // Telemetry failures must not break pack execution output.
     }
 
     output({

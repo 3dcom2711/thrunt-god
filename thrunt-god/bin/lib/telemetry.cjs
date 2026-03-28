@@ -410,7 +410,12 @@ function cmdMetricsSummary(cwd, raw) {
     lines.push('No metrics recorded yet. Run hunts to generate telemetry data.');
   }
 
-  output(summary, raw, lines.join('\n'));
+  if (raw) {
+    output(summary, raw);
+    return;
+  }
+
+  output(summary, true, lines.join('\n'));
 }
 
 function cmdMetricsList(cwd, filterArgs, raw) {
@@ -451,7 +456,12 @@ function cmdMetricsList(cwd, filterArgs, raw) {
     }
   }
 
-  output(records, raw, lines.join('\n'));
+  if (raw) {
+    output(records, raw);
+    return;
+  }
+
+  output(records, true, lines.join('\n'));
 }
 
 module.exports = {

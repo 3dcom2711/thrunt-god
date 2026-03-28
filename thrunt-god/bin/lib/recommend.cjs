@@ -12,6 +12,12 @@ function buildBaseReasoning(score) {
   if (score.noise_penalty > 0) {
     reasons.push(`Penalized by ${score.false_positive_count} false positive report(s)`);
   }
+  if (score.low_yield_count > 0) {
+    reasons.push(`Marked low-yield ${score.low_yield_count} time(s) by analysts`);
+  }
+  if (score.high_quality_count > 0) {
+    reasons.push(`Marked high-quality ${score.high_quality_count} time(s) by analysts`);
+  }
   if (score.analyst_adjustment !== 0) {
     const sign = score.analyst_adjustment >= 0 ? '+' : '';
     reasons.push(`Analyst adjusted by ${sign}${score.analyst_adjustment}`);
@@ -282,7 +288,12 @@ function cmdRecommend(cwd, entityType, filterArgs, raw) {
     }
   }
 
-  output(result, raw, lines.join('\n'));
+  if (raw) {
+    output(result, raw);
+    return;
+  }
+
+  output(result, true, lines.join('\n'));
 }
 
 function cmdPlanningHints(cwd, raw) {
@@ -304,7 +315,12 @@ function cmdPlanningHints(cwd, raw) {
   lines.push(`Average score: ${result.summary.avg_score}`);
   lines.push(`Coverage gaps: ${result.summary.coverage_gaps}`);
 
-  output(result, raw, lines.join('\n'));
+  if (raw) {
+    output(result, raw);
+    return;
+  }
+
+  output(result, true, lines.join('\n'));
 }
 
 module.exports = {
