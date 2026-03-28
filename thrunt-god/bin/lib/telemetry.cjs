@@ -321,15 +321,12 @@ function summarizeMetrics(cwd, options = {}) {
     if (o in byOutcome) byOutcome[o]++;
   }
 
+  const classifiedOutcomes = huntRecords.map(r => classifyOutcome(r));
+
   const yieldSummary = {
-    high_yield: huntRecords.filter(r =>
-      (r.evidence_yield && r.evidence_yield.events) > 100
-    ).length,
-    noisy: huntRecords.filter(r => classifyOutcome(r) === 'noisy').length,
-    inconclusive: huntRecords.filter(r =>
-      r.outcome === 'empty' ||
-      (r.outcome === 'partial' && r.evidence_yield && r.evidence_yield.events === 0)
-    ).length,
+    high_yield: classifiedOutcomes.filter(outcome => outcome === 'high_yield').length,
+    noisy: classifiedOutcomes.filter(outcome => outcome === 'noisy').length,
+    inconclusive: classifiedOutcomes.filter(outcome => outcome === 'inconclusive').length,
   };
 
   return {

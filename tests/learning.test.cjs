@@ -342,7 +342,7 @@ describe('feedback semantics and detection filtering', () => {
     assert.equal(highQuality.high_quality_count, 1);
   });
 
-  it('keeps noisy summary aligned with classifyOutcome and filtered summaries', () => {
+  it('keeps yield summary aligned with classifyOutcome and filtered summaries', () => {
     const tmpDir = makeTempProject();
 
     telemetry.recordHuntExecution(tmpDir, {
@@ -365,6 +365,36 @@ describe('feedback semantics and detection filtering', () => {
       timing: { duration_ms: 100 },
       counts: { events: 1, warnings: 1, errors: 0 },
     });
+    telemetry.recordHuntExecution(tmpDir, {
+      query_id: 'QRY-HIGH-YIELD',
+      connector: { id: 'splunk' },
+      dataset: { kind: 'events' },
+      evidence: { hypothesis_ids: ['HYP-3'] },
+    }, {
+      status: 'ok',
+      timing: { duration_ms: 100 },
+      counts: { events: 120, warnings: 0, errors: 0 },
+    });
+    telemetry.recordHuntExecution(tmpDir, {
+      query_id: 'QRY-FAILED-HIGH-EVENTS',
+      connector: { id: 'splunk' },
+      dataset: { kind: 'events' },
+      evidence: { hypothesis_ids: ['HYP-4'] },
+    }, {
+      status: 'error',
+      timing: { duration_ms: 100 },
+      counts: { events: 200, warnings: 0, errors: 1 },
+    });
+    telemetry.recordHuntExecution(tmpDir, {
+      query_id: 'QRY-INCONCLUSIVE',
+      connector: { id: 'splunk' },
+      dataset: { kind: 'events' },
+      evidence: { hypothesis_ids: ['HYP-5'] },
+    }, {
+      status: 'partial',
+      timing: { duration_ms: 100 },
+      counts: { events: 0, warnings: 0, errors: 0 },
+    });
     telemetry.recordPackExecution(tmpDir, 'pack.reasoning', '1.0.0', [
       { connector_id: 'splunk', dataset_kind: 'events' },
     ], [
@@ -377,8 +407,12 @@ describe('feedback semantics and detection filtering', () => {
     const packRecommendation = recommendations.recommendations.find(rec => rec.entity_id === 'pack.reasoning');
 
     assert.equal(allSummary.yield_summary.noisy, 1);
-    assert.equal(filteredSummary.total_executions, 1);
+    assert.equal(allSummary.yield_summary.high_yield, 1);
+    assert.equal(allSummary.yield_summary.inconclusive, 1);
+    assert.equal(filteredSummary.total_executions, 4);
     assert.equal(filteredSummary.yield_summary.noisy, 1);
+    assert.equal(filteredSummary.yield_summary.high_yield, 1);
+    assert.equal(filteredSummary.yield_summary.inconclusive, 1);
     assert.ok(packRecommendation, 'expected recommendation for pack.reasoning');
     assert.ok(
       packRecommendation.reasoning.includes('High yield in prior runs relative to the entity baseline')
