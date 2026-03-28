@@ -1,44 +1,39 @@
 ---
 thrunt_state_version: 1.0
-milestone: v1.3
-milestone_name: Detection Promotion Pipeline
-current_phase: 19
-current_phase_name: promotion workflow integrations
-current_plan: 19-01 (planned, not started)
-status: validating
-stopped_at: Completed 19-01-PLAN.md (promotion workflow & integrations)
-last_updated: "2026-03-27T20:59:55.417Z"
+milestone: v1.4
+milestone_name: Hunt Learning & Recommendation Engine
+current_phase: 22
+current_phase_name: recommendation engine & adaptive planning
+current_plan: Complete
+status: milestone_complete
+stopped_at: v1.4 milestone completed and archived
+last_updated: "2026-03-27T21:42:00.000Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 3
   completed_plans: 3
-  percent: 67
+  percent: 100
 ---
 
 # Hunt State
 
 ## Mission Reference
 
-See: .planning/MISSION.md (updated 2026-03-25)
+See: .planning/MISSION.md (updated 2026-03-27)
 
 **Core value:** Turn THRUNT into an executable, evidence-grade threat hunting platform.
-**Current focus:** Phase 19 — promotion workflow & integrations
+**Current focus:** v1.4 complete — next: v1.5 Live Connector Ecosystem
 
 ## Current Position
 
-Phase: 19 (promotion workflow & integrations) — PLANNED, READY TO EXECUTE
-Plan: 0 of 1 complete
-Current Phase: 19
-Current Phase Name: promotion workflow integrations
-Total Phases: 35
-Current Plan: 19-01 (planned, not started)
-Total Plans in Phase: 1
-Status: Phase complete — ready for validation
+Milestone: v1.4 Hunt Learning & Recommendation Engine — COMPLETE
+All phases shipped: 20, 21, 22
+Status: Milestone complete and archived
 Last activity: 2026-03-27
-Last Activity Description: Phase 19 plan created with three-gate promotion engine, rejection workflow, status CLI, hooks, config registration, and evidence quality feedback
-Progress: [██████░░░░] 67%
+Last Activity Description: v1.4 milestone completed and archived
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
