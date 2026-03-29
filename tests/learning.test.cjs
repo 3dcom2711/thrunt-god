@@ -316,6 +316,23 @@ describe('feedback semantics and detection filtering', () => {
     assert.ok(legacy.hunt_execution_id);
   });
 
+  it('does not count partial pack targets as successful runs', () => {
+    const tmpDir = makeTempProject();
+
+    telemetry.recordPackExecution(tmpDir, 'pack.partial', '1.0.0', [
+      { connector_id: 'splunk', dataset_kind: 'events' },
+      { connector_id: 'splunk', dataset_kind: 'events' },
+    ], [
+      { status: 'ok', counts: { events: 10 }, timing: { duration_ms: 50 } },
+      { status: 'partial', counts: { events: 5 }, timing: { duration_ms: 50 } },
+    ]);
+
+    const score = scoring.scoreEntity(tmpDir, 'pack', 'pack.partial');
+    assert.equal(score.execution_count, 1);
+    assert.equal(score.yield_score, 0.75);
+    assert.equal(score.success_rate, 0);
+  });
+
   it('applies low_yield and high_quality feedback to composite scoring', () => {
     const tmpDir = makeTempProject();
 

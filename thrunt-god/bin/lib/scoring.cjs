@@ -101,6 +101,25 @@ function listFeedback(cwd, options = {}) {
 
 const YIELD_BASELINES = { connector: 50, pack: 20, hypothesis: 30 };
 
+function isSuccessfulPackExecution(record) {
+  const targetCount = Math.max(
+    0,
+    Math.trunc(
+      record.target_count ||
+      (Array.isArray(record.per_target) ? record.per_target.length : 0)
+    )
+  );
+  if (targetCount === 0) return false;
+
+  const successfulTargets = Number.isFinite(record.successful_targets)
+    ? Math.max(0, Math.trunc(record.successful_targets))
+    : Array.isArray(record.per_target)
+      ? record.per_target.filter(target => target.status === 'ok').length
+      : 0;
+
+  return successfulTargets === targetCount;
+}
+
 function computePackExecutionStats(huntMetrics, packMetrics) {
   const hunts = huntMetrics.map((record, index) => ({
     index,
@@ -145,7 +164,7 @@ function computePackExecutionStats(huntMetrics, packMetrics) {
   for (const pack of packs) {
     executionCount++;
     totalEvents += pack.record.total_events || 0;
-    if (pack.record.failed_targets === 0) okCount++;
+    if (isSuccessfulPackExecution(pack.record)) okCount++;
 
     const targetCount = Math.max(0, Math.trunc(pack.record.target_count || 0));
     const explicitHuntIds = Array.isArray(pack.record.hunt_execution_ids)

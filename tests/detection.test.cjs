@@ -670,6 +670,37 @@ describe('generateDetectionRules', () => {
     assert.ok(sigmaFile.includes(candidate.candidate_id), 'filename should include candidate_id');
   });
 
+  it('skips persisted candidates with invalid candidate_id before writing rules', () => {
+    const detectionsDir = path.join(tmpDir, '.planning', 'DETECTIONS');
+    fs.mkdirSync(detectionsDir, { recursive: true });
+
+    const candidate = detection.createDetectionCandidate({
+      source_finding_id: 'F-ESCAPE',
+      technique_ids: ['T1078'],
+      detection_logic: {
+        title: 'Escape test',
+        description: 'Invalid persisted id should not escape rules dir',
+        logsource: { category: 'authentication' },
+        detection: { selection: { user: 'admin' }, condition: 'selection' },
+      },
+      confidence: 'medium',
+      evidence_links: [],
+      metadata: { author: 'test', status: 'draft', notes: '' },
+    });
+    candidate.candidate_id = '../escape';
+
+    fs.writeFileSync(
+      path.join(detectionsDir, 'DET-20260327150000-SAFEFILE.json'),
+      JSON.stringify(candidate, null, 2)
+    );
+
+    const report = detection.generateDetectionRules(tmpDir, {});
+    assert.equal(report.generated, 0);
+    assert.equal(report.errors, 1);
+    assert.equal(report.skipped_candidates[0].reason, 'Invalid candidate ID: ../escape');
+    assert.ok(!fs.existsSync(path.join(detectionsDir, 'escape-sigma.yml')));
+  });
+
   it('returns a properly shaped generation report', () => {
     const detectionsDir = path.join(tmpDir, '.planning', 'DETECTIONS');
     fs.mkdirSync(detectionsDir, { recursive: true });

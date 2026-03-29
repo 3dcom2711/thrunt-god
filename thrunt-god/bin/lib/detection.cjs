@@ -49,18 +49,33 @@ function nowUtc() {
   return new Date().toISOString();
 }
 
+function isValidCandidateId(candidateId) {
+  return typeof candidateId === 'string' && CANDIDATE_ID_PATTERN.test(candidateId);
+}
+
+function assertValidCandidateId(candidateId) {
+  if (!isValidCandidateId(candidateId)) {
+    throw new Error(`Invalid candidate ID: ${candidateId}`);
+  }
+  return candidateId;
+}
+
+function resolveCandidateArtifactPath(baseDir, candidateId, suffix = '.json') {
+  const safeCandidateId = assertValidCandidateId(candidateId);
+  const artifactPath = path.resolve(baseDir, `${safeCandidateId}${suffix}`);
+  const baseRoot = `${path.resolve(baseDir)}${path.sep}`;
+  if (!artifactPath.startsWith(baseRoot)) {
+    throw new Error(`Invalid candidate ID: ${candidateId}`);
+  }
+  return artifactPath;
+}
+
 function resolveCandidateFile(detectionsDir, candidateId) {
-  if (typeof candidateId !== 'string' || !CANDIDATE_ID_PATTERN.test(candidateId)) {
-    error(`Invalid candidate ID: ${candidateId}`);
+  try {
+    return resolveCandidateArtifactPath(detectionsDir, candidateId, '.json');
+  } catch (err) {
+    error(err.message);
   }
-
-  const candidateFile = path.resolve(detectionsDir, `${candidateId}.json`);
-  const detectionsRoot = `${path.resolve(detectionsDir)}${path.sep}`;
-  if (!candidateFile.startsWith(detectionsRoot)) {
-    error(`Invalid candidate ID: ${candidateId}`);
-  }
-
-  return candidateFile;
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +460,7 @@ function mapFindingsToDetections(cwd, options) {
 
       // Write to DETECTIONS/ directory
       if (fs.existsSync(detectionsDir) || tryMkdir(detectionsDir)) {
-        const filename = `${formatCandidate.candidate_id}.json`;
+        const filename = path.basename(resolveCandidateArtifactPath(detectionsDir, formatCandidate.candidate_id, '.json'));
         fs.writeFileSync(
           path.join(detectionsDir, filename),
           JSON.stringify(formatCandidate, null, 2)
@@ -907,8 +922,19 @@ function generateDetectionRules(cwd, options) {
     tryMkdir(rulesDir);
 
     const ext = FORMAT_EXTENSIONS[result.format] || '.txt';
-    const filename = `${candidate.candidate_id}-${result.format}${ext}`;
-    const filePath = path.join(rulesDir, filename);
+    let filename;
+    let filePath;
+    try {
+      filePath = resolveCandidateArtifactPath(rulesDir, candidate.candidate_id, `-${result.format}${ext}`);
+      filename = path.basename(filePath);
+    } catch (err) {
+      report.errors++;
+      report.skipped_candidates.push({
+        candidate_id: candidate.candidate_id || 'unknown',
+        reason: err.message,
+      });
+      continue;
+    }
 
     fs.writeFileSync(filePath, result.content, 'utf-8');
 
@@ -945,7 +971,12 @@ function updateCandidateReadiness(detectionsDir, candidate, delta) {
   delete candidateCopy.content_hash;
   candidate.content_hash = computeContentHash(canonicalSerialize(candidateCopy));
 
-  const candidateFile = path.join(detectionsDir, `${candidate.candidate_id}.json`);
+  let candidateFile = null;
+  try {
+    candidateFile = resolveCandidateArtifactPath(detectionsDir, candidate.candidate_id, '.json');
+  } catch {
+    return;
+  }
   if (fs.existsSync(candidateFile)) {
     fs.writeFileSync(candidateFile, JSON.stringify(candidate, null, 2), 'utf-8');
   }
@@ -1211,12 +1242,13 @@ function applyPromotionHooks(candidate, receipt, hooks) {
 function writePromotedRule(candidate, cwd) {
   const detectionsDir = planningPaths(cwd).detections;
   const promotionRulesDir = path.join(detectionsDir, 'promotions', 'rules');
+  const candidateId = assertValidCandidateId(candidate.candidate_id);
   tryMkdir(promotionRulesDir);
 
   const format = candidate.target_format || 'sigma';
   const ext = FORMAT_EXTENSIONS[format] || '.txt';
-  const ruleFilename = `${candidate.candidate_id}-${format}${ext}`;
-  const metaFilename = `${candidate.candidate_id}-${format}${ext}.meta.json`;
+  const ruleFilename = path.basename(resolveCandidateArtifactPath(promotionRulesDir, candidateId, `-${format}${ext}`));
+  const metaFilename = path.basename(resolveCandidateArtifactPath(promotionRulesDir, candidateId, `-${format}${ext}.meta.json`));
 
   const rendered = renderCandidate(candidate);
   const content = rendered.error ? '' : rendered.content;
@@ -1224,7 +1256,7 @@ function writePromotedRule(candidate, cwd) {
   fs.writeFileSync(path.join(promotionRulesDir, ruleFilename), content, 'utf-8');
 
   const meta = {
-    candidate_id: candidate.candidate_id,
+    candidate_id: candidateId,
     source_finding_id: candidate.source_finding_id,
     technique_ids: candidate.technique_ids || [],
     confidence: candidate.confidence,
@@ -1265,13 +1297,14 @@ function promoteDetection(cwd, candidate, options) {
     candidate = applyPromotionHooks(candidate, null, hooks);
   }
 
+  const candidateId = assertValidCandidateId(candidate.candidate_id);
   const ruleResult = writePromotedRule(candidate, cwd);
 
   const promotionId = makePromotionId();
   const promotedBy = (options && options['promoted-by']) || detectRuntimeName();
   const receipt = {
     promotion_id: promotionId,
-    candidate_id: candidate.candidate_id,
+    candidate_id: candidateId,
     source_phase: candidate.source_phase || null,
     rule_path: ruleResult.rulePath,
     target_format: candidate.target_format || 'sigma',
@@ -1294,7 +1327,7 @@ function promoteDetection(cwd, candidate, options) {
   const candidateCopy = { ...candidate };
   delete candidateCopy.content_hash;
   candidate.content_hash = computeContentHash(canonicalSerialize(candidateCopy));
-  const candidateFile = path.join(detectionsDir, `${candidate.candidate_id}.json`);
+  const candidateFile = resolveCandidateArtifactPath(detectionsDir, candidateId, '.json');
   if (fs.existsSync(candidateFile)) {
     fs.writeFileSync(candidateFile, JSON.stringify(candidate, null, 2), 'utf-8');
   }
@@ -1313,12 +1346,13 @@ function promoteDetection(cwd, candidate, options) {
 function rejectDetection(cwd, candidate, options) {
   const detectionsDir = planningPaths(cwd).detections;
   const promotionsDir = path.join(detectionsDir, 'promotions');
+  const candidateId = assertValidCandidateId(candidate.candidate_id);
 
   const rejectionId = makeRejectionId();
   const rejectedBy = (options && options['rejected-by']) || detectRuntimeName();
   const receipt = {
     rejection_id: rejectionId,
-    candidate_id: candidate.candidate_id,
+    candidate_id: candidateId,
     reason: (options && options.reason) || 'No reason provided',
     rejected_at: nowUtc(),
     rejected_by: rejectedBy,
@@ -1336,7 +1370,7 @@ function rejectDetection(cwd, candidate, options) {
   const candidateCopy = { ...candidate };
   delete candidateCopy.content_hash;
   candidate.content_hash = computeContentHash(canonicalSerialize(candidateCopy));
-  const candidateFile = path.join(detectionsDir, `${candidate.candidate_id}.json`);
+  const candidateFile = resolveCandidateArtifactPath(detectionsDir, candidateId, '.json');
   if (fs.existsSync(candidateFile)) {
     fs.writeFileSync(candidateFile, JSON.stringify(candidate, null, 2), 'utf-8');
   }
@@ -1388,7 +1422,12 @@ function cmdDetectionPromote(cwd, options, raw) {
       error(`Candidate not found: ${options.candidate}`);
     }
     const candidate = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
-    const result = promoteDetection(cwd, candidate, options);
+    let result;
+    try {
+      result = promoteDetection(cwd, candidate, options);
+    } catch (err) {
+      error(err.message);
+    }
 
     if (raw) {
       output(result, raw);
@@ -1472,7 +1511,12 @@ function cmdDetectionReject(cwd, options, raw) {
     error(`Candidate not found: ${options.candidate}`);
   }
   const candidate = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
-  const result = rejectDetection(cwd, candidate, options);
+  let result;
+  try {
+    result = rejectDetection(cwd, candidate, options);
+  } catch (err) {
+    error(err.message);
+  }
 
   if (raw) {
     output(result, raw);
