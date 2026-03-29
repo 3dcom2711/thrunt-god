@@ -213,6 +213,8 @@ function classifyOutcome(record) {
   return 'inconclusive';
 }
 
+const YIELD_SUMMARY_BUCKETS = ['high_yield', 'productive', 'low_yield', 'noisy', 'inconclusive', 'failed'];
+
 // ---------------------------------------------------------------------------
 // Query
 // ---------------------------------------------------------------------------
@@ -321,13 +323,12 @@ function summarizeMetrics(cwd, options = {}) {
     if (o in byOutcome) byOutcome[o]++;
   }
 
-  const classifiedOutcomes = huntRecords.map(r => classifyOutcome(r));
-
-  const yieldSummary = {
-    high_yield: classifiedOutcomes.filter(outcome => outcome === 'high_yield').length,
-    noisy: classifiedOutcomes.filter(outcome => outcome === 'noisy').length,
-    inconclusive: classifiedOutcomes.filter(outcome => outcome === 'inconclusive').length,
-  };
+  const yieldSummary = Object.fromEntries(YIELD_SUMMARY_BUCKETS.map(outcome => [outcome, 0]));
+  for (const outcome of huntRecords.map(r => classifyOutcome(r))) {
+    if (outcome in yieldSummary) {
+      yieldSummary[outcome]++;
+    }
+  }
 
   return {
     total_executions: huntRecords.length,
@@ -364,8 +365,11 @@ function cmdMetricsSummary(cwd, raw) {
 
   lines.push('## Yield');
   lines.push(`  High-yield (>100 events): ${summary.yield_summary.high_yield}`);
+  lines.push(`  Productive (ok with >10 and <=100 events): ${summary.yield_summary.productive}`);
+  lines.push(`  Low-yield (1-10 events): ${summary.yield_summary.low_yield}`);
   lines.push(`  Noisy (warnings > errors and >5 warnings): ${summary.yield_summary.noisy}`);
   lines.push(`  Inconclusive: ${summary.yield_summary.inconclusive}`);
+  lines.push(`  Failed: ${summary.yield_summary.failed}`);
   lines.push('');
 
   const connectors = Object.keys(summary.by_connector);

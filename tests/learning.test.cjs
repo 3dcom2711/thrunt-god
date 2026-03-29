@@ -423,6 +423,16 @@ describe('feedback semantics and detection filtering', () => {
       timing: { duration_ms: 100 },
       counts: { events: 0, warnings: 0, errors: 0 },
     });
+    telemetry.recordHuntExecution(tmpDir, {
+      query_id: 'QRY-PRODUCTIVE',
+      connector: { id: 'sentinel' },
+      dataset: { kind: 'events' },
+      evidence: { hypothesis_ids: ['HYP-6'] },
+    }, {
+      status: 'ok',
+      timing: { duration_ms: 100 },
+      counts: { events: 30, warnings: 0, errors: 0 },
+    });
     telemetry.recordPackExecution(tmpDir, 'pack.reasoning', '1.0.0', [
       { connector_id: 'splunk', dataset_kind: 'events' },
     ], [
@@ -436,11 +446,17 @@ describe('feedback semantics and detection filtering', () => {
 
     assert.equal(allSummary.yield_summary.noisy, 1);
     assert.equal(allSummary.yield_summary.high_yield, 1);
+    assert.equal(allSummary.yield_summary.productive, 1);
+    assert.equal(allSummary.yield_summary.low_yield, 1);
     assert.equal(allSummary.yield_summary.inconclusive, 1);
+    assert.equal(allSummary.yield_summary.failed, 1);
     assert.equal(filteredSummary.total_executions, 4);
     assert.equal(filteredSummary.yield_summary.noisy, 1);
     assert.equal(filteredSummary.yield_summary.high_yield, 1);
+    assert.equal(filteredSummary.yield_summary.productive, 0);
+    assert.equal(filteredSummary.yield_summary.low_yield, 0);
     assert.equal(filteredSummary.yield_summary.inconclusive, 1);
+    assert.equal(filteredSummary.yield_summary.failed, 1);
     assert.ok(packRecommendation, 'expected recommendation for pack.reasoning');
     assert.ok(
       packRecommendation.reasoning.includes('High yield in prior runs relative to the entity baseline')
