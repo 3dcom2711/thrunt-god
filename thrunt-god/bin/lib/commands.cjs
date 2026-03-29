@@ -4,12 +4,22 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, getMilestonePhaseFilter, resolveModelInternal, stripShippedMilestones, extractCurrentMilestone, planningDir, planningPaths, toPosixPath, output, error, findPhaseInternal, extractOneLinerFromBody, getHuntmapPhaseInternal, getHuntmapDocInfo } = require('./core.cjs');
+const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, getMilestonePhaseFilter, resolveModelInternal, stripShippedMilestones, extractCurrentMilestone, planningDir, planningPaths, toPosixPath, output, error, findPhaseInternal, extractOneLinerFromBody, getHuntmapPhaseInternal, getHuntmapDocInfo, PLANNING_DIR_NAME } = require('./core.cjs');
 const { extractFrontmatter } = require('./frontmatter.cjs');
 const { MODEL_PROFILES } = require('./model-profiles.cjs');
 
 function isPlainObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function collectPackHuntExecutionIds(results = []) {
+  return results
+    .map(item =>
+      (item && item.artifacts && item.artifacts.telemetry && item.artifacts.telemetry.hunt_execution_id) ||
+      (item && item.result && item.result.metadata && item.result.metadata.hunt_execution_id) ||
+      null
+    )
+    .filter(Boolean);
 }
 
 function cmdGenerateSlug(text, raw) {
@@ -451,6 +461,7 @@ async function cmdRuntimeSmoke(cwd, args, raw) {
 
 async function cmdRuntimeExecute(cwd, args, raw) {
   const runtime = require('./runtime.cjs');
+  const telemetry = require('./telemetry.cjs');
   const config = loadConfig(cwd);
   const options = parseRuntimeArgs(args);
 
@@ -485,7 +496,13 @@ async function cmdRuntimeExecute(cwd, args, raw) {
     const results = [];
 
     for (const target of executionPlan.targets) {
-      const result = await runtime.executeQuerySpec(target.query_spec, registry, { cwd, config });
+      const result = await runtime.executeQuerySpec(target.query_spec, registry, {
+        cwd,
+        config,
+        artifacts: {
+          pack_id: executionPlan.pack.id,
+        },
+      });
       results.push({
         target: target.name,
         connector: target.connector,
@@ -495,6 +512,28 @@ async function cmdRuntimeExecute(cwd, args, raw) {
         artifacts: result.artifacts,
         pagination: result.pagination,
       });
+    }
+
+    try {
+      telemetry.recordPackExecution(
+        cwd,
+        executionPlan.pack.id,
+        executionPlan.pack.version || null,
+        executionPlan.targets.map(target => ({
+          connector_id: target.connector,
+          dataset_kind: target.dataset,
+        })),
+        results.map(item => ({
+          status: item.result.status,
+          counts: item.result.counts,
+          timing: item.result.timing,
+        })),
+        {
+          hunt_execution_ids: collectPackHuntExecutionIds(results),
+        }
+      );
+    } catch {
+      // Telemetry failures must not break pack execution output.
     }
 
     output({
@@ -987,7 +1026,7 @@ function cmdCommit(cwd, message, files, raw, amend, noVerify) {
   }
 
   // Check if .planning is gitignored
-  if (isGitIgnored(cwd, '.planning')) {
+  if (isGitIgnored(cwd, PLANNING_DIR_NAME)) {
     const result = { committed: false, hash: null, reason: 'skipped_gitignored' };
     output(result, raw, 'skipped');
     return;
@@ -1031,7 +1070,7 @@ function cmdCommit(cwd, message, files, raw, amend, noVerify) {
   }
 
   // Stage files
-  const filesToStage = files && files.length > 0 ? files : ['.planning/'];
+  const filesToStage = files && files.length > 0 ? files : [`${PLANNING_DIR_NAME}/`];
   for (const file of filesToStage) {
     const fullPath = path.join(cwd, file);
     if (!fs.existsSync(fullPath)) {

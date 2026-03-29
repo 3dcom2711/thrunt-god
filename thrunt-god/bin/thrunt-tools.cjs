@@ -48,6 +48,24 @@
  *   websearch <query>                  Search web via Brave API (if configured)
  *     [--limit N] [--freshness day|week|month]
  *
+ * Metrics:
+ *   metrics summary                    Aggregate hunt metrics summary
+ *   metrics list [--type hunt|pack|promotion] [--connector ID] [--pack ID] [--hypothesis ID] [--limit N]
+ *
+ * Scoring:
+ *   score summary                      Show scores for all entities
+ *   score entity <type> <id>           Show detailed score for one entity
+ *
+ * Feedback:
+ *   feedback submit --entity-type T --entity-id ID --type TYPE [--annotation "..."] [--adjustment N] [--analyst NAME]
+ *   feedback list [--entity-type T] [--entity-id ID] [--type TYPE] [--limit N]
+ *
+ * Recommendations:
+ *   recommend packs [--limit N] [--min-score S]       Ranked pack recommendations
+ *   recommend connectors [--limit N] [--min-score S]  Ranked connector recommendations
+ *   recommend hypotheses [--limit N] [--min-score S]  Ranked hypothesis recommendations
+ *   planning-hints                                     Aggregate planning hints from scores
+ *
  * Phase Operations:
  *   phase next-decimal <phase>         Calculate next decimal phase number
  *   phase add <description> [--id ID]  Append new phase to HUNTMAP.md + create dir
@@ -169,6 +187,9 @@ const frontmatter = require('./lib/frontmatter.cjs');
 const profilePipeline = require('./lib/profile-pipeline.cjs');
 const profileOutput = require('./lib/profile-output.cjs');
 const workstream = require('./lib/workstream.cjs');
+const telemetry = require('./lib/telemetry.cjs');
+const scoring = require('./lib/scoring.cjs');
+const recommend = require('./lib/recommend.cjs');
 
 // ─── Arg parsing helpers ──────────────────────────────────────────────────────
 
@@ -239,7 +260,7 @@ async function main() {
   // However, in monorepo worktrees where the subdirectory itself owns .planning/,
   // skip worktree resolution — the CWD is already the correct project root.
   const { resolveWorktreeRoot } = require('./lib/core.cjs');
-  if (!fs.existsSync(path.join(cwd, '.planning'))) {
+  if (!fs.existsSync(path.join(cwd, core.PLANNING_DIR_NAME))) {
     const worktreeRoot = resolveWorktreeRoot(cwd);
     if (worktreeRoot !== cwd) {
       cwd = worktreeRoot;
@@ -761,9 +782,75 @@ async function runCommand(command, args, cwd, raw) {
       } else if (subcommand === 'list') {
         const options = parseNamedArgs(args, ['phase', 'status', 'format'], []);
         detection.cmdDetectionList(cwd, options, raw);
+      } else if (subcommand === 'generate') {
+        const options = parseNamedArgs(args, ['phase', 'candidate', 'format'], []);
+        detection.cmdDetectionGenerate(cwd, options, raw);
+      } else if (subcommand === 'backtest') {
+        const options = parseNamedArgs(args, ['phase', 'candidate'], []);
+        detection.cmdDetectionBacktest(cwd, options, raw);
+      } else if (subcommand === 'promote') {
+        const options = parseNamedArgs(args, ['phase', 'candidate', 'promoted-by'], ['approve']);
+        detection.cmdDetectionPromote(cwd, options, raw);
+      } else if (subcommand === 'reject') {
+        const options = parseNamedArgs(args, ['candidate', 'reason'], []);
+        detection.cmdDetectionReject(cwd, options, raw);
+      } else if (subcommand === 'status') {
+        const options = parseNamedArgs(args, ['phase'], []);
+        detection.cmdDetectionStatus(cwd, options, raw);
       } else {
-        error('Unknown detection subcommand. Available: map, list');
+        error('Unknown detection subcommand. Available: map, list, generate, backtest, promote, reject, status');
       }
+      break;
+    }
+
+    case 'metrics': {
+      const subcommand = args[1];
+      if (subcommand === 'summary') {
+        telemetry.cmdMetricsSummary(cwd, raw);
+      } else if (subcommand === 'list') {
+        telemetry.cmdMetricsList(cwd, args.slice(2), raw);
+      } else {
+        error('Unknown metrics subcommand. Available: summary, list');
+      }
+      break;
+    }
+
+    case 'score': {
+      const subcommand = args[1];
+      if (subcommand === 'summary') {
+        scoring.cmdScoreSummary(cwd, raw);
+      } else if (subcommand === 'entity') {
+        scoring.cmdScoreEntity(cwd, args[2], args[3], raw);
+      } else {
+        error('Unknown score subcommand. Available: summary, entity <type> <id>');
+      }
+      break;
+    }
+
+    case 'feedback': {
+      const subcommand = args[1];
+      if (subcommand === 'submit') {
+        scoring.cmdFeedbackSubmit(cwd, args.slice(2), raw);
+      } else if (subcommand === 'list') {
+        scoring.cmdFeedbackList(cwd, args.slice(2), raw);
+      } else {
+        error('Unknown feedback subcommand. Available: submit, list');
+      }
+      break;
+    }
+
+    case 'recommend': {
+      const entityType = args[1];
+      if (['packs', 'connectors', 'hypotheses'].includes(entityType)) {
+        recommend.cmdRecommend(cwd, entityType, args.slice(2), raw);
+      } else {
+        error('Unknown recommend target. Available: packs, connectors, hypotheses');
+      }
+      break;
+    }
+
+    case 'planning-hints': {
+      recommend.cmdPlanningHints(cwd, raw);
       break;
     }
 

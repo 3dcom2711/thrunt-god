@@ -11,6 +11,7 @@ const { output, error, getMilestonePhaseFilter, planningDir, planningPaths, toPo
 const { extractFrontmatter } = require('./frontmatter.cjs');
 const { requireSafePath, sanitizeForDisplay } = require('./security.cjs');
 const { createEvidenceManifest, canonicalSerialize, computeContentHash, buildProvenance, computeManifestHash, verifyManifestIntegrity } = require('./manifest.cjs');
+const telemetry = require('./telemetry.cjs');
 
 function cmdAuditEvidence(cwd, raw) {
   const phasesDir = path.join(planningDir(cwd), 'phases');
@@ -574,6 +575,16 @@ function writeRuntimeArtifacts(cwd, spec, envelope, options = {}) {
   const manifestPath = path.join(paths.manifests, `${manifest.manifest_id}.json`);
   fs.writeFileSync(manifestPath, manifestJson, 'utf-8');
 
+  // Emit hunt execution telemetry
+  let huntExecution = null;
+  try {
+    huntExecution = telemetry.recordHuntExecution(cwd, spec, envelope, {
+      pack_id: (options && options.pack_id) || null,
+      receipt_ids: [receiptId],
+      manifest_ids: [manifest.manifest_id],
+    });
+  } catch (_) { /* telemetry failures must not break execution */ }
+
   return {
     query_log: {
       id: spec.query_id,
@@ -588,6 +599,11 @@ function writeRuntimeArtifacts(cwd, spec, envelope, options = {}) {
     manifest: {
       id: manifest.manifest_id,
       path: toPosixPath(path.relative(cwd, manifestPath)),
+    },
+    telemetry: {
+      hunt_execution_id: huntExecution && huntExecution.hunt_execution_id
+        ? huntExecution.hunt_execution_id
+        : null,
     },
   };
 }

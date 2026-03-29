@@ -19,14 +19,16 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { planningPaths, output, error } = require('./core.cjs');
-const { canonicalSerialize, computeContentHash } = require('./manifest.cjs');
+const { planningPaths, loadConfig, output, error } = require('./core.cjs');
+const { canonicalSerialize, computeContentHash, detectRuntimeName } = require('./manifest.cjs');
+const telemetry = require('./telemetry.cjs');
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const CANDIDATE_VERSION = '1.0';
+const CANDIDATE_ID_PATTERN = /^DET-[A-Za-z0-9-]+$/;
 
 // ---------------------------------------------------------------------------
 // Internal Helpers
@@ -45,6 +47,35 @@ function makeCandidateId() {
 /** Current UTC timestamp in ISO-8601 format. */
 function nowUtc() {
   return new Date().toISOString();
+}
+
+function isValidCandidateId(candidateId) {
+  return typeof candidateId === 'string' && CANDIDATE_ID_PATTERN.test(candidateId);
+}
+
+function assertValidCandidateId(candidateId) {
+  if (!isValidCandidateId(candidateId)) {
+    throw new Error(`Invalid candidate ID: ${candidateId}`);
+  }
+  return candidateId;
+}
+
+function resolveCandidateArtifactPath(baseDir, candidateId, suffix = '.json') {
+  const safeCandidateId = assertValidCandidateId(candidateId);
+  const artifactPath = path.resolve(baseDir, `${safeCandidateId}${suffix}`);
+  const baseRoot = `${path.resolve(baseDir)}${path.sep}`;
+  if (!artifactPath.startsWith(baseRoot)) {
+    throw new Error(`Invalid candidate ID: ${candidateId}`);
+  }
+  return artifactPath;
+}
+
+function resolveCandidateFile(detectionsDir, candidateId) {
+  try {
+    return resolveCandidateArtifactPath(detectionsDir, candidateId, '.json');
+  } catch (err) {
+    error(err.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -429,7 +460,7 @@ function mapFindingsToDetections(cwd, options) {
 
       // Write to DETECTIONS/ directory
       if (fs.existsSync(detectionsDir) || tryMkdir(detectionsDir)) {
-        const filename = `${formatCandidate.candidate_id}.json`;
+        const filename = path.basename(resolveCandidateArtifactPath(detectionsDir, formatCandidate.candidate_id, '.json'));
         fs.writeFileSync(
           path.join(detectionsDir, filename),
           JSON.stringify(formatCandidate, null, 2)
@@ -681,6 +712,855 @@ function cmdDetectionList(cwd, options, raw) {
 }
 
 // ---------------------------------------------------------------------------
+// Generation, Validation, Noise Scoring, and Backtesting
+// ---------------------------------------------------------------------------
+
+const FORMAT_EXTENSIONS = {
+  sigma: '.yml',
+  splunk_spl: '.spl',
+  elastic_eql: '.eql',
+  kql: '.kql',
+};
+
+function makeBacktestId() {
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+  return `BT-${stamp}-${suffix}`;
+}
+
+function validateSigmaStructure(candidate) {
+  const errors = [];
+  const warnings = [];
+  const dl = candidate.detection_logic || {};
+
+  if (!dl.title || typeof dl.title !== 'string') errors.push('missing or invalid title');
+  if (!dl.logsource || typeof dl.logsource !== 'object') errors.push('missing logsource');
+  if (!dl.detection || typeof dl.detection !== 'object') errors.push('missing detection');
+  if (dl.detection && !dl.detection.condition) errors.push('missing detection.condition');
+
+  if (dl.logsource && typeof dl.logsource === 'object' &&
+      !dl.logsource.category && !dl.logsource.product && !dl.logsource.service) {
+    warnings.push('logsource has no category, product, or service -- overly generic');
+  }
+  if (dl.detection && dl.detection.selection &&
+      typeof dl.detection.selection === 'object' &&
+      Object.keys(dl.detection.selection).length === 0) {
+    warnings.push('empty selection object -- matches everything');
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+function validateStubStructure(candidate, format) {
+  const errors = [];
+  const warnings = [`stub format (${format}) -- limited validation`];
+  const dl = candidate.detection_logic;
+  if (!dl || (typeof dl === 'object' && Object.keys(dl).length === 0)) {
+    errors.push('empty detection_logic');
+  }
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+function validateStructure(candidate, format) {
+  if (format === 'sigma') return validateSigmaStructure(candidate);
+  if (format === 'splunk_spl' || format === 'elastic_eql' || format === 'kql') {
+    return validateStubStructure(candidate, format);
+  }
+  return { valid: false, errors: [`unsupported format: ${format}`], warnings: [] };
+}
+
+// Stub formats return default medium risk. Sigma: scores wildcard density,
+// field specificity, time window breadth, and negation usage.
+function scoreNoise(candidate, renderedContent) {
+  const format = candidate.target_format;
+
+  if (format === 'splunk_spl' || format === 'elastic_eql' || format === 'kql') {
+    return {
+      noise_risk: 'medium',
+      dimensions: {
+        wildcard_density: 0.5,
+        field_specificity: 0.5,
+        time_window_breadth: 0.5,
+        negation_only: 0,
+      },
+      score: 0.45,
+      stub: true,
+    };
+  }
+
+  const detectionContent = extractDetectionSection(renderedContent);
+  const dl = (candidate.detection_logic && candidate.detection_logic.detection) || {};
+  const selection = dl.selection || {};
+  const condition = (dl.condition || '').toLowerCase();
+
+  const wildcardCount = (detectionContent.match(/\*/g) || []).length;
+  const tokenCount = detectionContent.split(/\s+/).filter(Boolean).length;
+  const wildcardDensity = Math.min(1.0, wildcardCount / Math.max(tokenCount * 0.1, 1));
+
+  const fieldCount = Object.keys(selection).length;
+  const fieldSpecificity = Math.max(0, 1.0 - (fieldCount / 5));
+
+  const hasTimeframe = candidate.detection_logic &&
+    (candidate.detection_logic.timeframe || (dl.timeframe));
+  const timeWindowBreadth = hasTimeframe ? 0.0 : 1.0;
+
+  // 1.0 if condition uses only NOT/exclude without positive selection
+  const hasPositiveSelection = /\bselection\b/.test(condition) && !/^\s*not\b/i.test(condition);
+  const hasNegation = /\bnot\b/i.test(condition) || /\bexclude\b/i.test(condition);
+  const negationOnly = (hasNegation && !hasPositiveSelection) ? 1.0 : 0.0;
+
+  const dimensions = {
+    wildcard_density: Math.round(wildcardDensity * 10000) / 10000,
+    field_specificity: Math.round(fieldSpecificity * 10000) / 10000,
+    time_window_breadth: timeWindowBreadth,
+    negation_only: negationOnly,
+  };
+
+  const score = (dimensions.wildcard_density * 0.3) +
+                (dimensions.field_specificity * 0.3) +
+                (dimensions.time_window_breadth * 0.2) +
+                (dimensions.negation_only * 0.2);
+
+  const roundedScore = Math.round(score * 10000) / 10000;
+  const noiseRisk = roundedScore > 0.6 ? 'high' : roundedScore > 0.3 ? 'medium' : 'low';
+
+  return { noise_risk: noiseRisk, dimensions, score: roundedScore };
+}
+
+function extractDetectionSection(content) {
+  const lines = content.split('\n');
+  let collecting = false;
+  const detectionLines = [];
+
+  for (const line of lines) {
+    if (/^detection:/.test(line)) {
+      collecting = true;
+      continue;
+    }
+    if (collecting) {
+      // Stop at next top-level key (no leading whitespace)
+      if (/^\S/.test(line) && line.trim() !== '') {
+        break;
+      }
+      detectionLines.push(line);
+    }
+  }
+
+  return detectionLines.join('\n');
+}
+
+function validateExpectedOutcomes(outcomes) {
+  if (outcomes === null || outcomes === undefined) {
+    return { valid: true, errors: [], warnings: ['no expected outcomes defined'] };
+  }
+
+  const errors = [];
+  const warnings = [];
+
+  if (!outcomes.expected_matches ||
+      typeof outcomes.expected_matches.min !== 'number' ||
+      typeof outcomes.expected_matches.max !== 'number') {
+    errors.push('expected_matches must have numeric min and max');
+  }
+
+  const validLevels = ['low', 'medium', 'high'];
+  if (!validLevels.includes(outcomes.expected_noise_level)) {
+    errors.push('expected_noise_level must be low, medium, or high');
+  }
+
+  if (outcomes.time_window !== undefined && typeof outcomes.time_window !== 'string') {
+    errors.push('time_window must be a string');
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+function generateDetectionRules(cwd, options) {
+  let candidates = listDetectionCandidates(cwd, options || {});
+
+  if (options && options.candidate) {
+    candidates = candidates.filter(c => c.candidate_id === options.candidate);
+  }
+  if (options && options.format) {
+    candidates = candidates.filter(c => c.target_format === options.format);
+  }
+
+  const paths = planningPaths(cwd);
+  const rulesDir = path.join(paths.detections, 'rules');
+  const report = {
+    total_candidates: candidates.length,
+    generated: 0,
+    skipped: 0,
+    errors: 0,
+    rules: [],
+    skipped_candidates: [],
+    format_breakdown: {},
+  };
+
+  for (const candidate of candidates) {
+    if (!candidate.detection_logic ||
+        (typeof candidate.detection_logic === 'object' &&
+         Object.keys(candidate.detection_logic).length === 0)) {
+      report.skipped++;
+      report.skipped_candidates.push({
+        candidate_id: candidate.candidate_id,
+        reason: 'missing detection_logic',
+      });
+      continue;
+    }
+
+    const result = renderCandidate(candidate);
+    if (result.error) {
+      report.errors++;
+      report.skipped_candidates.push({
+        candidate_id: candidate.candidate_id,
+        reason: result.error,
+      });
+      continue;
+    }
+
+    tryMkdir(rulesDir);
+
+    const ext = FORMAT_EXTENSIONS[result.format] || '.txt';
+    let filename;
+    let filePath;
+    try {
+      filePath = resolveCandidateArtifactPath(rulesDir, candidate.candidate_id, `-${result.format}${ext}`);
+      filename = path.basename(filePath);
+    } catch (err) {
+      report.errors++;
+      report.skipped_candidates.push({
+        candidate_id: candidate.candidate_id || 'unknown',
+        reason: err.message,
+      });
+      continue;
+    }
+
+    fs.writeFileSync(filePath, result.content, 'utf-8');
+
+    report.generated++;
+    report.rules.push({
+      candidate_id: candidate.candidate_id,
+      format: result.format,
+      file: `rules/${filename}`,
+      status: 'ok',
+    });
+    report.format_breakdown[result.format] = (report.format_breakdown[result.format] || 0) + 1;
+  }
+
+  return report;
+}
+
+function writeBacktestResult(backtestsDir, backtestResult) {
+  tryMkdir(backtestsDir);
+  const tmpFile = path.join(backtestsDir, `.tmp-${backtestResult.backtest_id}.json`);
+  const finalFile = path.join(backtestsDir, `${backtestResult.backtest_id}.json`);
+  fs.writeFileSync(tmpFile, JSON.stringify(backtestResult, null, 2), 'utf-8');
+  fs.renameSync(tmpFile, finalFile);
+}
+
+function updateCandidateReadiness(detectionsDir, candidate, delta) {
+  const baseScore = scorePromotionReadiness(candidate, {
+    finding_status: { high: 'confirmed', medium: 'supported', low: 'inconclusive' }[candidate.confidence] || 'unknown',
+  });
+  candidate.promotion_readiness = Math.max(0, Math.min(1,
+    Math.round((baseScore + delta) * 10000) / 10000
+  ));
+
+  const candidateCopy = { ...candidate };
+  delete candidateCopy.content_hash;
+  candidate.content_hash = computeContentHash(canonicalSerialize(candidateCopy));
+
+  let candidateFile = null;
+  try {
+    candidateFile = resolveCandidateArtifactPath(detectionsDir, candidate.candidate_id, '.json');
+  } catch {
+    return;
+  }
+  if (fs.existsSync(candidateFile)) {
+    fs.writeFileSync(candidateFile, JSON.stringify(candidate, null, 2), 'utf-8');
+  }
+}
+
+function computeReadinessDelta(validation, noiseScore) {
+  const validationPenalty = validation.valid ? 0 : -0.2;
+  const noisePenalties = { high: -0.15, medium: -0.05, low: 0 };
+  const noisePenalty = noisePenalties[noiseScore.noise_risk] || 0;
+  return validationPenalty + noisePenalty;
+}
+
+function backtestDetection(cwd, candidate) {
+  const paths = planningPaths(cwd);
+  const format = candidate.target_format || 'sigma';
+
+  const renderResult = renderCandidate(candidate);
+  const renderedContent = renderResult.error ? '' : renderResult.content;
+  const ruleFile = renderResult.error ? null :
+    `rules/${candidate.candidate_id}-${renderResult.format}${FORMAT_EXTENSIONS[renderResult.format] || '.txt'}`;
+
+  const validation = validateStructure(candidate, format);
+  const noiseScore = scoreNoise(candidate, renderedContent);
+  const outcomeValidation = validateExpectedOutcomes(
+    candidate.expected_outcomes !== undefined ? candidate.expected_outcomes : null
+  );
+  const delta = computeReadinessDelta(validation, noiseScore);
+
+  const backtestResult = {
+    backtest_id: makeBacktestId(),
+    candidate_id: candidate.candidate_id,
+    rule_file: ruleFile,
+    timestamp: nowUtc(),
+    validation: { passed: validation.valid, errors: validation.errors, warnings: validation.warnings },
+    noise_score: noiseScore,
+    expected_outcomes: outcomeValidation,
+    promotion_readiness_delta: Math.round(delta * 10000) / 10000,
+  };
+  backtestResult.content_hash = computeContentHash(canonicalSerialize(backtestResult));
+
+  writeBacktestResult(path.join(paths.detections, 'backtests'), backtestResult);
+  updateCandidateReadiness(paths.detections, candidate, delta);
+
+  return backtestResult;
+}
+
+// ---------------------------------------------------------------------------
+// CLI Entry Points: Generation and Backtesting
+// ---------------------------------------------------------------------------
+
+function cmdDetectionGenerate(cwd, options, raw) {
+  const report = generateDetectionRules(cwd, options || {});
+
+  if (raw) {
+    output(report, raw);
+    return;
+  }
+
+  const lines = [
+    '# Detection Generation Report',
+    '',
+    `**Total candidates:** ${report.total_candidates}`,
+    `**Generated:** ${report.generated}`,
+    `**Skipped:** ${report.skipped}`,
+    `**Errors:** ${report.errors}`,
+    '',
+  ];
+
+  if (report.rules.length > 0) {
+    lines.push('| Candidate ID | Format | File | Status |');
+    lines.push('|---|---|---|---|');
+    for (const rule of report.rules) {
+      lines.push(`| ${rule.candidate_id} | ${rule.format} | ${rule.file} | ${rule.status} |`);
+    }
+    lines.push('');
+  }
+
+  if (report.skipped_candidates.length > 0) {
+    lines.push('**Skipped candidates:**');
+    for (const s of report.skipped_candidates) {
+      lines.push(`- ${s.candidate_id}: ${s.reason}`);
+    }
+    lines.push('');
+  }
+
+  output(report, true, lines.join('\n'));
+}
+
+function cmdDetectionBacktest(cwd, options, raw) {
+  let candidates = listDetectionCandidates(cwd, options || {});
+
+  if (options && options.candidate) {
+    candidates = candidates.filter(c => c.candidate_id === options.candidate);
+  }
+
+  const results = [];
+  const noiseBreakdown = { low: 0, medium: 0, high: 0 };
+  let passed = 0;
+  let failed = 0;
+
+  for (const candidate of candidates) {
+    const result = backtestDetection(cwd, candidate);
+    results.push(result);
+
+    if (result.validation.passed) {
+      passed++;
+    } else {
+      failed++;
+    }
+    const risk = result.noise_score.noise_risk;
+    noiseBreakdown[risk] = (noiseBreakdown[risk] || 0) + 1;
+  }
+
+  const summary = {
+    total_candidates: candidates.length,
+    backtested: results.length,
+    results,
+    summary: { passed, failed, noise_breakdown: noiseBreakdown },
+  };
+
+  if (raw) {
+    output(summary, raw);
+    return;
+  }
+
+  const lines = [
+    '# Detection Backtest Results',
+    '',
+    `**Backtested:** ${summary.backtested}`,
+    `**Passed:** ${passed}`,
+    `**Failed:** ${failed}`,
+    '',
+    '**Noise Breakdown:**',
+    `- Low: ${noiseBreakdown.low}`,
+    `- Medium: ${noiseBreakdown.medium}`,
+    `- High: ${noiseBreakdown.high}`,
+    '',
+  ];
+
+  if (results.length > 0) {
+    lines.push('| Candidate ID | Validation | Noise Risk | Delta |');
+    lines.push('|---|---|---|---|');
+    for (const r of results) {
+      const status = r.validation.passed ? 'PASS' : 'FAIL';
+      lines.push(`| ${r.candidate_id} | ${status} | ${r.noise_score.noise_risk} | ${r.promotion_readiness_delta} |`);
+    }
+    lines.push('');
+  }
+
+  output(summary, true, lines.join('\n'));
+}
+
+function makePromotionId() {
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+  return `PROM-${stamp}-${suffix}`;
+}
+
+function makeRejectionId() {
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+  return `REJ-${stamp}-${suffix}`;
+}
+
+function findLatestBacktest(candidateId, cwd) {
+  const backtestsDir = path.join(planningPaths(cwd).detections, 'backtests');
+  if (!fs.existsSync(backtestsDir)) return null;
+
+  let backtests = [];
+  try {
+    const files = fs.readdirSync(backtestsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const filePath = path.join(backtestsDir, file);
+        const bt = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        if (bt.candidate_id === candidateId) {
+          const parsedTimestamp = Date.parse(bt.timestamp || '');
+          let sortTimestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0;
+          if (sortTimestamp === 0) {
+            try {
+              sortTimestamp = fs.statSync(filePath).mtimeMs;
+            } catch {
+              sortTimestamp = 0;
+            }
+          }
+          backtests.push({ ...bt, _sort_timestamp: sortTimestamp });
+        }
+      } catch {
+        // Skip corrupt files
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  if (backtests.length === 0) return null;
+  backtests.sort((a, b) =>
+    (b._sort_timestamp || 0) - (a._sort_timestamp || 0) ||
+    (b.backtest_id || '').localeCompare(a.backtest_id || '')
+  );
+  const latest = { ...backtests[0] };
+  delete latest._sort_timestamp;
+  return latest;
+}
+
+// Gates evaluated cheapest-first: backtest_passed, readiness_threshold, analyst_approval
+function checkPromotionGates(candidate, cwd, options) {
+  const config = loadConfig(cwd);
+  const gates = [];
+
+  const backtest = findLatestBacktest(candidate.candidate_id, cwd);
+  const backtestPassed = backtest ? (backtest.validation && backtest.validation.passed === true) : false;
+  gates.push({
+    gate: 'backtest_passed',
+    passed: backtestPassed,
+    detail: backtest
+      ? (backtestPassed ? `Backtest ${backtest.backtest_id} passed` : `Backtest ${backtest.backtest_id} failed validation`)
+      : 'No backtest found for candidate',
+  });
+
+  const threshold = config.promotion_readiness_threshold ?? 0.6;
+  const readiness = candidate.promotion_readiness ?? 0;
+  const readinessPassed = readiness >= threshold;
+  gates.push({
+    gate: 'readiness_threshold',
+    passed: readinessPassed,
+    detail: readinessPassed
+      ? `Readiness ${readiness} >= threshold ${threshold}`
+      : `Readiness ${readiness} < threshold ${threshold}`,
+  });
+
+  const approved = options && options.approve === true;
+  gates.push({
+    gate: 'analyst_approval',
+    passed: approved,
+    detail: approved ? 'Analyst approved with --approve flag' : 'Missing --approve flag',
+  });
+
+  return {
+    all_passed: gates.every(g => g.passed),
+    gates,
+  };
+}
+
+// Follows applySignatureHooks pattern from manifest.cjs
+function applyPromotionHooks(candidate, receipt, hooks) {
+  if (!hooks || (!hooks.beforePromote && !hooks.afterPromote)) return candidate;
+
+  let result = { ...candidate };
+
+  if (typeof hooks.beforePromote === 'function') {
+    result = hooks.beforePromote(result) || result;
+  }
+
+  if (receipt && typeof hooks.afterPromote === 'function') {
+    hooks.afterPromote(result, receipt);
+  }
+
+  return result;
+}
+
+// Writes rule file + meta.json sidecar to DETECTIONS/promotions/rules/
+function writePromotedRule(candidate, cwd) {
+  const detectionsDir = planningPaths(cwd).detections;
+  const promotionRulesDir = path.join(detectionsDir, 'promotions', 'rules');
+  const candidateId = assertValidCandidateId(candidate.candidate_id);
+  tryMkdir(promotionRulesDir);
+
+  const format = candidate.target_format || 'sigma';
+  const ext = FORMAT_EXTENSIONS[format] || '.txt';
+  const ruleFilename = path.basename(resolveCandidateArtifactPath(promotionRulesDir, candidateId, `-${format}${ext}`));
+  const metaFilename = path.basename(resolveCandidateArtifactPath(promotionRulesDir, candidateId, `-${format}${ext}.meta.json`));
+
+  const rendered = renderCandidate(candidate);
+  const content = rendered.error ? '' : rendered.content;
+
+  fs.writeFileSync(path.join(promotionRulesDir, ruleFilename), content, 'utf-8');
+
+  const meta = {
+    candidate_id: candidateId,
+    source_finding_id: candidate.source_finding_id,
+    technique_ids: candidate.technique_ids || [],
+    confidence: candidate.confidence,
+    promotion_readiness: candidate.promotion_readiness,
+    evidence_chain: candidate.evidence_links || [],
+    promoted_at: nowUtc(),
+  };
+  fs.writeFileSync(path.join(promotionRulesDir, metaFilename), JSON.stringify(meta, null, 2), 'utf-8');
+
+  return {
+    rulePath: `promotions/rules/${ruleFilename}`,
+    metaPath: `promotions/rules/${metaFilename}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Promotion: Core Promote/Reject/Status
+// ---------------------------------------------------------------------------
+
+function promoteDetection(cwd, candidate, options) {
+  const config = loadConfig(cwd);
+  const detectionsDir = planningPaths(cwd).detections;
+  const promotionsDir = path.join(detectionsDir, 'promotions');
+
+  const gateResult = checkPromotionGates(candidate, cwd, options);
+  if (!gateResult.all_passed) {
+    const failedGates = gateResult.gates.filter(g => !g.passed);
+    return {
+      promoted: false,
+      gates: gateResult,
+      reason: `Promotion blocked: ${failedGates.map(g => g.detail).join('; ')}`,
+    };
+  }
+
+  const hooksEnabled = config.promotion_hooks_enabled;
+  const hooks = options && options.hooks;
+  if (hooksEnabled && hooks) {
+    candidate = applyPromotionHooks(candidate, null, hooks);
+  }
+
+  const candidateId = assertValidCandidateId(candidate.candidate_id);
+  const ruleResult = writePromotedRule(candidate, cwd);
+
+  const promotionId = makePromotionId();
+  const promotedBy = (options && options['promoted-by']) || detectRuntimeName();
+  const receipt = {
+    promotion_id: promotionId,
+    candidate_id: candidateId,
+    source_phase: candidate.source_phase || null,
+    rule_path: ruleResult.rulePath,
+    target_format: candidate.target_format || 'sigma',
+    promoted_at: nowUtc(),
+    promoted_by: promotedBy,
+    gate_results: gateResult.gates,
+    evidence_chain: candidate.evidence_links || [],
+  };
+
+  const receiptCopy = { ...receipt };
+  receipt.content_hash = computeContentHash(canonicalSerialize(receiptCopy));
+
+  tryMkdir(promotionsDir);
+  const tmpFile = path.join(promotionsDir, `.tmp-${promotionId}.json`);
+  const finalFile = path.join(promotionsDir, `${promotionId}.json`);
+  fs.writeFileSync(tmpFile, JSON.stringify(receipt, null, 2), 'utf-8');
+  fs.renameSync(tmpFile, finalFile);
+
+  candidate.metadata.status = 'promoted';
+  const candidateCopy = { ...candidate };
+  delete candidateCopy.content_hash;
+  candidate.content_hash = computeContentHash(canonicalSerialize(candidateCopy));
+  const candidateFile = resolveCandidateArtifactPath(detectionsDir, candidateId, '.json');
+  if (fs.existsSync(candidateFile)) {
+    fs.writeFileSync(candidateFile, JSON.stringify(candidate, null, 2), 'utf-8');
+  }
+
+  if (hooksEnabled && hooks) {
+    applyPromotionHooks(candidate, receipt, { afterPromote: hooks.afterPromote });
+  }
+
+  try {
+    telemetry.recordPromotionOutcome(cwd, candidate, receipt);
+  } catch (_) { /* telemetry must not break promotion */ }
+
+  return { promoted: true, receipt, rule_path: ruleResult.rulePath };
+}
+
+function rejectDetection(cwd, candidate, options) {
+  const detectionsDir = planningPaths(cwd).detections;
+  const promotionsDir = path.join(detectionsDir, 'promotions');
+  const candidateId = assertValidCandidateId(candidate.candidate_id);
+
+  const rejectionId = makeRejectionId();
+  const rejectedBy = (options && options['rejected-by']) || detectRuntimeName();
+  const receipt = {
+    rejection_id: rejectionId,
+    candidate_id: candidateId,
+    reason: (options && options.reason) || 'No reason provided',
+    rejected_at: nowUtc(),
+    rejected_by: rejectedBy,
+  };
+  receipt.content_hash = computeContentHash(canonicalSerialize({ ...receipt }));
+
+  tryMkdir(promotionsDir);
+  const tmpFile = path.join(promotionsDir, `.tmp-${rejectionId}.json`);
+  const finalFile = path.join(promotionsDir, `${rejectionId}.json`);
+  fs.writeFileSync(tmpFile, JSON.stringify(receipt, null, 2), 'utf-8');
+  fs.renameSync(tmpFile, finalFile);
+
+  candidate.metadata.status = 'rejected';
+  candidate.metadata.rejection_reason = receipt.reason;
+  const candidateCopy = { ...candidate };
+  delete candidateCopy.content_hash;
+  candidate.content_hash = computeContentHash(canonicalSerialize(candidateCopy));
+  const candidateFile = resolveCandidateArtifactPath(detectionsDir, candidateId, '.json');
+  if (fs.existsSync(candidateFile)) {
+    fs.writeFileSync(candidateFile, JSON.stringify(candidate, null, 2), 'utf-8');
+  }
+
+  try {
+    telemetry.recordPromotionOutcome(cwd, candidate, receipt);
+  } catch (_) { /* telemetry must not break rejection */ }
+
+  return { rejected: true, receipt };
+}
+
+function detectionStatus(cwd, options) {
+  const candidates = listDetectionCandidates(cwd, options || {});
+
+  const byStatus = { draft: [], promoted: [], rejected: [] };
+  for (const c of candidates) {
+    const status = (c.metadata && c.metadata.status) || 'draft';
+    if (!byStatus[status]) byStatus[status] = [];
+    byStatus[status].push({
+      candidate_id: c.candidate_id,
+      source_finding_id: c.source_finding_id,
+      target_format: c.target_format,
+      promotion_readiness: c.promotion_readiness,
+      status,
+    });
+  }
+
+  return {
+    by_status: byStatus,
+    counts: {
+      draft: byStatus.draft.length,
+      promoted: byStatus.promoted.length,
+      rejected: byStatus.rejected.length,
+      total: candidates.length,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CLI Entry Points: Promote, Reject, Status
+// ---------------------------------------------------------------------------
+
+function cmdDetectionPromote(cwd, options, raw) {
+  const detectionsDir = planningPaths(cwd).detections;
+
+  if (options && options.candidate) {
+    const candidateFile = resolveCandidateFile(detectionsDir, options.candidate);
+    if (!fs.existsSync(candidateFile)) {
+      error(`Candidate not found: ${options.candidate}`);
+    }
+    const candidate = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
+    let result;
+    try {
+      result = promoteDetection(cwd, candidate, options);
+    } catch (err) {
+      error(err.message);
+    }
+
+    if (raw) {
+      output(result, raw);
+      return;
+    }
+
+    if (result.promoted) {
+      output(result, true, `Promoted ${options.candidate}\nReceipt: ${result.receipt.promotion_id}\nRule: ${result.rule_path}`);
+    } else {
+      output(result, true, `Promotion blocked for ${options.candidate}: ${result.reason}`);
+    }
+    return;
+  }
+
+  if (options && options.phase) {
+    const candidates = listDetectionCandidates(cwd, {}).filter(c =>
+      c.metadata && c.metadata.status === 'draft' &&
+      c.source_phase && c.source_phase.startsWith(options.phase)
+    );
+
+    const promoted = [];
+    const skipped = [];
+    const failed = [];
+
+    for (const candidate of candidates) {
+      try {
+        const result = promoteDetection(cwd, candidate, options);
+        if (result.promoted) {
+          promoted.push({ candidate_id: candidate.candidate_id, receipt: result.receipt });
+        } else {
+          skipped.push({ candidate_id: candidate.candidate_id, reason: result.reason });
+        }
+      } catch (err) {
+        failed.push({ candidate_id: candidate.candidate_id, error: err.message });
+      }
+    }
+
+    const summary = { promoted, skipped, failed };
+
+    if (raw) {
+      output(summary, raw);
+      return;
+    }
+
+    const lines = [
+      '# Bulk Promotion Results',
+      '',
+      `**Promoted:** ${promoted.length}`,
+      `**Skipped:** ${skipped.length}`,
+      `**Failed:** ${failed.length}`,
+      '',
+    ];
+    for (const p of promoted) {
+      lines.push(`- PROMOTED: ${p.candidate_id} (${p.receipt.promotion_id})`);
+    }
+    for (const s of skipped) {
+      lines.push(`- SKIPPED: ${s.candidate_id}: ${s.reason}`);
+    }
+    for (const f of failed) {
+      lines.push(`- FAILED: ${f.candidate_id}: ${f.error}`);
+    }
+
+    output(summary, true, lines.join('\n'));
+    return;
+  }
+
+  error('Usage: detection promote --candidate ID --approve  OR  detection promote --phase N --approve');
+}
+
+function cmdDetectionReject(cwd, options, raw) {
+  if (!options || !options.candidate) {
+    error('Usage: detection reject --candidate ID --reason "text"');
+  }
+  if (!options.reason) {
+    error('Usage: detection reject --candidate ID --reason "text" (--reason is required)');
+  }
+
+  const detectionsDir = planningPaths(cwd).detections;
+  const candidateFile = resolveCandidateFile(detectionsDir, options.candidate);
+  if (!fs.existsSync(candidateFile)) {
+    error(`Candidate not found: ${options.candidate}`);
+  }
+  const candidate = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
+  let result;
+  try {
+    result = rejectDetection(cwd, candidate, options);
+  } catch (err) {
+    error(err.message);
+  }
+
+  if (raw) {
+    output(result, raw);
+    return;
+  }
+
+  output(result, true, `Rejected ${options.candidate}\nReceipt: ${result.receipt.rejection_id}\nReason: ${result.receipt.reason}`);
+}
+
+function cmdDetectionStatus(cwd, options, raw) {
+  const result = detectionStatus(cwd, options || {});
+
+  if (raw) {
+    output(result, raw);
+    return;
+  }
+
+  const lines = [
+    '# Detection Status',
+    '',
+    '| Status | Count |',
+    '|--------|-------|',
+    `| Draft | ${result.counts.draft} |`,
+    `| Promoted | ${result.counts.promoted} |`,
+    `| Rejected | ${result.counts.rejected} |`,
+    `| **Total** | **${result.counts.total}** |`,
+    '',
+  ];
+
+  for (const [status, candidates] of Object.entries(result.by_status)) {
+    if (candidates.length > 0) {
+      lines.push(`## ${status.charAt(0).toUpperCase() + status.slice(1)}`);
+      lines.push('');
+      for (const c of candidates) {
+        lines.push(`- ${c.candidate_id} (readiness: ${c.promotion_readiness})`);
+      }
+      lines.push('');
+    }
+  }
+
+  output(result, true, lines.join('\n'));
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -692,5 +1572,22 @@ module.exports = {
   listDetectionCandidates,
   cmdDetectionMap,
   cmdDetectionList,
+  cmdDetectionGenerate,
+  cmdDetectionBacktest,
   toYaml,
+  generateDetectionRules,
+  backtestDetection,
+  scoreNoise,
+  validateStructure,
+  validateExpectedOutcomes,
+  FORMAT_EXTENSIONS,
+  makeBacktestId,
+  promoteDetection,
+  rejectDetection,
+  detectionStatus,
+  checkPromotionGates,
+  applyPromotionHooks,
+  cmdDetectionPromote,
+  cmdDetectionReject,
+  cmdDetectionStatus,
 };
