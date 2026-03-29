@@ -37,6 +37,12 @@ import {
   createInitialHuntState,
   createInitialInteractiveSessionState,
   createInitialRunListState,
+  createInitialThruntDashboardState,
+  createInitialThruntPhasesState,
+  createInitialThruntEvidenceState,
+  createInitialThruntDetectionsState,
+  createInitialThruntPacksState,
+  createInitialThruntConnectorsState,
   type RuntimeInfo,
 } from "./types"
 import {
@@ -258,6 +264,12 @@ export class TUIApp implements AppController {
       setupSandboxIndex: 0,
       hunt: createInitialHuntState(),
       thruntContext: null,
+      thruntDashboard: createInitialThruntDashboardState(),
+      thruntPhases: createInitialThruntPhasesState(),
+      thruntEvidence: createInitialThruntEvidenceState(),
+      thruntDetections: createInitialThruntDetectionsState(),
+      thruntPacks: createInitialThruntPacksState(),
+      thruntConnectors: createInitialThruntConnectorsState(),
     }
 
     // Build commands list (including hunt commands)

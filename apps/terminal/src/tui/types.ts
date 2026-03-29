@@ -14,6 +14,11 @@ import type {
 } from "../hushd"
 import type { DetectionResult } from "../config"
 import type { ThruntHuntContext } from "../thrunt-bridge/types"
+import type { EvidenceAuditResult } from "../thrunt-bridge/evidence"
+import type { DetectionCandidate } from "../thrunt-bridge/detection"
+import type { PackListEntry, PackShowResult } from "../thrunt-bridge/pack"
+import type { ConnectorEntry, RuntimeDoctorResult } from "../thrunt-bridge/connector"
+import type { HuntmapAnalysis, HuntmapPhaseDetail } from "../thrunt-bridge/huntmap"
 import type {
   TimelineEvent,
   Alert,
@@ -172,6 +177,13 @@ export type InputMode =
   | "hunt-report-history"
   | "hunt-mitre"
   | "hunt-playbook"
+  // THRUNT observation screens
+  | "hunt-dashboard"
+  | "hunt-phases"
+  | "hunt-evidence"
+  | "hunt-detections"
+  | "hunt-packs"
+  | "hunt-connectors"
 
 export type ScreenStage = "supported" | "experimental"
 export type HomeFocus = "prompt" | "actions" | "nav"
@@ -457,6 +469,56 @@ export interface HuntPlaybookState {
   report: HuntReport | null
 }
 
+// =============================================================================
+// THRUNT OBSERVATION SCREEN STATE
+// =============================================================================
+
+export interface ThruntDashboardState {
+  loading: boolean
+  error: string | null
+}
+
+export interface ThruntPhasesState {
+  analysis: HuntmapAnalysis | null
+  selectedPhaseIndex: number
+  phaseDetail: HuntmapPhaseDetail | null
+  detailLoading: boolean
+  list: ListViewport
+  loading: boolean
+  error: string | null
+}
+
+export interface ThruntEvidenceState {
+  results: EvidenceAuditResult[]
+  tree: TreeViewport
+  loading: boolean
+  error: string | null
+}
+
+export interface ThruntDetectionsState {
+  candidates: DetectionCandidate[]
+  list: ListViewport
+  loading: boolean
+  error: string | null
+}
+
+export interface ThruntPacksState {
+  packs: PackListEntry[]
+  selectedPackDetail: PackShowResult | null
+  tree: TreeViewport
+  detailLoading: boolean
+  loading: boolean
+  error: string | null
+}
+
+export interface ThruntConnectorsState {
+  connectors: ConnectorEntry[]
+  doctor: RuntimeDoctorResult | null
+  list: ListViewport
+  loading: boolean
+  error: string | null
+}
+
 export interface HuntState {
   investigation: HuntInvestigationState
   watch: HuntWatchState
@@ -542,6 +604,12 @@ export interface AppState {
 
   // THRUNT bridge state
   thruntContext: ThruntHuntContext | null
+  thruntDashboard: ThruntDashboardState
+  thruntPhases: ThruntPhasesState
+  thruntEvidence: ThruntEvidenceState
+  thruntDetections: ThruntDetectionsState
+  thruntPacks: ThruntPacksState
+  thruntConnectors: ThruntConnectorsState
 }
 
 // =============================================================================
@@ -741,5 +809,60 @@ export function createInitialRunListState(): RunListState {
     selectedRunId: null,
     filter: "active",
     list: { offset: 0, selected: 0 },
+  }
+}
+
+export function createInitialThruntDashboardState(): ThruntDashboardState {
+  return { loading: false, error: null }
+}
+
+export function createInitialThruntPhasesState(): ThruntPhasesState {
+  return {
+    analysis: null,
+    selectedPhaseIndex: 0,
+    phaseDetail: null,
+    detailLoading: false,
+    list: { offset: 0, selected: 0 },
+    loading: false,
+    error: null,
+  }
+}
+
+export function createInitialThruntEvidenceState(): ThruntEvidenceState {
+  return {
+    results: [],
+    tree: { offset: 0, selected: 0, expandedKeys: new Set() },
+    loading: false,
+    error: null,
+  }
+}
+
+export function createInitialThruntDetectionsState(): ThruntDetectionsState {
+  return {
+    candidates: [],
+    list: { offset: 0, selected: 0 },
+    loading: false,
+    error: null,
+  }
+}
+
+export function createInitialThruntPacksState(): ThruntPacksState {
+  return {
+    packs: [],
+    selectedPackDetail: null,
+    tree: { offset: 0, selected: 0, expandedKeys: new Set() },
+    detailLoading: false,
+    loading: false,
+    error: null,
+  }
+}
+
+export function createInitialThruntConnectorsState(): ThruntConnectorsState {
+  return {
+    connectors: [],
+    doctor: null,
+    list: { offset: 0, selected: 0 },
+    loading: false,
+    error: null,
   }
 }

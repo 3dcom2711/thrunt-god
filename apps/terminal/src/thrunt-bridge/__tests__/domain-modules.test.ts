@@ -1,7 +1,10 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { beforeEach, describe, expect, mock, test } from "bun:test"
+import type { ThruntCommandResult } from "../types"
 
 // Mock the executor module before importing domain modules
-const mockRunThruntCommand = mock(() => Promise.resolve({ ok: false, exitCode: 1 }))
+const mockRunThruntCommand = mock((): Promise<ThruntCommandResult<unknown>> =>
+  Promise.resolve({ ok: false, exitCode: 1 }),
+)
 
 mock.module("../executor", () => ({
   runThruntCommand: mockRunThruntCommand,

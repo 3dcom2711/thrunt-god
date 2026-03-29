@@ -11,3 +11,10 @@ export type {
   ThruntStreamHandle,
   ThruntHuntContext,
 } from "./types"
+
+// Domain bridge modules
+export { auditEvidence, type EvidenceAuditResult } from "./evidence"
+export { listDetections, detectionStatus, type DetectionCandidate } from "./detection"
+export { listPacks, showPack, type PackListEntry, type PackShowResult } from "./pack"
+export { listConnectors, runtimeDoctor, type ConnectorEntry, type RuntimeDoctorResult } from "./connector"
+export { analyzeHuntmap, getPhaseDetail, type HuntmapAnalysis, type HuntmapPhaseDetail } from "./huntmap"
