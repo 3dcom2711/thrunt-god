@@ -100,6 +100,9 @@ import { huntReportScreen } from "./screens/hunt-report"
 import { huntReportHistoryScreen } from "./screens/hunt-report-history"
 import { huntMitreScreen } from "./screens/hunt-mitre"
 import { huntPlaybookScreen } from "./screens/hunt-playbook"
+import { huntDetectionsScreen } from "./screens/hunt-detections"
+import { huntConnectorsScreen } from "./screens/hunt-connectors"
+import { huntPacksScreen } from "./screens/hunt-packs"
 
 const AUDIT_PREVIEW_REFRESH_INTERVAL_MS = 15_000
 const INTERACTIVE_ACTIVITY_LIMIT = 8
@@ -322,6 +325,9 @@ export class TUIApp implements AppController {
       ["hunt-report-history", huntReportHistoryScreen],
       ["hunt-mitre", huntMitreScreen],
       ["hunt-playbook", huntPlaybookScreen],
+      ["hunt-detections", huntDetectionsScreen],
+      ["hunt-connectors", huntConnectorsScreen],
+      ["hunt-packs", huntPacksScreen],
     ])
   }
 
