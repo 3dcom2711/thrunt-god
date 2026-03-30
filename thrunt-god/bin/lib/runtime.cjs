@@ -2065,15 +2065,23 @@ async function executeSplunkAsyncJob({ spec, profile, secrets, auth, options }) 
   }, fetchOptions);
 
   const sid = createResponse.data?.sid;
-  if (!sid) {
-    const err = new Error('Splunk async job creation did not return a sid');
+  if (!sid || typeof sid !== 'string') {
+    const err = new Error(`Splunk async job creation did not return a valid sid (got ${typeof sid}: ${JSON.stringify(sid)})`);
     err.code = 'SPLUNK_ASYNC_JOB_NO_SID';
     throw err;
   }
 
   // Step 2: Poll until isDone
+  // Compute timeout budget from spec or use a reasonable default (120s).
+  // The outer withTimeout uses spec.execution.timeout_ms (default 30s) which is
+  // too short for async jobs, so callers should set a higher timeout. We cap
+  // the poll loop to avoid dangling promises beyond the timeout budget.
+  const pollIntervalMs = 2000;
+  const timeoutBudgetMs = Number.isFinite(spec.execution?.timeout_ms) && spec.execution.timeout_ms > 0
+    ? spec.execution.timeout_ms
+    : 120_000;
+  const maxAttempts = Math.max(1, Math.floor(timeoutBudgetMs / pollIntervalMs));
   const pollUrl = buildUrl(baseUrl, `services/search/jobs/${encodeURIComponent(sid)}`, { output_mode: 'json' });
-  const maxAttempts = 30;
   const waitFn = typeof options?.sleep === 'function' ? options.sleep : sleep;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -2089,12 +2097,12 @@ async function executeSplunkAsyncJob({ spec, profile, secrets, auth, options }) 
     }
 
     if (attempt === maxAttempts - 1) {
-      const err = new Error(`Splunk async job ${sid} did not complete within ${maxAttempts * 2} seconds`);
+      const err = new Error(`Splunk async job ${sid} did not complete within ${maxAttempts * pollIntervalMs / 1000} seconds (${maxAttempts} attempts)`);
       err.code = 'SPLUNK_ASYNC_JOB_TIMEOUT';
       throw err;
     }
 
-    await waitFn(2000);
+    await waitFn(pollIntervalMs);
   }
 
   // Step 3: Fetch results
@@ -2607,9 +2615,14 @@ function createDefenderXDRAdapter() {
           titlePath: 'ActionType',
         });
       });
+      const warnings = [];
+      if (response.data?.Stats?.dataset_statistics?.dataset_truncation) {
+        warnings.push(createWarning('defender_xdr_truncation', 'Query results were truncated by Defender XDR due to dataset size limits'));
+      }
       return {
         events,
         entities,
+        warnings,
         metadata: {
           backend: 'defender_xdr',
           endpoint: '/api/advancedhunting/run',
