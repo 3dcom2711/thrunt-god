@@ -218,4 +218,127 @@ describe('built-in SIEM connectors', () => {
       await fixture.close();
     }
   });
+
+  test('elastic reports status partial when ES|QL returns is_partial true', async () => {
+    process.env.ELASTIC_API_KEY = 'elastic-key';
+    const fixture = await startJsonServer(async () => {
+      return {
+        json: {
+          columns: [
+            { name: '@timestamp' },
+            { name: 'host.name' },
+          ],
+          values: [
+            ['2026-03-24T13:00:00.000Z', 'app-01'],
+          ],
+          is_partial: true,
+        },
+      };
+    });
+
+    try {
+      const result = await runtime.executeQuerySpec({
+        connector: { id: 'elastic', profile: 'prod' },
+        dataset: { kind: 'events' },
+        time_window: {
+          start: '2026-03-24T12:00:00.000Z',
+          end: '2026-03-25T12:00:00.000Z',
+        },
+        query: { language: 'esql', statement: 'FROM logs-* | LIMIT 10000' },
+      }, runtime.createBuiltInConnectorRegistry(), {
+        config: {
+          connector_profiles: {
+            elastic: {
+              prod: {
+                auth_type: 'api_key',
+                base_url: fixture.baseUrl,
+                secret_refs: {
+                  api_key: { type: 'env', value: 'ELASTIC_API_KEY' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      assert.strictEqual(result.envelope.status, 'partial');
+      assert.ok(result.envelope.warnings.some(w => w.code === 'elastic_partial'));
+      assert.strictEqual(result.envelope.counts.events, 1);
+    } finally {
+      delete process.env.ELASTIC_API_KEY;
+      await fixture.close();
+    }
+  });
+
+  test('sentinel reports status partial when response contains PartialError', async () => {
+    process.env.SENTINEL_CLIENT_ID = 'sentinel-client';
+    process.env.SENTINEL_CLIENT_SECRET = 'sentinel-secret';
+    const fixture = await startJsonServer(async ({ req }) => {
+      if (req.url === '/oauth2/token') {
+        return {
+          json: {
+            access_token: 'sentinel-token',
+            expires_in: 3600,
+          },
+        };
+      }
+
+      return {
+        json: {
+          tables: [
+            {
+              columns: [
+                { name: 'TimeGenerated' },
+                { name: 'Computer' },
+              ],
+              rows: [
+                ['2026-03-24T02:00:00.000Z', 'dc-01'],
+              ],
+            },
+          ],
+          error: {
+            code: 'PartialError',
+            message: 'Query execution ran into partial failure',
+          },
+        },
+      };
+    });
+
+    try {
+      const result = await runtime.executeQuerySpec({
+        connector: { id: 'sentinel', profile: 'prod' },
+        dataset: { kind: 'events' },
+        time_window: {
+          start: '2026-03-24T00:00:00.000Z',
+          end: '2026-03-25T00:00:00.000Z',
+        },
+        query: { language: 'kql', statement: 'SecurityEvent | take 5' },
+      }, runtime.createBuiltInConnectorRegistry(), {
+        config: {
+          connector_profiles: {
+            sentinel: {
+              prod: {
+                auth_type: 'oauth_client_credentials',
+                base_url: `${fixture.baseUrl}/v1`,
+                token_url: `${fixture.baseUrl}/oauth2/token`,
+                default_parameters: { workspace_id: 'ws-123' },
+                secret_refs: {
+                  client_id: { type: 'env', value: 'SENTINEL_CLIENT_ID' },
+                  client_secret: { type: 'env', value: 'SENTINEL_CLIENT_SECRET' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      assert.strictEqual(result.envelope.status, 'partial');
+      assert.ok(result.envelope.warnings.some(w => w.code === 'sentinel_partial_error'));
+      assert.strictEqual(result.envelope.counts.events, 1);
+    } finally {
+      delete process.env.SENTINEL_CLIENT_ID;
+      delete process.env.SENTINEL_CLIENT_SECRET;
+      await fixture.close();
+    }
+  });
 });
