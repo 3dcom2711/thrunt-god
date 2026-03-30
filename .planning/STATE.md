@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Developer Experience & CI
 status: Active
-stopped_at: Completed 36-03-PLAN.md
-last_updated: "2026-03-30T21:03:59.513Z"
-last_activity: 2026-03-30 -- Completed 36-03 Query Starters Test Coverage
+stopped_at: Completed 37-01-PLAN.md
+last_updated: "2026-03-30T21:28:47.509Z"
+last_activity: 2026-03-30 -- Completed 37-01 Pack Test Infrastructure & Mock Fixtures
 progress:
   total_phases: 19
   completed_phases: 6
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_plans: 13
+  completed_plans: 12
+  percent: 92
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.0 Developer Experience & CI — Phase 36 (Pack Query Wiring & Validation)
+**Current focus:** v2.0 Developer Experience & CI — Phase 37 (Pack Testing & Publishing)
 
 ## Current Milestone: v2.0 Developer Experience & CI
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 36 of 37 (Pack Query Wiring & Validation)
-Plan: 3 of 3 (Query Starters Test Coverage)
+Phase: 37 of 37 (Pack Testing & Publishing)
+Plan: 1 of 2 (Pack Test Infrastructure & Mock Fixtures)
 Status: Active
-Last activity: 2026-03-30 -- Completed 36-03 Query Starters Test Coverage
+Last activity: 2026-03-30 -- Completed 37-01 Pack Test Infrastructure & Mock Fixtures
 
-Progress: [██████████] 100% (11/11 plans complete)
+Progress: [█████████░] 92% (12/13 plans complete)
 
 ## Upcoming Milestones
 
@@ -73,6 +73,8 @@ All historical decisions logged in PROJECT.md Key Decisions table.
 - [Phase 36]: STARTER-PREFILL: Pre-fill query lines array from starter template rather than replacing prompt -- user can extend starter content
 - [Phase 36]: ENTITY-STEP-7B: Entity type selection added as Step 7b within stepTelemetry rather than a separate step function -- keeps 8-step flow structure intact
 - [Phase 36]: SUITE-NUMBERING-CONTIGUOUS: Numbered new test suites 11-16 contiguously following existing suites 1-10 in the test file
+- [Phase 37]: CANONICAL-FOLDER-FN: Consolidated getPackFolderForKind into pack.cjs as single source of truth, re-exported from pack-author.cjs for backward compatibility
+- [Phase 37]: SCHEMA-ALWAYS-VALIDATE: cmdPackTest now always runs schema validation even in non-validate-only mode, surfacing warnings alongside errors
 
 ### Research Specs Available
 
@@ -102,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T21:03:59.511Z
-Stopped at: Completed 36-03-PLAN.md
+Last session: 2026-03-30T21:28:47.506Z
+Stopped at: Completed 37-01-PLAN.md
 Resume file: None

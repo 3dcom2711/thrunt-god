@@ -117,6 +117,10 @@ Plans:
 **Goal**: Ship enhanced pack test with mock data support, fixture generation, and pack distribution mechanisms
 **Depends on**: Phase 36 (query wiring and validation exist)
 **Requirements**: PACK-03
+**Plans:** 1/2 plans executed
+Plans:
+- [ ] 37-01-PLAN.md -- Test fixture generation, mock response fixtures, enhanced cmdPackTest with --verbose/--mock-data/--coverage/--validate-only
+- [ ] 37-02-PLAN.md -- Pack promote command, registry extension with pack_registries config, deprecation warnings, comprehensive test coverage
 **Success Criteria** (what must be TRUE):
   1. pack test --verbose shows detailed execution trace
   2. pack test --mock-data validates against synthetic data fixtures
@@ -272,8 +276,8 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 33. SDK Export Surface | 1/1 | Complete    | 2026-03-30 |
 | 34. Connector Scaffolding CLI | 2/2 | Complete    | 2026-03-30 |
 | 35. Pack Authoring Interactive CLI | 3/3 | Complete    | 2026-03-30 |
-| 36. Pack Query Wiring & Validation | 3/3 | Complete   | 2026-03-30 |
-| 37. Pack Testing & Publishing | 0/0 | Not Started | |
+| 36. Pack Query Wiring & Validation | 3/3 | Complete    | 2026-03-30 |
+| 37. Pack Testing & Publishing | 1/2 | In Progress|  |
 | 38. Replay Engine Core | 0/0 | Not Started | |
 | 39. Per-Language Query Rewriters | 0/0 | Not Started | |
 | 40. Source Retargeting & IOC Injection | 0/0 | Not Started | |
