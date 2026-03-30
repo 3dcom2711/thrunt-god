@@ -84,8 +84,8 @@ export namespace Router {
     // Determine strategy
     const strategy = action.strategy || "single"
 
-    // Determine gates (use rule result or default)
-    const gates = action.gates || config.defaults.gates
+    // Determine gates (prefer task-provided, then rule result, then default)
+    const gates = task.gates || action.gates || config.defaults.gates
 
     // Determine retries
     const retries = action.retries ?? config.defaults.retries
@@ -157,7 +157,7 @@ export namespace Router {
       // If gates failed, try with reduced gates
       // Remove non-critical gates on first reroute
       const criticalGates = originalDecision.gates.filter(
-        (g) => g === "pytest" // Only pytest is always critical
+        (g) => g === "evidence-integrity" // Evidence integrity is the critical gate
       )
 
       if (criticalGates.length < originalDecision.gates.length) {

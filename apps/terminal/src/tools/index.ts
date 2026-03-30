@@ -274,7 +274,7 @@ Use before committing or after making changes to verify quality.`,
     const p = params as GateParams
     const ctx = context ?? { cwd: process.cwd(), projectId: "default" }
 
-    const gates = p.gates ?? ["pytest", "mypy", "ruff"]
+    const gates = p.gates ?? ["evidence-integrity", "receipt-completeness"]
     const failFast = p.failFast ?? true
     const directory = p.directory ?? ctx.cwd
 
