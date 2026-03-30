@@ -1,0 +1,65 @@
+name: Reusable Pack Test
+
+on:
+  workflow_call:
+    inputs:
+      thrunt-version:
+        description: 'THRUNT GOD version to test against'
+        required: false
+        default: 'latest'
+        type: string
+      node-version:
+        description: 'Node.js version'
+        required: false
+        default: '22'
+        type: string
+      packs-directory:
+        description: 'Directory containing pack JSON files'
+        required: false
+        default: 'packs'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout pack repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6.3.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install THRUNT GOD
+        run: npm install -g thrunt-god@${{ inputs.thrunt-version }}
+
+      - name: Discover and validate packs
+        run: |
+          PACKS_DIR="${{ inputs.packs-directory }}"
+          if [ ! -d "$PACKS_DIR" ]; then
+            echo "No packs directory found at $PACKS_DIR"
+            exit 1
+          fi
+
+          FAILED=0
+          for pack_file in "$PACKS_DIR"/**/*.json; do
+            echo "Validating: $pack_file"
+            PACK_ID=$(node -e "console.log(require('./$pack_file').id)")
+            mkdir -p .planning/packs/
+            cp "$pack_file" .planning/packs/
+            if ! thrunt-god pack test "$PACK_ID" 2>&1; then
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "FAILED: $FAILED pack(s) failed validation"
+            exit 1
+          fi
