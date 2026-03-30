@@ -86,7 +86,7 @@ Plans:
 **Goal**: Ship thrunt pack create command with interactive guided flow for creating hunt packs including MITRE ATT&CK technique selection
 **Depends on**: Nothing (builds on existing pack init command)
 **Requirements**: PACK-01
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 - [ ] 35-01-PLAN.md -- MITRE ATT&CK data bundle, mitre-data.cjs module, and mitre-data tests
 - [ ] 35-02-PLAN.md -- pack-author.cjs interactive engine, cmdPackCreate routing
@@ -266,7 +266,7 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 32. Integration Test CI & Pack Validation | 1/1 | Complete    | 2026-03-30 |
 | 33. SDK Export Surface | 1/1 | Complete    | 2026-03-30 |
 | 34. Connector Scaffolding CLI | 2/2 | Complete    | 2026-03-30 |
-| 35. Pack Authoring Interactive CLI | 1/3 | In Progress|  |
+| 35. Pack Authoring Interactive CLI | 2/3 | In Progress|  |
 | 36. Pack Query Wiring & Validation | 0/0 | Not Started | |
 | 37. Pack Testing & Publishing | 0/0 | Not Started | |
 | 38. Replay Engine Core | 0/0 | Not Started | |
