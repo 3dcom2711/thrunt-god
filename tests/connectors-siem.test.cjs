@@ -676,4 +676,76 @@ describe('built-in SIEM connectors', () => {
       await fixture.close();
     }
   });
+
+  test('opensearch executes query with SigV4 authentication for AWS managed clusters', async () => {
+    process.env.OPENSEARCH_AWS_KEY = 'test-access-key';
+    process.env.OPENSEARCH_AWS_SECRET = 'test-secret-key';
+    let capturedReq = null;
+    const fixture = await startJsonServer(async ({ req, body }) => {
+      capturedReq = req;
+      return {
+        json: {
+          schema: [
+            { name: '@timestamp', type: 'timestamp' },
+            { name: 'host.name', type: 'keyword' },
+            { name: 'user.name', type: 'keyword' },
+          ],
+          datarows: [
+            ['2026-03-28T14:00:00.000Z', 'os-aws-01', 'frank'],
+          ],
+          total: 1,
+          size: 1,
+          status: 200,
+        },
+      };
+    });
+
+    try {
+      const result = await runtime.executeQuerySpec({
+        connector: { id: 'opensearch', profile: 'aws' },
+        dataset: { kind: 'events' },
+        time_window: {
+          start: '2026-03-28T00:00:00.000Z',
+          end: '2026-03-29T00:00:00.000Z',
+        },
+        query: { language: 'sql', statement: "SELECT * FROM logs WHERE @timestamp > '2026-03-28'" },
+      }, runtime.createBuiltInConnectorRegistry(), {
+        config: {
+          connector_profiles: {
+            opensearch: {
+              aws: {
+                auth_type: 'sigv4',
+                base_url: fixture.baseUrl,
+                region: 'us-east-1',
+                secret_refs: {
+                  access_key_id: { type: 'env', value: 'OPENSEARCH_AWS_KEY' },
+                  secret_access_key: { type: 'env', value: 'OPENSEARCH_AWS_SECRET' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // SigV4 signature in authorization header
+      assert.ok(capturedReq.headers.authorization, 'Should have authorization header');
+      assert.ok(capturedReq.headers.authorization.startsWith('AWS4-HMAC-SHA256'), `Expected AWS4-HMAC-SHA256 but got ${capturedReq.headers.authorization}`);
+      assert.ok(capturedReq.headers['x-amz-date'], 'Should have x-amz-date header');
+
+      // Envelope is correct
+      assert.strictEqual(result.envelope.status, 'ok');
+      assert.strictEqual(result.envelope.counts.events, 1);
+      assert.ok(result.envelope.entities.some(e => e.kind === 'host' && e.value === 'os-aws-01'));
+      assert.ok(result.envelope.entities.some(e => e.kind === 'user' && e.value === 'frank'));
+
+      // Capabilities include sigv4
+      const connectors = runtime.createBuiltInConnectorRegistry().list();
+      const opensearch = connectors.find(c => c.id === 'opensearch');
+      assert.ok(opensearch.auth_types.includes('sigv4'), 'opensearch capabilities should include sigv4 auth type');
+    } finally {
+      delete process.env.OPENSEARCH_AWS_KEY;
+      delete process.env.OPENSEARCH_AWS_SECRET;
+      await fixture.close();
+    }
+  });
 });
