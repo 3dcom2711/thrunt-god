@@ -53,9 +53,45 @@ async function waitForHealthy(url, { timeout = 120000, interval = 3000 } = {}) {
   }
 }
 
+/**
+ * Bootstrap a bearer token from Splunk REST API for integration test auth.
+ * Uses the /services/authorization/tokens endpoint to create a static token.
+ *
+ * @param {string} baseUrl - Splunk management URL (e.g. http://127.0.0.1:18089)
+ * @param {object} opts
+ * @param {string} opts.user - Splunk admin username
+ * @param {string} opts.password - Splunk admin password
+ * @returns {Promise<string>} bearer token
+ */
+async function createSplunkBearerToken(baseUrl, { user, password }) {
+  const auth = 'Basic ' + Buffer.from(`${user}:${password}`).toString('base64');
+  const resp = await fetch(`${baseUrl}/services/authorization/tokens`, {
+    method: 'POST',
+    headers: {
+      Authorization: auth,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: 'name=integ_test_token&audience=search&type=static',
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Failed to create Splunk bearer token: HTTP ${resp.status} — ${text}`);
+  }
+
+  const data = await resp.json();
+  const token = data?.entry?.[0]?.content?.token;
+  if (!token) {
+    throw new Error(`Splunk token response missing entry[0].content.token: ${JSON.stringify(data)}`);
+  }
+  return token;
+}
+
 module.exports = {
   skipIfNoDocker,
   waitForHealthy,
+  createSplunkBearerToken,
   SPLUNK_URL,
   SPLUNK_HEC_URL,
   ELASTIC_URL,
