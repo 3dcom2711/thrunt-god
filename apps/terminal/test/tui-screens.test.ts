@@ -10,6 +10,7 @@ import {
   createInitialHuntState,
   createInitialInteractiveSessionState,
   createInitialRunListState,
+  createInitialThruntExecutionState,
 } from "../src/tui/types"
 import { THEME } from "../src/tui/theme"
 import { createMainScreen } from "../src/tui/screens/main"
@@ -182,6 +183,8 @@ function createState(): AppState {
     thruntDetections: { candidates: [], list: { offset: 0, selected: 0 }, loading: false, error: null },
     thruntPacks: { packs: [], selectedPackDetail: null, tree: { offset: 0, selected: 0, expandedKeys: new Set() }, detailLoading: false, loading: false, error: null },
     thruntConnectors: { connectors: [], doctor: null, list: { offset: 0, selected: 0 }, loading: false, error: null },
+    thruntGateResults: null,
+    thruntExecution: createInitialThruntExecutionState(),
   }
 }
 

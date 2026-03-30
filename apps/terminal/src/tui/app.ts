@@ -15,8 +15,12 @@ import { Hushd, eventDecision } from "../hushd"
 import { Config } from "../config"
 import { loadDesktopAgentSnapshotSync } from "../desktop-agent"
 import { ThruntPlanningWatcher } from "../thrunt-bridge"
+import { executeQueryStream } from "../thrunt-bridge/runtime"
+import { Verifier } from "../verifier"
 import { THEME, ESC, AGENTS } from "./theme"
 import { renderStatusBar } from "./components/status-bar"
+import { renderGateOverlay } from "./components/gate-overlay"
+import { createLogState, appendLine } from "./components/streaming-log"
 import { getInvestigationCounts, isInvestigationStale } from "./investigation"
 import { getSurfaceMeta } from "./surfaces"
 import type {
@@ -43,6 +47,7 @@ import {
   createInitialThruntDetectionsState,
   createInitialThruntPacksState,
   createInitialThruntConnectorsState,
+  createInitialThruntExecutionState,
   type RuntimeInfo,
 } from "./types"
 import {
@@ -275,6 +280,8 @@ export class TUIApp implements AppController {
       thruntDetections: createInitialThruntDetectionsState(),
       thruntPacks: createInitialThruntPacksState(),
       thruntConnectors: createInitialThruntConnectorsState(),
+      thruntGateResults: null,
+      thruntExecution: createInitialThruntExecutionState(),
     }
 
     // Build commands list (including hunt commands)
@@ -747,6 +754,18 @@ export class TUIApp implements AppController {
       return
     }
 
+    // Gate overlay toggle (G key from main screen when gate results exist)
+    if ((key === "G" || key === "g") && this.state.inputMode === "main" && this.state.thruntGateResults) {
+      this._showGateOverlay = !this._showGateOverlay
+      this.render()
+      return
+    }
+    if (key === "\x1b" && this._showGateOverlay) {
+      this._showGateOverlay = false
+      this.render()
+      return
+    }
+
     const screen = this.screens.get(this.state.inputMode)
     if (screen) {
       const ctx = this.createContext()
@@ -764,6 +783,17 @@ export class TUIApp implements AppController {
     const ctx = this.createContext()
     const screen = this.screens.get(this.state.inputMode)
     let screenContent = screen ? screen.render(ctx) : ""
+
+    // Gate overlay (centered, replaces screen rows)
+    if (this._showGateOverlay && this.state.thruntGateResults) {
+      const overlayLines = renderGateOverlay(this.state.thruntGateResults, this.width, this.height, THEME)
+      const startRow = Math.max(0, Math.floor((this.height - overlayLines.length) / 2))
+      const screenLines = screenContent.split("\n")
+      for (let i = 0; i < overlayLines.length && (startRow + i) < screenLines.length; i++) {
+        screenLines[startRow + i] = overlayLines[i]
+      }
+      screenContent = screenLines.join("\n")
+    }
 
     // Apply background + status bar
     const clearToEol = "\x1b[K"
@@ -834,6 +864,11 @@ export class TUIApp implements AppController {
           plan: `${this.state.thruntContext.plan.current ?? "?"}/${this.state.thruntContext.plan.total ?? "?"}`,
           progress: this.state.thruntContext.progressPercent ?? 0,
         } : null,
+        gateResults: this.state.thruntGateResults ? {
+          passed: this.state.thruntGateResults.results.filter(r => r.passed).length,
+          failed: this.state.thruntGateResults.results.filter(r => !r.passed).length,
+          score: this.state.thruntGateResults.score,
+        } : null,
       },
       this.width,
       THEME,
@@ -900,6 +935,16 @@ export class TUIApp implements AppController {
         error: `${agent.name} does not expose an interactive ${mode} session yet.`,
       }
       this.render()
+      return
+    }
+
+    // Detect query execution: if prompt starts with "query:" extract connector and query
+    const queryMatch = prompt.match(/^query:\s*(\S+)\s+(.+)$/i)
+    if (queryMatch) {
+      const [, connector, queryText] = queryMatch
+      this.state.dispatchSheet = createInitialDispatchSheetState()
+      this.state.promptBuffer = ""
+      this.executeThruntQuery(connector, queryText)
       return
     }
 
@@ -2267,6 +2312,143 @@ export class TUIApp implements AppController {
       this.render()
       await sessionPlan?.cleanup().catch(() => {})
     }
+  }
+
+  // ===========================================================================
+  // THRUNT QUERY EXECUTION
+  // ===========================================================================
+
+  private _activeQueryHandle: { kill(): void } | null = null
+  private _showGateOverlay = false
+
+  private executeThruntQuery(connector: string, query: string): void {
+    // Set up execution state
+    this.state.thruntExecution = {
+      running: true,
+      connector,
+      query,
+      log: createLogState(1000),
+      error: null,
+      completedAt: null,
+    }
+    this.state.statusMessage = `${THEME.accent}*${THEME.reset} Executing query on ${connector}...`
+    this.render()
+
+    // Track stream completion for gate triggering
+    let streamDone = false
+
+    const handle = executeQueryStream(
+      connector,
+      query,
+      (data: unknown) => {
+        // Format each NDJSON chunk as a log line
+        const text = typeof data === "object" && data !== null
+          ? JSON.stringify(data, null, 0)
+          : String(data)
+        this.state.thruntExecution.log = appendLine(
+          this.state.thruntExecution.log,
+          { text, plainLength: text.length },
+        )
+        this.render()
+      },
+      (error: string) => {
+        this.state.thruntExecution.error = error
+        this.state.thruntExecution.running = false
+        this.state.thruntExecution.completedAt = new Date().toISOString()
+        this.state.statusMessage = `${THEME.error}x${THEME.reset} Query execution error: ${error}`
+        this.render()
+      },
+    )
+
+    // Store handle for potential kill
+    this._activeQueryHandle = handle
+
+    // Monitor process completion by polling for error/stopped state
+    const checkCompletion = setInterval(() => {
+      if (this.state.thruntExecution.error || !this.state.thruntExecution.running) {
+        clearInterval(checkCompletion)
+        if (!streamDone) {
+          streamDone = true
+          this.onQueryExecutionComplete()
+        }
+      }
+    }, 500)
+
+    // Stability guard: if no new lines arrive for 3 seconds after at least one, consider done
+    let lastLineCount = 0
+    let stableChecks = 0
+    const stableTimer = setInterval(() => {
+      const currentCount = this.state.thruntExecution.log.lines.length
+      if (currentCount > 0 && currentCount === lastLineCount) {
+        stableChecks++
+        if (stableChecks >= 6) { // 3 seconds of stability
+          clearInterval(stableTimer)
+          clearInterval(checkCompletion)
+          if (!streamDone) {
+            streamDone = true
+            this.state.thruntExecution.running = false
+            this.state.thruntExecution.completedAt = new Date().toISOString()
+            this.onQueryExecutionComplete()
+          }
+        }
+      } else {
+        stableChecks = 0
+        lastLineCount = currentCount
+      }
+    }, 500)
+  }
+
+  private async onQueryExecutionComplete(): Promise<void> {
+    this.state.statusMessage = `${THEME.accent}*${THEME.reset} Running verification gates...`
+    this.render()
+
+    try {
+      // Create synthetic WorkcellInfo for THRUNT gate context
+      const workcell: import("../types").WorkcellInfo = {
+        id: "thrunt-execution",
+        name: "thrunt-query",
+        directory: this.cwd,
+        branch: "main",
+        status: "warm",
+        projectId: "thrunt",
+        createdAt: Date.now(),
+        useCount: 0,
+      }
+
+      const gateResults = await Verifier.run(workcell, {
+        gates: ["evidence-integrity", "receipt-completeness"],
+        failFast: false,
+        timeout: 60000,
+      })
+
+      this.state.thruntGateResults = {
+        results: gateResults.results.map(r => ({
+          gate: r.gate,
+          passed: r.passed,
+          output: r.output,
+          diagnostics: r.diagnostics?.map(d => ({
+            severity: d.severity,
+            message: d.message,
+            file: d.file,
+          })),
+        })),
+        allPassed: gateResults.allPassed,
+        score: gateResults.score,
+        ranAt: new Date().toISOString(),
+      }
+
+      if (gateResults.allPassed) {
+        this.state.statusMessage = `${THEME.success}v${THEME.reset} Query complete, gates passed`
+      } else {
+        this.state.statusMessage = `${THEME.warning}!${THEME.reset} Query complete, gate issues found`
+      }
+    } catch (err) {
+      this.state.statusMessage = `${THEME.warning}!${THEME.reset} Query complete, gate check error`
+    }
+
+    // Auto-navigate to evidence screen
+    this.setScreen("hunt-evidence")
+    this.render()
   }
 
   private async launchManagedRun(run: RunRecord): Promise<void> {
