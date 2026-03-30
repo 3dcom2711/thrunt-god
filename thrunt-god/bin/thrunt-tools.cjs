@@ -35,6 +35,9 @@
  *   pack test [<pack-id>]              Smoke-test packs using example parameters
  *   pack init <pack-id>                Scaffold a local pack under .planning/packs/
  *     [--param key=value] [--params '{json}']
+ *   pack create [options]              Interactively create a new hunt pack with guided 8-step flow
+ *     [--non-interactive] [--kind <type>] [--id <id>] [--attack <ids>]
+ *     [--extends <ids>] [--connectors <ids>] [--output <path>] [--dry-run]
  *   init connector <id>                Scaffold a new connector adapter with tests and Docker boilerplate
  *   runtime list-connectors            List built-in runtime connector capabilities
  *   runtime doctor [<connector-id>]    Score connector readiness and preflight config
@@ -561,8 +564,10 @@ async function runCommand(command, args, cwd, raw) {
         await commands.cmdPackTest(cwd, args.slice(2), raw);
       } else if (subcommand === 'init') {
         await commands.cmdPackInit(cwd, args.slice(2), raw);
+      } else if (subcommand === 'create') {
+        await commands.cmdPackCreate(cwd, args.slice(2), raw);
       } else {
-        error('Unknown pack subcommand. Available: list, show, bootstrap, validate, render-targets, lint, test, init');
+        error('Unknown pack subcommand. Available: list, show, bootstrap, validate, render-targets, lint, test, init, create');
       }
       break;
     }

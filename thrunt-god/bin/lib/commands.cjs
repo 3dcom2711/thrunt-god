@@ -1004,6 +1004,58 @@ async function cmdPackInit(cwd, args, raw) {
   }, raw);
 }
 
+/**
+ * Create a new pack via the interactive 8-step flow or non-interactive flags.
+ * thrunt pack create [options]
+ */
+async function cmdPackCreate(cwd, args, raw) {
+  const packAuthor = require('./pack-author.cjs');
+
+  // Parse flags
+  const flags = {
+    dryRun: false,
+    nonInteractive: false,
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i];
+    if (!token.startsWith('--')) continue;
+    const key = token.slice(2);
+
+    if (key === 'dry-run') { flags.dryRun = true; continue; }
+    if (key === 'non-interactive') { flags.nonInteractive = true; continue; }
+
+    const nextVal = args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null;
+
+    if (key === 'kind' && nextVal) { flags.kind = nextVal; i++; continue; }
+    if (key === 'id' && nextVal) { flags.id = nextVal; i++; continue; }
+    if (key === 'title' && nextVal) { flags.title = nextVal; i++; continue; }
+    if (key === 'description' && nextVal) { flags.description = nextVal; i++; continue; }
+    if (key === 'attack' && nextVal) { flags.attack = nextVal; i++; continue; }
+    if (key === 'extends' && nextVal) { flags.extends = nextVal; i++; continue; }
+    if (key === 'connectors' && nextVal) { flags.connectors = nextVal; i++; continue; }
+    if (key === 'datasets' && nextVal) { flags.datasets = nextVal; i++; continue; }
+    if (key === 'hypothesis' && nextVal) { flags.hypothesis = nextVal; i++; continue; }
+    if (key === 'output' && nextVal) { flags.output = nextVal; i++; continue; }
+    if (key === 'stability' && nextVal) { flags.stability = nextVal; i++; continue; }
+  }
+
+  try {
+    let result;
+    if (flags.nonInteractive) {
+      result = packAuthor.buildPackFromFlags(cwd, flags);
+    } else {
+      result = await packAuthor.runPackAuthor(cwd, {
+        dryRun: flags.dryRun,
+        output: flags.output,
+      });
+    }
+    output(result, raw);
+  } catch (err) {
+    error(err.message || String(err));
+  }
+}
+
 function cmdCommit(cwd, message, files, raw, amend, noVerify) {
   if (!message && !amend) {
     error('commit message required');
@@ -2182,6 +2234,7 @@ module.exports = {
   cmdPackLint,
   cmdPackTest,
   cmdPackInit,
+  cmdPackCreate,
   cmdRuntimeListConnectors,
   cmdRuntimeDoctor,
   cmdRuntimeSmoke,
