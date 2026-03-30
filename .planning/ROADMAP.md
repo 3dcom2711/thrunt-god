@@ -78,10 +78,11 @@ Plans:
   2. The OpenSearch integration test executes a real ES|QL query against the OpenSearch container and validates that normalizeElasticRows() produces consistent output against a live response snapshot
   3. User can run EQL sequence queries against Elasticsearch via /_eql/search as a distinct query surface and receive results in the standard result envelope
   4. User can configure an OpenSearch connector with AWS SigV4 credentials and execute queries against an Amazon OpenSearch Service managed cluster
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 30-01: TBD
+- [ ] 30-01-PLAN.md -- EQL query surface for Elastic adapter + SigV4 authentication for OpenSearch adapter with unit tests
+- [ ] 30-02-PLAN.md -- Elastic ES|QL and OpenSearch SQL Docker integration tests with entity extraction validation
 
 ## Progress
 
@@ -92,5 +93,5 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 |-------|----------------|--------|-----------|
 | 27. SDK Contract Hardening & New Adapter Stubs | 2/2 | Complete    | 2026-03-30 |
 | 28. Docker Test Infrastructure | 1/1 | Complete    | 2026-03-30 |
-| 29. Splunk Integration | 1/1 | Complete   | 2026-03-30 |
-| 30. Elastic & OpenSearch Integration | 0/? | Not started | - |
+| 29. Splunk Integration | 1/1 | Complete    | 2026-03-30 |
+| 30. Elastic & OpenSearch Integration | 0/2 | Not started | - |
