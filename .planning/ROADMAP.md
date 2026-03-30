@@ -193,6 +193,10 @@ Plans:
 **Goal**: Ship tenant configuration system extending connector_profiles with per-tenant credential management and CRUD commands
 **Depends on**: Nothing (first multi-tenant phase, builds on existing connector_profiles)
 **Requirements**: TENANT-01
+**Plans:** 2 plans
+Plans:
+- [ ] 42-01-PLAN.md -- tenant.cjs module with Zod validation, assessTenantReadiness, CRUD CLI commands, config integration, CLI routing
+- [ ] 42-02-PLAN.md -- Comprehensive test suite for schema validation, CRUD, readiness, and CLI routing
 **Success Criteria** (what must be TRUE):
   1. Tenant config schema extends connector_profiles with tenant metadata (display_name, tags, enabled flag)
   2. Credential isolation enforced — per-tenant token cache via fresh Map() instances
@@ -294,8 +298,8 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 38. Replay Engine Core | 1/1 | Complete    | 2026-03-30 |
 | 39. Per-Language Query Rewriters | 1/1 | Complete    | 2026-03-30 |
 | 40. Source Retargeting & IOC Injection | 1/1 | Complete    | 2026-03-30 |
-| 41. Replay Diffing & Receipt Lineage | 2/2 | Complete   | 2026-03-30 |
-| 42. Tenant Registry & Auth | 0/0 | Not Started | |
+| 41. Replay Diffing & Receipt Lineage | 2/2 | Complete    | 2026-03-30 |
+| 42. Tenant Registry & Auth | 0/2 | Active | |
 | 43. Dispatch Coordinator | 0/0 | Not Started | |
 | 44. Cross-Tenant Aggregation & Heatmap | 0/0 | Not Started | |
 | 45. @thrunt/connector-sdk Package | 0/0 | Not Started | |
