@@ -15,6 +15,7 @@ const { createInterface } = require('node:readline/promises');
 
 const packLib = require('./pack.cjs');
 const mitreData = require('./mitre-data.cjs');
+const queryStarters = require('./query-starters.cjs');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -508,8 +509,24 @@ async function stepConnectorWiring(rl, kind) {
     const defaultLang = connector ? (CONNECTOR_LANGUAGES[connector] || 'native') : 'native';
     const language = await promptLine(rl, '> Query language', defaultLang);
 
-    console.log('  > Query template (enter empty line to finish):');
-    const queryLines = [];
+    // Query starter presentation
+    const starter = connector ? queryStarters.getQueryStarter(connector) : null;
+    let useStarter = false;
+    if (starter) {
+      console.log(`\n  Suggested starter (${starter.description}):`);
+      console.log(`    ${starter.template.split('\n').join('\n    ')}`);
+      useStarter = await promptYesNo(rl, '> Use this starter as base?', true);
+    }
+
+    if (useStarter && starter) {
+      console.log('  > Query template (edit below, empty line to finish):');
+    } else {
+      console.log('  > Query template (enter empty line to finish):');
+    }
+    const queryLines = useStarter && starter ? [...starter.template.split('\n')] : [];
+    if (useStarter && starter) {
+      console.log(`    (pre-filled ${queryLines.length} line${queryLines.length !== 1 ? 's' : ''} from starter)`);
+    }
     let line;
     do {
       line = await rl.question('    ');
@@ -532,6 +549,35 @@ async function stepConnectorWiring(rl, kind) {
 
     targetCount++;
     addTarget = await promptYesNo(rl, '> Add another target?', false);
+  }
+
+  // Multi-target guidance: warn about connectors without execution targets
+  if (selectedConnectors.length > 0 && targets.length > 0) {
+    const targetConnectors = new Set(targets.map(t => t.connector));
+    const uncoveredConnectors = selectedConnectors.filter(c => !targetConnectors.has(c));
+    if (uncoveredConnectors.length > 0) {
+      console.log(`\n  Connectors without execution targets: ${uncoveredConnectors.join(', ')}`);
+      for (const uc of uncoveredConnectors) {
+        const addMissing = await promptYesNo(rl, `> Add a target for ${uc}?`, false);
+        if (addMissing) {
+          const ucStarter = queryStarters.getQueryStarter(uc);
+          const ucLang = CONNECTOR_LANGUAGES[uc] || 'native';
+          const ucName = await promptLine(rl, '> Target name');
+          if (ucName) {
+            const ucDataset = selectedDatasets.length === 1 ? selectedDatasets[0] : await promptChoice(rl, '> Dataset:', selectedDatasets.length > 0 ? selectedDatasets : DATASET_KINDS);
+            const ucTemplate = ucStarter ? ucStarter.template : '';
+            targets.push({
+              name: ucName,
+              description: '',
+              connector: uc,
+              dataset: ucDataset,
+              language: ucLang,
+              query_template: ucTemplate,
+            });
+          }
+        }
+      }
+    }
   }
 
   return {
