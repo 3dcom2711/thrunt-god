@@ -238,6 +238,7 @@ function parseRuntimeArgs(args = []) {
     parameters: {},
     hypothesis_ids: [],
     tags: [],
+    iocs: [],
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -266,8 +267,8 @@ function parseRuntimeArgs(args = []) {
       continue;
     }
 
-    if ((key === 'hypothesis' || key === 'tag') && args[i + 1] && !args[i + 1].startsWith('--')) {
-      const target = key === 'hypothesis' ? options.hypothesis_ids : options.tags;
+    if ((key === 'hypothesis' || key === 'tag' || key === 'ioc') && args[i + 1] && !args[i + 1].startsWith('--')) {
+      const target = key === 'hypothesis' ? options.hypothesis_ids : key === 'tag' ? options.tags : options.iocs;
       target.push(args[i + 1]);
       i += 1;
       continue;
@@ -2429,6 +2430,303 @@ async function cmdPackPromote(cwd, args, raw) {
   }, raw, toPosixPath(relDest));
 }
 
+// ─── Replay CLI Commands ─────────────────────────────────────────────────────
+
+async function cmdRuntimeReplay(cwd, args, raw) {
+  const replay = require('./replay.cjs');
+  const runtime = require('./runtime.cjs');
+  const telemetry = require('./telemetry.cjs');
+  const config = loadConfig(cwd);
+  const options = parseRuntimeArgs(args);
+
+  if (!options.source) {
+    error('runtime replay requires --source <QRY-...|RCT-...|PE-...>');
+  }
+
+  // Determine source type from ID prefix
+  let sourceType;
+  if (options.source.startsWith('QRY-')) {
+    sourceType = 'query';
+  } else if (options.source.startsWith('RCT-')) {
+    sourceType = 'receipt';
+  } else if (options.source.startsWith('PE-')) {
+    sourceType = 'pack_execution';
+  } else {
+    error(`Unrecognized source ID prefix: "${options.source}". Expected QRY-..., RCT-..., or PE-...`);
+  }
+
+  // Build mutations from args
+  const mutations = {};
+  if (options.start && options.end) {
+    mutations.time_window = { mode: 'absolute', start: options.start, end: options.end };
+  } else if (options.shift) {
+    mutations.time_window = { mode: 'shift', shift_ms: replay.parseShiftDuration(options.shift) };
+  } else if (options.lookback_minutes) {
+    mutations.time_window = { mode: 'lookback', lookback_minutes: parseInt(options.lookback_minutes, 10) };
+  }
+
+  if (options.connector) {
+    mutations.connector = { id: options.connector };
+  }
+
+  if (options.iocs && options.iocs.length > 0) {
+    const parsedIocs = options.iocs.map(pair => {
+      const eq = pair.indexOf('=');
+      if (eq === -1) {
+        error(`--ioc requires type=value format, received "${pair}"`);
+      }
+      return { type: pair.slice(0, eq), value: pair.slice(eq + 1) };
+    });
+    mutations.ioc_injection = {
+      mode: options.ioc_mode || 'append',
+      iocs: parsedIocs,
+    };
+  }
+
+  // Build diff config
+  const diffConfig = {
+    enabled: options.diff === true,
+    mode: options.diff_mode || 'full',
+  };
+
+  // Build evidence lineage
+  const evidenceLineage = {
+    original_query_ids: [options.source],
+    replay_reason: options.reason || 'CLI replay',
+  };
+
+  // Create replay spec
+  const replaySpec = replay.createReplaySpec({
+    source: { type: sourceType, ids: [options.source] },
+    mutations,
+    diff: diffConfig,
+    evidence: { lineage: evidenceLineage },
+  });
+
+  // Resolve original source
+  const resolved = replay.resolveReplaySource(cwd, replaySpec.source);
+  const validResolved = resolved.filter(r => r.original_spec);
+  if (validResolved.length === 0) {
+    const warnings = resolved.flatMap(r => r.warnings || []);
+    error(`Could not resolve source: ${options.source}${warnings.length ? ' (' + warnings.join('; ') + ')' : ''}`);
+  }
+
+  // Apply mutations to each resolved spec
+  const mutatedSpecs = validResolved.map(r => replay.applyMutations(r.original_spec, replaySpec.mutations));
+
+  // Dry run: output mutated specs and return
+  if (options.dry_run) {
+    output({
+      replay_id: replaySpec.replay_id,
+      dry_run: true,
+      source: options.source,
+      source_type: sourceType,
+      mutations: replaySpec.mutations,
+      diff: diffConfig,
+      mutated_specs: mutatedSpecs,
+    }, raw);
+    return;
+  }
+
+  // Execute each mutated spec
+  const registry = runtime.createBuiltInConnectorRegistry();
+  const results = [];
+
+  for (const mutatedSpec of mutatedSpecs) {
+    const result = await runtime.executeQuerySpec(mutatedSpec, registry, {
+      cwd,
+      config,
+      artifacts: {
+        lineage: {
+          ...evidenceLineage,
+          replay_id: replaySpec.replay_id,
+          mutations_applied: Object.keys(replaySpec.mutations).filter(k => replaySpec.mutations[k]),
+        },
+      },
+    });
+    results.push(result);
+  }
+
+  // Diff if enabled
+  let diffResult = null;
+  if (diffConfig.enabled && results.length > 0) {
+    const originalResolved = validResolved[0];
+    // Build minimal original envelope from resolved spec for diffing
+    const originalEnvelope = originalResolved.original_envelope || {
+      query_id: originalResolved.original_spec.query_id,
+      connector: originalResolved.original_spec.connector,
+      time_window: originalResolved.original_spec.time_window,
+      counts: { events: 0, entities: 0 },
+      entities: [],
+      status: 'unknown',
+    };
+
+    const replayEnvelope = results[0].envelope || {
+      query_id: mutatedSpecs[0].query_id,
+      connector: mutatedSpecs[0].connector,
+      time_window: mutatedSpecs[0].time_window,
+      counts: { events: 0, entities: 0 },
+      entities: [],
+      status: 'unknown',
+    };
+
+    try {
+      diffResult = replay.buildDiff(originalEnvelope, replayEnvelope, diffConfig.mode);
+    } catch (e) {
+      diffResult = { error: e.message, fallback: 'counts_only' };
+    }
+
+    // Write diff artifact
+    if (diffResult && !diffResult.error) {
+      const paths = planningPaths(cwd);
+      fs.mkdirSync(paths.queries, { recursive: true });
+      const diffPath = path.join(paths.queries, `DIFF-${replaySpec.replay_id}.json`);
+      fs.writeFileSync(diffPath, JSON.stringify(diffResult, null, 2));
+    }
+  }
+
+  // Record telemetry
+  try {
+    const firstResult = results[0] || {};
+    telemetry.recordReplayExecution(cwd, replaySpec, {
+      events: firstResult.envelope && firstResult.envelope.counts && firstResult.envelope.counts.events || 0,
+      entities: firstResult.envelope && firstResult.envelope.counts && firstResult.envelope.counts.entities || 0,
+      status: firstResult.envelope && firstResult.envelope.status || 'unknown',
+    });
+  } catch {
+    // Telemetry failures must not break replay output
+  }
+
+  output({
+    replay_id: replaySpec.replay_id,
+    source: options.source,
+    source_type: sourceType,
+    mutations: replaySpec.mutations,
+    diff: diffResult,
+    results: results.map(r => ({
+      result: r.envelope,
+      artifacts: r.artifacts,
+      pagination: r.pagination,
+    })),
+  }, raw);
+}
+
+async function cmdReplayList(cwd, args, raw) {
+  const options = parseRuntimeArgs(args);
+  const paths = planningPaths(cwd);
+  const metricsDir = path.join(paths.planning, 'METRICS');
+
+  if (!fs.existsSync(metricsDir)) {
+    output({ replays: [], total: 0 }, raw);
+    return;
+  }
+
+  const files = fs.readdirSync(metricsDir).filter(f => f.startsWith('RE-') && f.endsWith('.json'));
+  const records = [];
+
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(metricsDir, file), 'utf-8');
+      const record = JSON.parse(content);
+      records.push(record);
+    } catch {
+      // Skip malformed files
+    }
+  }
+
+  // Filter by --source if provided
+  let filtered = records;
+  if (options.source) {
+    filtered = records.filter(r => {
+      const ids = r.original_query_ids || [];
+      const srcId = (r.source && r.source.ids) || [];
+      return ids.includes(options.source) || srcId.includes(options.source);
+    });
+  }
+
+  // Sort by timestamp descending
+  filtered.sort((a, b) => {
+    const ta = a.timestamp || '';
+    const tb = b.timestamp || '';
+    return tb.localeCompare(ta);
+  });
+
+  // Apply limit
+  const limit = options.limit ? parseInt(options.limit, 10) : 20;
+  const limited = filtered.slice(0, limit);
+
+  output({
+    replays: limited.map(r => ({
+      replay_execution_id: r.replay_execution_id,
+      replay_id: r.replay_id,
+      timestamp: r.timestamp,
+      source: r.source,
+      original_query_ids: r.original_query_ids,
+      mutation_types: r.mutation_types,
+      diff_mode: r.diff_mode,
+      results_summary: r.results_summary,
+    })),
+    total: filtered.length,
+  }, raw);
+}
+
+async function cmdReplayDiff(cwd, args, raw) {
+  const paths = planningPaths(cwd);
+
+  // Extract replay ID from first non-flag arg
+  let replayId = null;
+  for (const arg of args) {
+    if (!arg.startsWith('--')) {
+      replayId = arg;
+      break;
+    }
+  }
+
+  if (!replayId) {
+    error('replay diff requires a replay ID (RPL-...) as argument');
+  }
+
+  const diffPath = path.join(paths.queries, `DIFF-${replayId}.json`);
+  if (!fs.existsSync(diffPath)) {
+    error(`No diff found for ${replayId}`);
+  }
+
+  let diffData;
+  try {
+    diffData = JSON.parse(fs.readFileSync(diffPath, 'utf-8'));
+  } catch (e) {
+    error(`Failed to parse diff file: ${e.message}`);
+  }
+
+  // Build human-readable summary
+  const summary = [];
+  if (diffData.baseline && diffData.replay) {
+    summary.push(`Baseline: ${diffData.baseline.query_id || 'unknown'} (${diffData.baseline.status || 'unknown'})`);
+    summary.push(`Replay:   ${diffData.replay.query_id || 'unknown'} (${diffData.replay.status || 'unknown'})`);
+  }
+  if (diffData.delta) {
+    const d = diffData.delta;
+    if (d.events) {
+      summary.push(`Events: +${d.events.added} -${d.events.removed} =${d.events.unchanged}`);
+    }
+    if (d.entities) {
+      const added = Array.isArray(d.entities.added) ? d.entities.added.length : d.entities.added || 0;
+      const removed = Array.isArray(d.entities.removed) ? d.entities.removed.length : d.entities.removed || 0;
+      const unchanged = d.entities.unchanged || 0;
+      summary.push(`Entities: +${added} -${removed} =${unchanged}`);
+    }
+  }
+  if (diffData.summary) {
+    summary.push(diffData.summary);
+  }
+
+  output({
+    replay_id: replayId,
+    diff: diffData,
+    human_summary: summary.join('\n'),
+  }, raw, summary.join('\n'));
+}
+
 module.exports = {
   cmdGenerateSlug,
   cmdCurrentTimestamp,
@@ -2450,6 +2748,9 @@ module.exports = {
   cmdRuntimeDoctor,
   cmdRuntimeSmoke,
   cmdRuntimeExecute,
+  cmdRuntimeReplay,
+  cmdReplayList,
+  cmdReplayDiff,
   cmdCommit,
   cmdCommitToSubrepo,
   cmdSummaryExtract,
