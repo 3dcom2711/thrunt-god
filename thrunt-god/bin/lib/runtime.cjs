@@ -726,6 +726,7 @@ async function executeQuerySpec(specInput, adapterOrRegistry, options = {}) {
     warnings: [],
     errors: [],
     metadata: [],
+    status_override: null,
   };
   const startedAt = nowIso();
   let stage = 'preflight';
@@ -818,6 +819,11 @@ async function executeQuerySpec(specInput, adapterOrRegistry, options = {}) {
 
       mergePage(accumulator, normalized);
 
+      // Capture status_override from normalizer (first non-null wins)
+      if (normalized.status_override && !accumulator.status_override) {
+        accumulator.status_override = normalized.status_override;
+      }
+
       paginationState = advancePaginationState(paginationState, {
         cursor: normalized.next_cursor || null,
         has_more: normalized.has_more,
@@ -840,6 +846,7 @@ async function executeQuerySpec(specInput, adapterOrRegistry, options = {}) {
     started_at: startedAt,
     completed_at: nowIso(),
     pages_fetched: paginationState.pages_fetched,
+    status: accumulator.status_override || undefined,
     events: accumulator.events,
     entities: accumulator.entities,
     relationships: accumulator.relationships,
@@ -2188,6 +2195,7 @@ function createElasticAdapter() {
           columns: toArray(response.data?.columns).map(column => column.name || column),
         },
         has_more: false,
+        status_override: response.data?.is_partial ? 'partial' : undefined,
       };
     },
   };
@@ -2248,6 +2256,7 @@ function createSentinelAdapter() {
     },
     normalizeResponse({ response, spec }) {
       const rows = normalizeAzureTables(response.data);
+      const partialError = response.data?.error?.code === 'PartialError';
       const entities = [];
       const events = rows.map(row => {
         addEntitiesFromRecord(entities, 'sentinel', row, [
@@ -2264,15 +2273,24 @@ function createSentinelAdapter() {
           summaryPath: 'Description',
         });
       });
+      const warnings = [];
+      if (partialError) {
+        warnings.push(createWarning('sentinel_partial_error',
+          response.data.error.message || 'Sentinel returned a partial result (PartialError).',
+          { code: response.data.error.code, details: response.data.error.details || null }
+        ));
+      }
       return {
         events,
         entities,
+        warnings,
         metadata: {
           backend: 'sentinel',
           endpoint: '/query',
           tables: toArray(response.data?.tables).length,
         },
         has_more: false,
+        status_override: partialError ? 'partial' : undefined,
       };
     },
   };
