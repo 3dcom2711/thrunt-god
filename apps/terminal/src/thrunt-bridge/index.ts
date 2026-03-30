@@ -13,6 +13,7 @@ export type {
 } from "./types"
 
 // Domain bridge modules
+export { executeQueryStream, type QueryExecutionResult } from "./runtime"
 export { auditEvidence, type EvidenceAuditResult } from "./evidence"
 export { listDetections, detectionStatus, type DetectionCandidate } from "./detection"
 export { listPacks, showPack, type PackListEntry, type PackShowResult } from "./pack"
