@@ -446,47 +446,59 @@ function renderHuntStatusPanel(state: AppState): string[] {
   return lines
 }
 
-function buildOpsSnapshot(ctx: ScreenContext, width: number): { boxWidth: number; statusLines: string[]; actionLines: string[] } | null {
-  const { state } = ctx
+function renderStatusSubtitle(state: AppState): string {
+  const ctx = state.thruntContext
+  if (!ctx) {
+    return `${THEME.dim}No active hunt${THEME.reset}`
+  }
+
+  const parts: string[] = []
+
+  // Phase
+  const phaseNum = ctx.phase.number ?? "?"
+  const phaseName = ctx.phase.name ?? "unknown"
+  parts.push(`${THEME.dim}Phase${THEME.reset} ${THEME.secondary}${phaseNum}${THEME.reset}${THEME.dim}: ${phaseName}${THEME.reset}`)
+
+  // Plan progress
+  const planCurrent = ctx.plan.current ?? "?"
+  const planTotal = ctx.plan.total ?? "?"
+  parts.push(`${THEME.dim}${planCurrent}/${planTotal}${THEME.reset}`)
+
+  // Progress percentage with mini bar
+  const percent = ctx.progressPercent ?? 0
+  const barWidth = 8
+  const filled = Math.round((percent / 100) * barWidth)
+  const empty = barWidth - filled
+  parts.push(`${THEME.success}${"█".repeat(filled)}${THEME.dim}${"░".repeat(empty)}${THEME.reset} ${THEME.dim}${percent}%${THEME.reset}`)
+
+  // Health
+  parts.push(renderHealthStatus(state))
+
+  // Blockers (if any)
+  if (ctx.blockers.length > 0) {
+    parts.push(`${THEME.warning}${ctx.blockers.length} blocker${ctx.blockers.length > 1 ? "s" : ""}${THEME.reset}`)
+  }
+
+  return parts.join(`${THEME.dim}  ·  ${THEME.reset}`)
+}
+
+function buildActionRows(ctx: ScreenContext, width: number): string[] | null {
   const boxWidth = Math.min(84, width - 8)
   if (boxWidth < 28) {
     return null
   }
-
-  // Hunt status panel (compact box — data only)
-  const statusContent: string[] = []
-  statusContent.push(...renderHuntStatusPanel(state))
-
-  // Health + runs on same line as last status line for density
-  statusContent.push(`${THEME.dim}Health:${THEME.reset} ${renderHealthStatus(state)}  ` +
-    `${THEME.dim}Runs:${THEME.reset} ${THEME.white}${state.activeRuns}${THEME.reset}`)
-
-  const statusLines = renderTracedBox(
-    "Hunt Status",
-    statusContent,
-    boxWidth,
-    state,
-    {
-      focused: false,
-      traceStartFrame: state.homeActionsTraceStartFrame,
-    },
-  )
-
-  // Action grid (standalone, not boxed)
-  const actionLines = renderHomeActionRows(ctx, boxWidth - 2)
-
-  return { boxWidth, statusLines, actionLines }
+  return renderHomeActionRows(ctx, boxWidth - 2)
 }
 
 function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
   const { state, width, height } = ctx
   const lines: string[] = []
-  const opsSnapshot = buildOpsSnapshot(ctx, width)
-  const opsHeight = opsSnapshot ? opsSnapshot.statusLines.length + opsSnapshot.actionLines.length + 3 : 0
+  const actionRows = buildActionRows(ctx, width)
+  const actionHeight = actionRows ? actionRows.length + 1 : 0
   const statusHeight = state.statusMessage ? 2 : 0
 
-  // Calculate vertical centering for logo + input
-  const contentHeight = LOGO.main.length + LOGO.god.length + 8 + opsHeight + statusHeight
+  // Calculate vertical centering
+  const contentHeight = LOGO.main.length + LOGO.god.length + 10 + actionHeight + statusHeight
   const startY = Math.max(1, Math.floor((height - contentHeight) / 3))
 
   // Top padding
@@ -494,22 +506,23 @@ function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
     lines.push("")
   }
 
-  // Logo - stacked layout: THRUNT on top, GOD below
-  // Render THRUNT lines in royal purple
+  // Logo - THRUNT in royal purple
   lines.push(...centerBlock(
     LOGO.main.map((line) => `${THEME.accent}${line}${THEME.reset}`),
     width,
   ))
 
-  // Get animated GOD for current frame and render below
+  // Animated GOD with gold shimmer
   const animatedGod = getAnimatedGod(state.animationFrame)
   lines.push(...centerBlock(animatedGod, width))
 
+  // Status subtitle — compact inline under logo
+  lines.push(centerLine(renderStatusSubtitle(state), width))
+
   lines.push("")
 
-  // Hero input box
+  // Hero prompt box
   const inputWidth = Math.min(78, width - 10)
-
   const prompt = state.promptBuffer
   const placeholder = 'Ask anything... "Fix broken tests"'
   const cursor = prompt ? THEME.secondary + "▎" + THEME.reset : ""
@@ -537,7 +550,7 @@ function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
   )
   lines.push(...centerBlock(inputBox, width))
 
-  // Single hint line — context-sensitive
+  // Single hint line
   const hints = state.homeFocus === "prompt"
     ? `${THEME.bold}Enter${THEME.reset}${THEME.muted} dispatch${THEME.reset}    ` +
       `${THEME.bold}Tab${THEME.reset}${THEME.muted} actions${THEME.reset}    ` +
@@ -559,17 +572,13 @@ function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
     lines.push(centerLine(state.statusMessage, width))
   }
 
-  // Hunt Status box (data only)
-  if (opsSnapshot) {
+  // Action grid (standalone, below hints)
+  if (actionRows) {
     lines.push("")
-    lines.push(...centerBlock(opsSnapshot.statusLines, width))
-
-    // Action grid (standalone, below status)
-    lines.push("")
-    lines.push(...centerBlock(opsSnapshot.actionLines, width))
+    lines.push(...centerBlock(actionRows, width))
   }
 
-  // Fill remaining space (leave room for status bar)
+  // Fill remaining space
   const currentLines = lines.length
   for (let i = currentLines; i < height - 2; i++) {
     lines.push("")
