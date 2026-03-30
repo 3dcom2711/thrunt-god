@@ -653,9 +653,21 @@ async function stepTelemetry(rl, connectors, datasets) {
     addSpot = await promptYesNo(rl, '> Add another blind spot?', false);
   }
 
+  // Entity type selection (Step 7b)
+  console.log('\n  Step 7b: Entity Types');
+  console.log('  > Which entity types does this pack extract?');
+
+  const entityOptions = queryStarters.ENTITY_SCOPE_TYPES.map(e => ({
+    value: e.kind,
+    label: `${e.description} (${e.source})`,
+  }));
+
+  const selectedEntities = await promptMultiSelect(rl, '> Select entity types:', entityOptions);
+
   return {
     telemetry_requirements: requirements,
     blind_spots: blindSpots,
+    selected_entities: selectedEntities,
   };
 }
 
@@ -804,6 +816,13 @@ async function runPackAuthor(cwd, options = {}) {
     // Step 2: Identity
     const identity = await stepIdentity(rl, kind);
 
+    // Incremental validation: identity checkpoint
+    const identityCheck = queryStarters.runIncrementalValidation({
+      version: '1.0', id: identity.id, kind, title: identity.title,
+      description: identity.description, stability: identity.stability,
+    }, 'identity');
+    console.log(queryStarters.formatValidationResults(identityCheck));
+
     // Step 3: ATT&CK Mapping (technique packs only)
     let attackIds = [];
     if (kind === 'technique') {
@@ -814,6 +833,16 @@ async function runPackAuthor(cwd, options = {}) {
         const useNewId = await promptYesNo(rl, `  Update pack ID to ${suggestedId}?`, true);
         if (useNewId) identity.id = suggestedId;
       }
+    }
+
+    // Incremental validation: attack checkpoint (technique packs only)
+    if (kind === 'technique' && attackIds.length > 0) {
+      const attackCheck = queryStarters.runIncrementalValidation({
+        version: '1.0', id: identity.id, kind, title: identity.title,
+        description: identity.description, stability: identity.stability,
+        attack: attackIds,
+      }, 'attack');
+      console.log(queryStarters.formatValidationResults(attackCheck));
     }
 
     // Step 4: Composition (domain/family/campaign only)
@@ -827,6 +856,17 @@ async function runPackAuthor(cwd, options = {}) {
 
     // Step 6: Connector & Query Wiring
     const wiringResult = await stepConnectorWiring(rl, kind);
+
+    // Incremental validation: query checkpoint
+    const queryCheck = queryStarters.runIncrementalValidation({
+      version: '1.0', id: identity.id, kind, title: identity.title,
+      description: identity.description, stability: identity.stability,
+      attack: attackIds, required_connectors: wiringResult.required_connectors,
+      supported_datasets: wiringResult.supported_datasets,
+      execution_targets: wiringResult.execution_targets,
+      parameters: [],
+    }, 'query');
+    console.log(queryStarters.formatValidationResults(queryCheck));
 
     // Step 7: Telemetry & Blind Spots
     let telemetryResult = { telemetry_requirements: [], blind_spots: [] };
@@ -870,6 +910,7 @@ async function runPackAuthor(cwd, options = {}) {
         time_window: {
           lookback_minutes: 1440,
         },
+        entities: telemetryResult.selected_entities || [],
       },
       execution_defaults: {
         consistency: 'best_effort',
@@ -886,23 +927,15 @@ async function runPackAuthor(cwd, options = {}) {
       ],
     };
 
-    // Validate the pack
-    const validation = packLib.validatePackDefinition(packInput, { requireComplete: false });
-    if (!validation.valid) {
-      console.log('\n  Validation errors:');
-      for (const err of validation.errors) {
-        console.log(`    - ${err}`);
-      }
+    // Incremental validation: final checkpoint
+    const finalCheck = queryStarters.runIncrementalValidation(packInput, 'final');
+    console.log(queryStarters.formatValidationResults(finalCheck));
+
+    if (!finalCheck.passed) {
       const proceed = await promptYesNo(rl, '> Continue anyway?', false);
       if (!proceed) {
         rl.close();
-        return { created: false, pack_id: identity.id, reason: 'validation_errors', errors: validation.errors };
-      }
-    }
-    if (validation.warnings && validation.warnings.length > 0) {
-      console.log('\n  Warnings:');
-      for (const warn of validation.warnings) {
-        console.log(`    - ${warn}`);
+        return { created: false, pack_id: identity.id, reason: 'validation_errors', errors: finalCheck.results.filter(r => r.status === 'FAIL').map(r => r.message) };
       }
     }
 
