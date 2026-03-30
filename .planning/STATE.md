@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Developer Experience & CI
-status: in_progress
-stopped_at: Completed 41-01-PLAN.md
-last_updated: "2026-03-30T22:49:20.000Z"
-last_activity: 2026-03-30 -- Completed 41-01 Replay Diffing & Receipt Lineage (core)
+status: completed
+stopped_at: Completed 41-02-PLAN.md
+last_updated: "2026-03-30T23:01:05.598Z"
+last_activity: 2026-03-30 -- Completed 41-02 Replay CLI Commands
 progress:
   total_phases: 19
-  completed_phases: 10
-  total_plans: 17
-  completed_plans: 17
+  completed_phases: 11
+  total_plans: 18
+  completed_plans: 18
   percent: 100
 ---
 
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 41 of 44 (Replay Diffing & Receipt Lineage)
-Plan: 1 of 2 (Replay Diffing & Receipt Lineage - core)
-Status: In Progress
-Last activity: 2026-03-30 -- Completed 41-01 Replay Diffing & Receipt Lineage (core)
+Plan: 2 of 2 (Replay CLI Commands)
+Status: Phase Complete
+Last activity: 2026-03-30 -- Completed 41-02 Replay CLI Commands
 
-Progress: [██████████] 100% (17/17 plans complete)
+Progress: [██████████] 100% (18/18 plans complete)
 
 ## Upcoming Milestones
 
@@ -93,6 +93,9 @@ All historical decisions logged in PROJECT.md Key Decisions table.
 - [Phase 41-replay-diffing-receipt-lineage]: ENTITY-SET-COMPOSITE-KEY: Entity comparison uses Set of kind:value composite keys for O(n) diff rather than nested loops
 - [Phase 41-replay-diffing-receipt-lineage]: LINEAGE-TEMPLATE-INLINE: Lineage section rendered via template literal conditional rather than separate render function -- minimal surface area
 - [Phase 41-replay-diffing-receipt-lineage]: REPLAY-CONTEXT-NULL-DEFAULT: replay_context and lineage fields default to null (not undefined) for consistent JSON serialization
+- [Phase 41]: SUBPROCESS-REPLAY-TESTS: CLI command tests use execFileSync subprocess approach because output() uses fs.writeSync(1,...) which cannot be monkey-patched in-process
+- [Phase 41]: PARSE-RUNTIME-ARGS-EXPORT: Exported parseRuntimeArgs from commands.cjs for direct testability of flag parsing
+- [Phase 41]: DIFF-NO-RAW-FLAG: cmdReplayDiff passes human_summary as rawValue so --raw outputs text; tests omit --raw to get JSON
 
 ### Research Specs Available
 
@@ -122,6 +125,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T22:49:20.000Z
-Stopped at: Completed 41-01-PLAN.md
+Last session: 2026-03-30T23:01:05.594Z
+Stopped at: Completed 41-02-PLAN.md
 Resume file: None
