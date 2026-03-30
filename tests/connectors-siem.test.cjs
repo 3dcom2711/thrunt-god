@@ -334,6 +334,91 @@ describe('built-in SIEM connectors', () => {
     }
   });
 
+  test('defender xdr executes advanced hunting and normalizes Schema Results response', async () => {
+    process.env.DEFENDER_CLIENT_ID = 'defender-client';
+    process.env.DEFENDER_CLIENT_SECRET = 'defender-secret';
+    const fixture = await startJsonServer(async ({ req, body }) => {
+      if (req.url === '/oauth2/token') {
+        assert.strictEqual(req.method, 'POST');
+        assert.match(body, /grant_type=client_credentials/);
+        assert.match(body, /scope=https%3A%2F%2Fapi\.security\.microsoft\.com%2F\.default/);
+        return {
+          json: {
+            access_token: 'defender-token',
+            expires_in: 3600,
+          },
+        };
+      }
+
+      assert.strictEqual(req.method, 'POST');
+      assert.strictEqual(req.url, '/api/advancedhunting/run');
+      assert.strictEqual(req.headers.authorization, 'Bearer defender-token');
+      const parsed = JSON.parse(body);
+      assert.ok(parsed.Query, 'body should contain Query field');
+      return {
+        json: {
+          Schema: [
+            { Name: 'Timestamp', Type: 'DateTime' },
+            { Name: 'DeviceName', Type: 'String' },
+            { Name: 'AccountName', Type: 'String' },
+            { Name: 'ActionType', Type: 'String' },
+            { Name: 'RemoteIP', Type: 'String' },
+          ],
+          Results: [
+            {
+              Timestamp: '2026-03-24T15:00:00.000Z',
+              DeviceName: 'xdr-host-01',
+              AccountName: 'eve',
+              ActionType: 'ConnectionSuccess',
+              RemoteIP: '10.0.0.5',
+            },
+          ],
+          Stats: { ExecutionTime: 1.234 },
+        },
+      };
+    });
+
+    try {
+      const result = await runtime.executeQuerySpec({
+        connector: { id: 'defender_xdr', profile: 'prod' },
+        dataset: { kind: 'events' },
+        time_window: {
+          start: '2026-03-24T00:00:00.000Z',
+          end: '2026-03-25T00:00:00.000Z',
+        },
+        query: { language: 'kql', statement: 'DeviceNetworkEvents | take 5' },
+      }, runtime.createBuiltInConnectorRegistry(), {
+        config: {
+          connector_profiles: {
+            defender_xdr: {
+              prod: {
+                auth_type: 'oauth_client_credentials',
+                base_url: fixture.baseUrl,
+                token_url: `${fixture.baseUrl}/oauth2/token`,
+                secret_refs: {
+                  client_id: { type: 'env', value: 'DEFENDER_CLIENT_ID' },
+                  client_secret: { type: 'env', value: 'DEFENDER_CLIENT_SECRET' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      assert.strictEqual(result.envelope.status, 'ok');
+      assert.strictEqual(result.envelope.counts.events, 1);
+      assert.ok(result.envelope.entities.some(e => e.kind === 'host' && e.value === 'xdr-host-01'));
+      assert.ok(result.envelope.entities.some(e => e.kind === 'user' && e.value === 'eve'));
+      assert.ok(result.envelope.entities.some(e => e.kind === 'ip' && e.value === '10.0.0.5'));
+      assert.strictEqual(result.envelope.metadata.endpoint, '/api/advancedhunting/run');
+      assert.strictEqual(result.envelope.metadata.schema_columns, 5);
+    } finally {
+      delete process.env.DEFENDER_CLIENT_ID;
+      delete process.env.DEFENDER_CLIENT_SECRET;
+      await fixture.close();
+    }
+  });
+
   test('sentinel reports status partial when response contains PartialError', async () => {
     process.env.SENTINEL_CLIENT_ID = 'sentinel-client';
     process.env.SENTINEL_CLIENT_SECRET = 'sentinel-secret';
