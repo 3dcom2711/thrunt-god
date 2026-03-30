@@ -147,6 +147,9 @@ Plans:
 **Goal**: Ship regex-based time rewriters for all 5 query languages that safely substitute time ranges in existing query statements
 **Depends on**: Phase 38 (ReplaySpec and core infrastructure exist)
 **Requirements**: REPLAY-02
+**Plans:** 1/1 plans complete
+Plans:
+- [ ] 39-01-PLAN.md -- Per-language time rewriters (SPL, ES|QL, EQL, KQL, OpenSearch SQL), TIME_REWRITERS registry, rewriteQueryTime dispatcher
 **Success Criteria** (what must be TRUE):
   1. SPL rewriter handles earliest/latest modifiers in query strings
   2. ES|QL rewriter handles @timestamp range filters
@@ -281,8 +284,8 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 35. Pack Authoring Interactive CLI | 3/3 | Complete    | 2026-03-30 |
 | 36. Pack Query Wiring & Validation | 3/3 | Complete    | 2026-03-30 |
 | 37. Pack Testing & Publishing | 2/2 | Complete    | 2026-03-30 |
-| 38. Replay Engine Core | 1/1 | Complete   | 2026-03-30 |
-| 39. Per-Language Query Rewriters | 0/0 | Not Started | |
+| 38. Replay Engine Core | 1/1 | Complete    | 2026-03-30 |
+| 39. Per-Language Query Rewriters | 1/1 | Complete   | 2026-03-30 |
 | 40. Source Retargeting & IOC Injection | 0/0 | Not Started | |
 | 41. Replay Diffing & Receipt Lineage | 0/0 | Not Started | |
 | 42. Tenant Registry & Auth | 0/0 | Not Started | |

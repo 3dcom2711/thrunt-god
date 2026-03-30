@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Advanced Hunt Features
-status: in_progress
-stopped_at: Completed 38-01-PLAN.md
-last_updated: "2026-03-30T21:58:41.000Z"
-last_activity: 2026-03-30 -- Completed 38-01 Replay Engine Core (ReplaySpec schema, source resolution, mutations)
+milestone: v2.0
+milestone_name: Developer Experience & CI
+status: completed
+stopped_at: Completed 39-01-PLAN.md
+last_updated: "2026-03-30T22:10:14.977Z"
+last_activity: 2026-03-30 -- Completed 39-01 Per-Language Query Rewriters (SPL, ES|QL, EQL, KQL, OpenSearch SQL)
 progress:
-  total_phases: 7
-  completed_phases: 0
-  total_plans: 1
-  completed_plans: 1
+  total_phases: 19
+  completed_phases: 9
+  total_plans: 15
+  completed_plans: 15
   percent: 14
 ---
 
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.1 Advanced Hunt Features — Phase 38 (Replay Engine Core)
+**Current focus:** v2.1 Advanced Hunt Features — Phase 39 (Per-Language Query Rewriters)
 
 ## Current Milestone: v2.1 Advanced Hunt Features
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 38 of 44 (Replay Engine Core)
-Plan: 1 of 1 (ReplaySpec Schema, Source Resolution & Mutations)
+Phase: 39 of 44 (Per-Language Query Rewriters)
+Plan: 1 of 1 (Per-Language Time Rewriters & Registry)
 Status: Complete
-Last activity: 2026-03-30 -- Completed 38-01 Replay Engine Core (ReplaySpec schema, source resolution, mutations)
+Last activity: 2026-03-30 -- Completed 39-01 Per-Language Query Rewriters (SPL, ES|QL, EQL, KQL, OpenSearch SQL)
 
-Progress: [█---------] 14% (1/7 plans complete)
+Progress: [██████████] 100% (15/15 plans complete)
 
 ## Upcoming Milestones
 
@@ -82,6 +82,10 @@ All historical decisions logged in PROJECT.md Key Decisions table.
 - [Phase 38-replay-engine-core]: MANIFEST-FIRST-INTEGRITY: Source resolution checks MANIFESTS/*.json first for content hash verification before reading QUERIES/*.md
 - [Phase 38-replay-engine-core]: UNIFORM-SHIFT-PRESERVES-GAP: Shift mode applies same delta to both start and end, preserving original time window duration
 - [Phase 38-replay-engine-core]: HUNT-PHASE-STUB: hunt_phase source type returns empty array with warning -- full implementation deferred
+- [Phase 39-per-language-query-rewriters]: REGEX-NOT-PARSER: Rewriters use regex patterns rather than full language parsers -- handles common patterns and warns on complex/ambiguous constructs
+- [Phase 39-per-language-query-rewriters]: EQL-FILTER-PARAM: EQL uses filter-parameter approach (returns filter object) rather than statement rewriting -- aligns with how prepareQuery passes spec.parameters.filter
+- [Phase 39-per-language-query-rewriters]: ABSOLUTE-ISO-ALWAYS: All rewriters replace with absolute ISO timestamps to remove relative-time ambiguity
+- [Phase 39-per-language-query-rewriters]: BETWEEN-FIRST: BETWEEN patterns matched before individual comparisons in ES|QL and OpenSearch SQL to avoid double-matching
 
 ### Research Specs Available
 
@@ -111,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T21:58:41.000Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-03-30T22:09:24.000Z
+Stopped at: Completed 39-01-PLAN.md
 Resume file: None
