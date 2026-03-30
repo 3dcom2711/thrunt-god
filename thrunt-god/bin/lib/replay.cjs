@@ -21,6 +21,7 @@ const { createQuerySpec, normalizeTimeWindow, isPlainObject, cloneObject } = req
 const { planningPaths, output, error } = require('./core.cjs');
 const { computeContentHash } = require('./manifest.cjs');
 const { extractFrontmatter } = require('./frontmatter.cjs');
+const { resolvePack, renderPackTemplate } = require('./pack.cjs');
 
 // ─── ID Generation ───────────────────────────────────────────────────────────
 
@@ -639,6 +640,104 @@ function rewriteQueryTime(language, statement, originalTW, newTW, options) {
   return rewriter(statement, originalTW, newTW, options);
 }
 
+// ─── Connector Language Map & Field Mapping Warnings ────────────────────────
+
+const CONNECTOR_LANGUAGE_MAP = {
+  splunk: 'spl',
+  elastic: 'esql',
+  sentinel: 'kql',
+  defender_xdr: 'kql',
+  opensearch: 'sql',
+};
+
+const FIELD_MAPPING_WARNINGS = {
+  'sentinel:defender_xdr': [
+    'TimeGenerated -> Timestamp',
+    'Computer -> DeviceName',
+    'Account -> AccountName',
+    'HostName -> DeviceName',
+  ],
+  'defender_xdr:sentinel': [
+    'Timestamp -> TimeGenerated',
+    'DeviceName -> Computer',
+    'AccountName -> Account',
+  ],
+};
+
+// ─── validateSameLanguageRetarget ───────────────────────────────────────────
+
+function validateSameLanguageRetarget(sourceConnectorId, targetConnectorId) {
+  if (sourceConnectorId === targetConnectorId) {
+    return { allowed: true, warnings: [] };
+  }
+
+  const sourceLang = CONNECTOR_LANGUAGE_MAP[sourceConnectorId];
+  const targetLang = CONNECTOR_LANGUAGE_MAP[targetConnectorId];
+
+  if (!sourceLang) {
+    return { allowed: false, error: `Unknown connector: ${sourceConnectorId}` };
+  }
+  if (!targetLang) {
+    return { allowed: false, error: `Unknown connector: ${targetConnectorId}` };
+  }
+
+  if (sourceLang === targetLang) {
+    const pairKey = `${sourceConnectorId}:${targetConnectorId}`;
+    const fieldWarnings = FIELD_MAPPING_WARNINGS[pairKey] || [];
+    const warnings = [];
+    if (fieldWarnings.length > 0) {
+      warnings.push(`FIELD_MAPPING_WARNING: Same language (${sourceLang}) but field names differ between ${sourceConnectorId} and ${targetConnectorId}: ${fieldWarnings.join(', ')}`);
+    }
+    return { allowed: true, warnings };
+  }
+
+  return {
+    allowed: false,
+    error: 'Cross-language retargeting requires a pack with execution targets for both connectors. Consider creating a custom pack or manually writing the equivalent query.',
+  };
+}
+
+// ─── retargetPackExecution ──────────────────────────────────────────────────
+
+function retargetPackExecution(cwd, packId, targetConnectorId, parameters, options) {
+  const opts = options || {};
+  const params = parameters || {};
+
+  // Resolve the pack -- propagates PACK_NOT_FOUND
+  const resolved = resolvePack(cwd, packId, opts);
+  if (!resolved.pack) {
+    const err = new Error(`Pack ${packId} not found`);
+    err.code = 'PACK_NOT_FOUND';
+    throw err;
+  }
+
+  const executionTargets = resolved.pack.execution_targets || [];
+
+  // Find target matching the desired connector
+  const target = executionTargets.find(t => t.connector === targetConnectorId);
+  if (!target) {
+    const available = executionTargets.map(t => t.connector).join(', ');
+    const err = new Error(`Connector "${targetConnectorId}" not found in pack "${packId}". Available connectors: ${available}`);
+    err.code = 'CONNECTOR_NOT_IN_PACK';
+    throw err;
+  }
+
+  // Render the query template
+  const renderedQuery = renderPackTemplate(target.query_template, params, { strict: false });
+
+  // Check for same-language retarget warnings
+  const warnings = [];
+  const originalConnectorId = opts.originalConnectorId || (executionTargets[0] ? executionTargets[0].connector : null);
+  if (originalConnectorId && originalConnectorId !== targetConnectorId) {
+    const retargetResult = validateSameLanguageRetarget(originalConnectorId, targetConnectorId);
+    if (retargetResult.warnings) {
+      warnings.push(...retargetResult.warnings);
+    }
+  }
+
+  return { target, rendered: renderedQuery.rendered, warnings };
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -655,4 +754,8 @@ module.exports = {
   rewriteOpenSearchSqlTime,
   rewriteQueryTime,
   TIME_REWRITERS,
+  CONNECTOR_LANGUAGE_MAP,
+  FIELD_MAPPING_WARNINGS,
+  validateSameLanguageRetarget,
+  retargetPackExecution,
 };

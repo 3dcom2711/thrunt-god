@@ -859,3 +859,149 @@ describe('rewriteQueryTime', () => {
     assert.ok(result.warnings.some(w => w.code === 'RETENTION_EXCEEDED'));
   });
 });
+
+// ─── 12. CONNECTOR_LANGUAGE_MAP ─────────────────────────────────────────────────
+
+describe('CONNECTOR_LANGUAGE_MAP', () => {
+  const { CONNECTOR_LANGUAGE_MAP } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  test('maps splunk to spl', () => {
+    assert.strictEqual(CONNECTOR_LANGUAGE_MAP.splunk, 'spl');
+  });
+
+  test('maps elastic to esql', () => {
+    assert.strictEqual(CONNECTOR_LANGUAGE_MAP.elastic, 'esql');
+  });
+
+  test('maps sentinel to kql', () => {
+    assert.strictEqual(CONNECTOR_LANGUAGE_MAP.sentinel, 'kql');
+  });
+
+  test('maps defender_xdr to kql', () => {
+    assert.strictEqual(CONNECTOR_LANGUAGE_MAP.defender_xdr, 'kql');
+  });
+
+  test('maps opensearch to sql', () => {
+    assert.strictEqual(CONNECTOR_LANGUAGE_MAP.opensearch, 'sql');
+  });
+});
+
+// ─── 13. validateSameLanguageRetarget ──────────────────────────────────────────
+
+describe('validateSameLanguageRetarget', () => {
+  const { validateSameLanguageRetarget } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  test('same connector (splunk->splunk) returns allowed:true with empty warnings', () => {
+    const result = validateSameLanguageRetarget('splunk', 'splunk');
+    assert.strictEqual(result.allowed, true);
+    assert.deepStrictEqual(result.warnings, []);
+  });
+
+  test('same language different connector (sentinel->defender_xdr) returns allowed:true with FIELD_MAPPING_WARNING', () => {
+    const result = validateSameLanguageRetarget('sentinel', 'defender_xdr');
+    assert.strictEqual(result.allowed, true);
+    assert.ok(result.warnings.length > 0);
+    const warning = result.warnings[0];
+    assert.ok(warning.includes('TimeGenerated') || warning.includes('Timestamp'), 'Warning should mention field mapping differences');
+  });
+
+  test('cross-language (splunk->elastic) returns allowed:false with CROSS_LANGUAGE_RETARGET error', () => {
+    const result = validateSameLanguageRetarget('splunk', 'elastic');
+    assert.strictEqual(result.allowed, false);
+    assert.ok(result.error);
+    assert.ok(result.error.includes('pack') || result.error.includes('Cross-language'), 'Error should suggest pack creation');
+  });
+
+  test('defender_xdr->sentinel (reverse same-language) also allowed with warning', () => {
+    const result = validateSameLanguageRetarget('defender_xdr', 'sentinel');
+    assert.strictEqual(result.allowed, true);
+    assert.ok(result.warnings.length > 0);
+    const warning = result.warnings[0];
+    assert.ok(warning.includes('Timestamp') || warning.includes('TimeGenerated'), 'Warning should mention field mapping differences');
+  });
+});
+
+// ─── 14. retargetPackExecution ─────────────────────────────────────────────────
+
+describe('retargetPackExecution', () => {
+  const { retargetPackExecution } = require('../thrunt-god/bin/lib/replay.cjs');
+  const os = require('os');
+
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'retarget-test-'));
+    // Create local pack directory (.planning/packs/) for resolvePack
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'packs'), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeTestPack(packId, targets, extraParams) {
+    const pack = {
+      id: packId,
+      title: 'Test Pack',
+      description: 'A test pack for retargeting',
+      kind: 'custom',
+      version: '1.0',
+      hypothesis_ids: ['H-TEST-001'],
+      hypothesis_templates: [],
+      required_connectors: targets.map(t => t.connector),
+      supported_datasets: ['events'],
+      parameters: extraParams || [],
+      execution_targets: targets.map(t => ({ ...t, description: t.description || `${t.name} target` })),
+      publish: {
+        finding_type: 'hunt_result',
+        expected_outcomes: ['true_positive', 'false_positive'],
+      },
+    };
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'packs', `${packId}.json`),
+      JSON.stringify(pack, null, 2),
+    );
+    return pack;
+  }
+
+  test('success: retargets to elastic target from multi-target pack', () => {
+    writeTestPack('test.retarget', [
+      { name: 'splunk-target', connector: 'splunk', dataset: 'events', language: 'spl', query_template: 'index=main src={{ip}}' },
+      { name: 'elastic-target', connector: 'elastic', dataset: 'events', language: 'esql', query_template: 'FROM logs-* | WHERE source.ip == "{{ip}}"' },
+    ], [{ name: 'ip', type: 'string', required: false }]);
+
+    const result = retargetPackExecution(tmpDir, 'test.retarget', 'elastic', { ip: '10.0.0.1' }, { builtInDir: '/nonexistent', skipExtraRegistries: true });
+    assert.ok(result.target);
+    assert.strictEqual(result.target.connector, 'elastic');
+    assert.ok(result.rendered.includes('10.0.0.1'));
+  });
+
+  test('CONNECTOR_NOT_IN_PACK: throws when pack has no target for connector', () => {
+    writeTestPack('test.splunk-only', [
+      { name: 'splunk-target', connector: 'splunk', dataset: 'events', language: 'spl', query_template: 'index=main' },
+    ]);
+
+    assert.throws(
+      () => retargetPackExecution(tmpDir, 'test.splunk-only', 'elastic', {}, { builtInDir: '/nonexistent', skipExtraRegistries: true }),
+      (err) => err.code === 'CONNECTOR_NOT_IN_PACK',
+    );
+  });
+
+  test('PACK_NOT_FOUND: throws when packId is invalid', () => {
+    assert.throws(
+      () => retargetPackExecution(tmpDir, 'nonexistent.pack', 'splunk', {}, { builtInDir: '/nonexistent', skipExtraRegistries: true }),
+      (err) => err.code === 'PACK_NOT_FOUND',
+    );
+  });
+
+  test('same-language retarget includes field mapping warnings in result', () => {
+    writeTestPack('test.kql-pack', [
+      { name: 'sentinel-target', connector: 'sentinel', dataset: 'events', language: 'kql', query_template: 'SecurityEvent | where TimeGenerated > ago(24h)' },
+      { name: 'xdr-target', connector: 'defender_xdr', dataset: 'events', language: 'kql', query_template: 'DeviceEvents | where Timestamp > ago(24h)' },
+    ]);
+
+    const result = retargetPackExecution(tmpDir, 'test.kql-pack', 'defender_xdr', {}, { originalConnectorId: 'sentinel', builtInDir: '/nonexistent', skipExtraRegistries: true });
+    assert.ok(result.warnings.length > 0);
+    assert.ok(result.warnings.some(w => w.includes('TimeGenerated') || w.includes('Timestamp')));
+  });
+});
