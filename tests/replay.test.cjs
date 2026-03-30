@@ -568,3 +568,294 @@ Execution completed.
     assert.ok(results[0].warnings[0].includes('not yet implemented'));
   });
 });
+
+// ─── 5. rewriteSplTime ─────────────────────────────────────────────────────────
+
+describe('rewriteSplTime', () => {
+  const { rewriteSplTime } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  const originalTW = { start: '2026-03-01T00:00:00.000Z', end: '2026-03-08T00:00:00.000Z' };
+  const newTW = { start: '2026-04-01T00:00:00.000Z', end: '2026-04-08T00:00:00.000Z' };
+
+  test('replaces earliest=-24h and latest=now with absolute ISO timestamps', () => {
+    const result = rewriteSplTime('earliest=-24h latest=now', originalTW, newTW);
+    assert.strictEqual(result.rewritten, 'earliest="2026-04-01T00:00:00.000Z" latest="2026-04-08T00:00:00.000Z"');
+    assert.strictEqual(result.modifications.length, 2);
+    assert.strictEqual(result.modifications[0].type, 'inline_time');
+    assert.strictEqual(result.modifications[0].original, 'earliest=-24h');
+    assert.strictEqual(result.modifications[1].original, 'latest=now');
+  });
+
+  test('replaces quoted ISO timestamps in earliest/latest', () => {
+    const result = rewriteSplTime('earliest="2026-03-01T00:00:00Z" latest="2026-03-08T00:00:00Z"', originalTW, newTW);
+    assert.strictEqual(result.rewritten, 'earliest="2026-04-01T00:00:00.000Z" latest="2026-04-08T00:00:00.000Z"');
+    assert.strictEqual(result.modifications.length, 2);
+  });
+
+  test('returns unchanged statement with STATEMENT_TIME_UNCHANGED warning when no time refs', () => {
+    const result = rewriteSplTime('index=main | head 10', originalTW, newTW);
+    assert.strictEqual(result.rewritten, 'index=main | head 10');
+    assert.strictEqual(result.modifications.length, 0);
+    assert.ok(result.warnings.some(w => w.code === 'STATEMENT_TIME_UNCHANGED'));
+  });
+
+  test('replaces earliest and emits EVAL_TIME_REFERENCE warning for eval block', () => {
+    const result = rewriteSplTime('earliest=-7d | eval t=relative_time(now(),"-1h")', originalTW, newTW);
+    assert.ok(result.rewritten.startsWith('earliest="2026-04-01T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 1);
+    assert.ok(result.warnings.some(w => w.code === 'EVAL_TIME_REFERENCE'));
+  });
+
+  test('replaces multiple earliest/latest in one statement', () => {
+    const stmt = 'earliest=-7d latest=now | append [search earliest=-24h latest=now]';
+    const result = rewriteSplTime(stmt, originalTW, newTW);
+    assert.strictEqual(result.modifications.length, 4);
+    // All earliest should be replaced
+    assert.ok(!result.rewritten.includes('-7d'));
+    assert.ok(!result.rewritten.includes('-24h'));
+  });
+
+  test('replaces rendered template variable earliest=-{{lookback_hours}}h', () => {
+    const result = rewriteSplTime('earliest=-4h latest=now | stats count', originalTW, newTW);
+    assert.ok(result.rewritten.includes('earliest="2026-04-01T00:00:00.000Z"'));
+    assert.ok(result.rewritten.includes('latest="2026-04-08T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 2);
+  });
+});
+
+// ─── 6. rewriteEsqlTime ────────────────────────────────────────────────────────
+
+describe('rewriteEsqlTime', () => {
+  const { rewriteEsqlTime } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  const originalTW = { start: '2026-03-01T00:00:00.000Z', end: '2026-03-08T00:00:00.000Z' };
+  const newTW = { start: '2026-04-01T00:00:00.000Z', end: '2026-04-08T00:00:00.000Z' };
+
+  test('replaces both >= and <= @timestamp comparisons', () => {
+    const stmt = 'FROM logs | WHERE @timestamp >= "2026-03-01" AND @timestamp <= "2026-03-08"';
+    const result = rewriteEsqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('@timestamp >= "2026-04-01T00:00:00.000Z"'));
+    assert.ok(result.rewritten.includes('@timestamp <= "2026-04-08T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 2);
+  });
+
+  test('replaces single > @timestamp comparison', () => {
+    const stmt = 'FROM logs | WHERE @timestamp > "2026-03-01"';
+    const result = rewriteEsqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('@timestamp > "2026-04-01T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('returns unchanged with STATEMENT_TIME_UNCHANGED warning when no @timestamp', () => {
+    const stmt = 'FROM logs | LIMIT 100';
+    const result = rewriteEsqlTime(stmt, originalTW, newTW);
+    assert.strictEqual(result.rewritten, stmt);
+    assert.strictEqual(result.modifications.length, 0);
+    assert.ok(result.warnings.some(w => w.code === 'STATEMENT_TIME_UNCHANGED'));
+  });
+
+  test('emits COMPUTED_TIMESTAMP warning for DATE_FORMAT/NOW()', () => {
+    const stmt = 'FROM logs | WHERE @timestamp >= DATE_FORMAT(NOW())';
+    const result = rewriteEsqlTime(stmt, originalTW, newTW);
+    assert.ok(result.warnings.some(w => w.code === 'COMPUTED_TIMESTAMP'));
+  });
+
+  test('replaces BETWEEN pattern with both timestamps', () => {
+    const stmt = 'FROM logs | WHERE @timestamp BETWEEN "2026-03-01" AND "2026-03-08"';
+    const result = rewriteEsqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('"2026-04-01T00:00:00.000Z"'));
+    assert.ok(result.rewritten.includes('"2026-04-08T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+});
+
+// ─── 7. rewriteEqlTime ─────────────────────────────────────────────────────────
+
+describe('rewriteEqlTime', () => {
+  const { rewriteEqlTime } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  const originalTW = { start: '2026-03-01T00:00:00.000Z', end: '2026-03-08T00:00:00.000Z' };
+  const newTW = { start: '2026-04-01T00:00:00.000Z', end: '2026-04-08T00:00:00.000Z' };
+
+  test('does NOT modify statement, returns filter object with range on @timestamp', () => {
+    const stmt = 'process where process.name == "cmd.exe"';
+    const result = rewriteEqlTime(stmt, originalTW, newTW);
+    assert.strictEqual(result.rewritten, stmt);
+    assert.ok(result.filter);
+    assert.strictEqual(result.filter.range['@timestamp'].gte, '2026-04-01T00:00:00.000Z');
+    assert.strictEqual(result.filter.range['@timestamp'].lte, '2026-04-08T00:00:00.000Z');
+    assert.strictEqual(result.modifications.length, 1);
+    assert.strictEqual(result.modifications[0].type, 'filter_param');
+  });
+
+  test('merges with existing filter when options.existingFilter provided', () => {
+    const stmt = 'process where process.name == "cmd.exe"';
+    const existingFilter = { term: { 'host.name': 'server01' } };
+    const result = rewriteEqlTime(stmt, originalTW, newTW, { existingFilter });
+    assert.strictEqual(result.rewritten, stmt);
+    assert.ok(result.filter.bool);
+    assert.ok(result.filter.bool.must);
+    assert.strictEqual(result.filter.bool.must.length, 2);
+    assert.deepStrictEqual(result.filter.bool.must[0], existingFilter);
+    assert.ok(result.filter.bool.must[1].range);
+  });
+
+  test('returns modifications array documenting the filter injection', () => {
+    const stmt = 'any where true';
+    const result = rewriteEqlTime(stmt, originalTW, newTW);
+    assert.strictEqual(result.modifications.length, 1);
+    assert.strictEqual(result.modifications[0].type, 'filter_param');
+    assert.strictEqual(result.modifications[0].original, 'none');
+    assert.ok(result.modifications[0].replaced.includes('@timestamp'));
+    assert.deepStrictEqual(result.warnings, []);
+  });
+});
+
+// ─── 8. rewriteKqlTime ─────────────────────────────────────────────────────────
+
+describe('rewriteKqlTime', () => {
+  const { rewriteKqlTime } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  const originalTW = { start: '2026-03-01T00:00:00.000Z', end: '2026-03-08T00:00:00.000Z' };
+  const newTW = { start: '2026-04-01T00:00:00.000Z', end: '2026-04-08T00:00:00.000Z' };
+
+  test('replaces TimeGenerated > ago(24h) with datetime()', () => {
+    const stmt = 'SigninLogs | where TimeGenerated > ago(24h)';
+    const result = rewriteKqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('TimeGenerated >= datetime(2026-04-01T00:00:00.000Z)'));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('replaces Timestamp > ago(7d) for Defender XDR', () => {
+    const stmt = 'DeviceEvents | where Timestamp > ago(7d)';
+    const result = rewriteKqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('Timestamp >= datetime(2026-04-01T00:00:00.000Z)'));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('replaces TimeGenerated >= datetime(2026-03-01)', () => {
+    const stmt = 'SecurityAlert | where TimeGenerated >= datetime(2026-03-01)';
+    const result = rewriteKqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('TimeGenerated >= datetime(2026-04-01T00:00:00.000Z)'));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('replaces both TimeGenerated and Timestamp in one statement', () => {
+    const stmt = 'union SigninLogs, DeviceEvents | where TimeGenerated > ago(24h) or Timestamp > ago(24h)';
+    const result = rewriteKqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes('TimeGenerated >= datetime(2026-04-01T00:00:00.000Z)'));
+    assert.ok(result.rewritten.includes('Timestamp >= datetime(2026-04-01T00:00:00.000Z)'));
+    assert.strictEqual(result.modifications.length, 2);
+  });
+
+  test('returns STATEMENT_TIME_UNCHANGED warning when no time refs', () => {
+    const stmt = 'SecurityAlert | take 10';
+    const result = rewriteKqlTime(stmt, originalTW, newTW);
+    assert.strictEqual(result.rewritten, stmt);
+    assert.strictEqual(result.modifications.length, 0);
+    assert.ok(result.warnings.some(w => w.code === 'STATEMENT_TIME_UNCHANGED'));
+  });
+
+  test('emits RETENTION_EXCEEDED warning for Defender XDR when start exceeds 30 days', () => {
+    const oldStart = new Date(Date.now() - 45 * 86400000).toISOString();
+    const farBackTW = { start: oldStart, end: new Date().toISOString() };
+    const stmt = 'DeviceEvents | where Timestamp > ago(7d)';
+    const result = rewriteKqlTime(stmt, originalTW, farBackTW, { connectorId: 'defender_xdr' });
+    assert.ok(result.warnings.some(w => w.code === 'RETENTION_EXCEEDED'));
+  });
+});
+
+// ─── 9. rewriteOpenSearchSqlTime ────────────────────────────────────────────────
+
+describe('rewriteOpenSearchSqlTime', () => {
+  const { rewriteOpenSearchSqlTime } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  const originalTW = { start: '2026-03-01T00:00:00.000Z', end: '2026-03-08T00:00:00.000Z' };
+  const newTW = { start: '2026-04-01T00:00:00.000Z', end: '2026-04-08T00:00:00.000Z' };
+
+  test('replaces >= and <= @timestamp comparisons with single-quoted ISO timestamps', () => {
+    const stmt = "SELECT * FROM logs WHERE @timestamp >= '2026-03-01' AND @timestamp <= '2026-03-08'";
+    const result = rewriteOpenSearchSqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes("@timestamp >= '2026-04-01T00:00:00.000Z'"));
+    assert.ok(result.rewritten.includes("@timestamp <= '2026-04-08T00:00:00.000Z'"));
+    assert.strictEqual(result.modifications.length, 2);
+  });
+
+  test('handles timestamp field without @ prefix', () => {
+    const stmt = "SELECT * FROM logs WHERE timestamp >= '2026-03-01'";
+    const result = rewriteOpenSearchSqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes("timestamp >= '2026-04-01T00:00:00.000Z'"));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('replaces BETWEEN pattern with both timestamps', () => {
+    const stmt = "SELECT * FROM logs WHERE @timestamp BETWEEN '2026-03-01' AND '2026-03-08'";
+    const result = rewriteOpenSearchSqlTime(stmt, originalTW, newTW);
+    assert.ok(result.rewritten.includes("'2026-04-01T00:00:00.000Z'"));
+    assert.ok(result.rewritten.includes("'2026-04-08T00:00:00.000Z'"));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('returns STATEMENT_TIME_UNCHANGED warning when no WHERE timestamp', () => {
+    const stmt = 'SELECT * FROM logs LIMIT 100';
+    const result = rewriteOpenSearchSqlTime(stmt, originalTW, newTW);
+    assert.strictEqual(result.rewritten, stmt);
+    assert.strictEqual(result.modifications.length, 0);
+    assert.ok(result.warnings.some(w => w.code === 'STATEMENT_TIME_UNCHANGED'));
+  });
+});
+
+// ─── 10. TIME_REWRITERS registry ────────────────────────────────────────────────
+
+describe('TIME_REWRITERS registry', () => {
+  const { TIME_REWRITERS } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  test('maps spl, esql, eql, kql, sql to rewriter functions', () => {
+    assert.strictEqual(typeof TIME_REWRITERS.spl, 'function');
+    assert.strictEqual(typeof TIME_REWRITERS.esql, 'function');
+    assert.strictEqual(typeof TIME_REWRITERS.eql, 'function');
+    assert.strictEqual(typeof TIME_REWRITERS.kql, 'function');
+    assert.strictEqual(typeof TIME_REWRITERS.sql, 'function');
+  });
+
+  test('all 5 keys present', () => {
+    const keys = Object.keys(TIME_REWRITERS).sort();
+    assert.deepStrictEqual(keys, ['eql', 'esql', 'kql', 'spl', 'sql']);
+  });
+});
+
+// ─── 11. rewriteQueryTime ───────────────────────────────────────────────────────
+
+describe('rewriteQueryTime', () => {
+  const { rewriteQueryTime } = require('../thrunt-god/bin/lib/replay.cjs');
+
+  const originalTW = { start: '2026-03-01T00:00:00.000Z', end: '2026-03-08T00:00:00.000Z' };
+  const newTW = { start: '2026-04-01T00:00:00.000Z', end: '2026-04-08T00:00:00.000Z' };
+
+  test('dispatches spl to rewriteSplTime', () => {
+    const result = rewriteQueryTime('spl', 'earliest=-24h latest=now', originalTW, newTW);
+    assert.ok(result.rewritten.includes('earliest="2026-04-01T00:00:00.000Z"'));
+    assert.ok(result.rewritten.includes('latest="2026-04-08T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 2);
+  });
+
+  test('dispatches esql to rewriteEsqlTime', () => {
+    const result = rewriteQueryTime('esql', 'FROM logs | WHERE @timestamp >= "2026-03-01"', originalTW, newTW);
+    assert.ok(result.rewritten.includes('@timestamp >= "2026-04-01T00:00:00.000Z"'));
+    assert.strictEqual(result.modifications.length, 1);
+  });
+
+  test('returns NO_TIME_REWRITER warning for unknown language', () => {
+    const result = rewriteQueryTime('unknown', 'test query', originalTW, newTW);
+    assert.strictEqual(result.rewritten, 'test query');
+    assert.strictEqual(result.modifications.length, 0);
+    assert.ok(result.warnings.some(w => w.code === 'NO_TIME_REWRITER'));
+  });
+
+  test('passes options through to rewriter', () => {
+    const oldStart = new Date(Date.now() - 45 * 86400000).toISOString();
+    const farBackTW = { start: oldStart, end: new Date().toISOString() };
+    const result = rewriteQueryTime('kql', 'DeviceEvents | where Timestamp > ago(7d)', originalTW, farBackTW, { connectorId: 'defender_xdr' });
+    assert.ok(result.warnings.some(w => w.code === 'RETENTION_EXCEEDED'));
+  });
+});
