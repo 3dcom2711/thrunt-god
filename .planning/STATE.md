@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Developer Experience & CI
-status: completed
-stopped_at: Completed 35-03-PLAN.md
-last_updated: "2026-03-30T20:31:54.999Z"
-last_activity: 2026-03-30 -- Completed 35-03 Pack Author Tests
+status: Active
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-30T20:52:45.154Z"
+last_activity: 2026-03-30 -- Completed 36-01 Query Starters Module
 progress:
   total_phases: 19
   completed_phases: 5
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 11
+  completed_plans: 9
+  percent: 82
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.0 Developer Experience & CI — Phase 35 (Pack Authoring Interactive CLI)
+**Current focus:** v2.0 Developer Experience & CI — Phase 36 (Pack Query Wiring & Validation)
 
 ## Current Milestone: v2.0 Developer Experience & CI
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 35 of 37 (Pack Authoring Interactive CLI)
-Plan: 3 of 3 (Pack Author Tests)
-Status: Phase 35 complete
-Last activity: 2026-03-30 -- Completed 35-03 Pack Author Tests
+Phase: 36 of 37 (Pack Query Wiring & Validation)
+Plan: 1 of 3 (Query Starters Module)
+Status: Active
+Last activity: 2026-03-30 -- Completed 36-01 Query Starters Module
 
-Progress: [██████████] 100% (8/8 plans complete)
+Progress: [████████░░] 82% (9/11 plans complete)
 
 ## Upcoming Milestones
 
@@ -69,6 +69,7 @@ All historical decisions logged in PROJECT.md Key Decisions table.
 - [Phase 35]: READLINE-PROMISES: Used node:readline/promises for async interactive prompts, consistent with cmdInitConnector pattern
 - [Phase 35]: PARTIAL-VALIDATION: Non-interactive mode uses requireComplete:false since scaffolds need manual editing
 - [Phase 35]: COMBINED-REGRESSION-GUARDS: Included regression guard tests (cmdPackCreate export, circular dependency, DATASET_KINDS) directly in main test file rather than separate file
+- [Phase 36-pack-query-wiring-validation]: HARDCODED-ENTITY-KINDS: Entity scope types hardcoded from reviewed runtime extraction list rather than dynamically importing runtime.cjs -- keeps module independently testable
 
 ### Research Specs Available
 
@@ -98,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T20:31:54.996Z
-Stopped at: Completed 35-03-PLAN.md
+Last session: 2026-03-30T20:52:45.151Z
+Stopped at: Completed 36-01-PLAN.md
 Resume file: None
