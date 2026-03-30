@@ -199,29 +199,27 @@ describe("Verifier namespace", () => {
     test("lists all registered gates", () => {
       const gates = Verifier.listGates()
 
-      expect(gates).toHaveLength(4)
-      expect(gates.map((g) => g.id)).toContain("pytest")
-      expect(gates.map((g) => g.id)).toContain("mypy")
-      expect(gates.map((g) => g.id)).toContain("ruff")
-      expect(gates.map((g) => g.id)).toContain("clawdstrike")
+      expect(gates).toHaveLength(2)
+      expect(gates.map((g) => g.id)).toContain("evidence-integrity")
+      expect(gates.map((g) => g.id)).toContain("receipt-completeness")
     })
 
     test("includes gate metadata", () => {
       const gates = Verifier.listGates()
-      const pytest = gates.find((g) => g.id === "pytest")
+      const evidenceGate = gates.find((g) => g.id === "evidence-integrity")
 
-      expect(pytest).toBeDefined()
-      expect(pytest?.name).toBe("Pytest")
-      expect(pytest?.description).toBeDefined()
-      expect(pytest?.critical).toBe(true)
+      expect(evidenceGate).toBeDefined()
+      expect(evidenceGate?.name).toBe("Evidence Integrity")
+      expect(evidenceGate?.description).toBeDefined()
+      expect(evidenceGate?.critical).toBe(false)
     })
   })
 
   describe("getGate", () => {
     test("returns gate by ID", () => {
-      const gate = Verifier.getGate("pytest")
+      const gate = Verifier.getGate("evidence-integrity")
       expect(gate).toBeDefined()
-      expect(gate?.info.id).toBe("pytest")
+      expect(gate?.info.id).toBe("evidence-integrity")
     })
 
     test("returns undefined for unknown gate", () => {
