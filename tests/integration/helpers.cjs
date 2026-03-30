@@ -1,0 +1,65 @@
+'use strict';
+
+const { execSync } = require('child_process');
+
+// Container URL constants matching docker-compose port mappings
+const SPLUNK_URL = 'http://127.0.0.1:18089';
+const SPLUNK_HEC_URL = 'http://127.0.0.1:18088';
+const ELASTIC_URL = 'http://127.0.0.1:19200';
+const OPENSEARCH_URL = 'http://127.0.0.1:19201';
+const SPLUNK_USER = 'admin';
+const SPLUNK_PASSWORD = 'TestPass123!';
+
+/**
+ * Skip the current test/describe block if Docker is not available.
+ * Call at the top of every integration test describe block.
+ *
+ * @param {import('node:test').TestContext} t - node:test context
+ * @returns {boolean} true if Docker is unavailable (test was skipped), false otherwise
+ */
+function skipIfNoDocker(t) {
+  try {
+    execSync('docker info', { stdio: 'pipe' });
+    return false;
+  } catch {
+    t.skip('Docker not available');
+    return true;
+  }
+}
+
+/**
+ * Poll a URL until it returns HTTP 200. Rejects after timeout.
+ *
+ * @param {string} url - URL to poll
+ * @param {object} [opts]
+ * @param {number} [opts.timeout=120000] - Max wait in ms
+ * @param {number} [opts.interval=3000] - Delay between attempts in ms
+ * @returns {Promise<void>}
+ */
+async function waitForHealthy(url, { timeout = 120000, interval = 3000 } = {}) {
+  const start = Date.now();
+  while (true) {
+    const elapsed = Date.now() - start;
+    if (elapsed > timeout) {
+      throw new Error(`waitForHealthy: ${url} did not return HTTP 200 within ${timeout}ms (elapsed: ${elapsed}ms)`);
+    }
+    try {
+      const resp = await fetch(url);
+      if (resp.status === 200) return;
+    } catch {
+      // Connection refused or network error — retry
+    }
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+}
+
+module.exports = {
+  skipIfNoDocker,
+  waitForHealthy,
+  SPLUNK_URL,
+  SPLUNK_HEC_URL,
+  ELASTIC_URL,
+  OPENSEARCH_URL,
+  SPLUNK_USER,
+  SPLUNK_PASSWORD,
+};
