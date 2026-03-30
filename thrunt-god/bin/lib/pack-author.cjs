@@ -93,19 +93,9 @@ function generatePackId(kind, title, attackId) {
 
 /**
  * Map pack kind to output directory name.
+ * Re-exported from pack.cjs (canonical source).
  */
-function getPackFolderForKind(kind) {
-  switch (kind) {
-    case 'technique': return 'techniques';
-    case 'domain': return 'domains';
-    case 'family': return 'families';
-    case 'campaign': return 'campaigns';
-    case 'custom':
-    case 'example':
-    default:
-      return 'custom';
-  }
-}
+const { getPackFolderForKind } = require('./pack.cjs');
 
 /**
  * Validate a hypothesis template for quality.
@@ -976,13 +966,18 @@ async function runPackAuthor(cwd, options = {}) {
     fs.mkdirSync(outputDir, { recursive: true });
     fs.writeFileSync(outputPath, `${packJson}\n`);
 
+    // Generate test artifacts
+    const testArtifacts = packLib.writeTestArtifacts(cwd, packInput);
+
     console.log(`\n  Pack created: ${relativePath}`);
+    console.log(`  Test fixture: ${testArtifacts.fixture_path}`);
+    console.log(`  Test file: ${testArtifacts.test_path}`);
     console.log('\n  Next steps:');
     console.log(`    thrunt pack lint ${identity.id}`);
     console.log(`    thrunt pack test ${identity.id}`);
 
     rl.close();
-    return { created: true, pack_id: identity.id, path: relativePath, pack: packInput };
+    return { created: true, pack_id: identity.id, path: relativePath, pack: packInput, test_artifacts: testArtifacts };
   } catch (err) {
     rl.close();
     throw err;
@@ -1147,7 +1142,10 @@ function buildPackFromFlags(cwd, flags = {}) {
 
   const relativePath = path.relative(cwd, outputPath);
 
-  return { created: true, pack_id: id, path: relativePath, pack: packInput };
+  // Generate test artifacts
+  const testArtifacts = packLib.writeTestArtifacts(cwd, packInput);
+
+  return { created: true, pack_id: id, path: relativePath, pack: packInput, test_artifacts: testArtifacts };
 }
 
 // ─── Module Exports ──────────────────────────────────────────────────────────
@@ -1157,7 +1155,7 @@ module.exports = {
   buildPackFromFlags,
   validateHypothesis,
   generatePackId,
-  getPackFolderForKind,
+  getPackFolderForKind, // re-exported from pack.cjs
   HYPOTHESIS_QUALITY_WORDS,
   CONNECTOR_LANGUAGES,
   DATASET_KINDS,

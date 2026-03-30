@@ -759,23 +759,7 @@ async function cmdPackRenderTargets(cwd, args, raw) {
   }
 }
 
-function getPackFolderForKind(kind) {
-  switch (kind) {
-    case 'technique':
-      return 'techniques';
-    case 'domain':
-      return 'domains';
-    case 'family':
-      return 'families';
-    case 'campaign':
-      return 'campaigns';
-    case 'example':
-      return 'examples';
-    case 'custom':
-    default:
-      return 'custom';
-  }
-}
+// getPackFolderForKind consolidated in pack.cjs — use packLib.getPackFolderForKind(kind)
 
 function formatPackTitle(packId) {
   return packId
@@ -843,6 +827,12 @@ async function cmdPackTest(cwd, args, raw) {
   const packLib = require('./pack.cjs');
   const packId = args[0] && !args[0].startsWith('--') ? args[0] : null;
 
+  // Parse flags
+  const verbose = args.includes('--verbose');
+  const mockData = args.includes('--mock-data');
+  const coverage = args.includes('--coverage');
+  const validateOnly = args.includes('--validate-only');
+
   let registry;
   try {
     registry = packLib.loadPackRegistry(cwd);
@@ -863,9 +853,35 @@ async function cmdPackTest(cwd, args, raw) {
   const results = [];
   for (const pack of selectedPacks) {
     const errors = [];
+    const warnings = [];
     const exampleParameters = pack.examples?.parameters || {};
     let bootstrap_ok = false;
     let render_ok = pack.execution_targets.length === 0;
+    let verbose_output = null;
+    let mock_data_output = null;
+    let coverage_output = null;
+
+    // Schema validation (always runs)
+    const schemaValidation = packLib.validatePackDefinition(pack);
+    if (!schemaValidation.valid) {
+      errors.push(...schemaValidation.errors.map(e => `schema: ${e}`));
+    }
+    if (schemaValidation.warnings) {
+      warnings.push(...schemaValidation.warnings);
+    }
+
+    // If validate-only, skip bootstrap and render
+    if (validateOnly) {
+      results.push({
+        id: pack.id,
+        source: pack.source,
+        valid: errors.length === 0,
+        validate_only: true,
+        errors,
+        warnings,
+      });
+      continue;
+    }
 
     if (!isPlainObject(exampleParameters) || Object.keys(exampleParameters).length === 0) {
       errors.push('Missing examples.parameters');
@@ -879,14 +895,130 @@ async function cmdPackTest(cwd, args, raw) {
 
       if (pack.execution_targets.length > 0) {
         try {
-          packLib.buildPackExecutionTargets(cwd, pack.id, exampleParameters, {
+          const renderResult = packLib.buildPackExecutionTargets(cwd, pack.id, exampleParameters, {
             profile: 'default',
           });
           render_ok = true;
+
+          // Verbose: show rendered queries
+          if (verbose) {
+            verbose_output = renderResult.targets.map(t => ({
+              name: t.name,
+              connector: t.connector,
+              language: t.language,
+              rendered_query: t.query_spec.query.statement,
+            }));
+          }
+
+          // Mock data: validate against mock response fixtures
+          if (mockData) {
+            mock_data_output = [];
+            for (const target of renderResult.targets) {
+              const mockResponse = packLib.loadMockResponse(target.connector);
+              const entry = {
+                target: target.name,
+                connector: target.connector,
+                has_mock: !!mockResponse,
+                checks: {},
+              };
+
+              if (mockResponse) {
+                // Check 1: rendered query has no unresolved placeholders
+                const unresolvedMatch = target.query_spec.query.statement.match(/\{\{[^}]+\}\}/g);
+                entry.checks.no_unresolved_placeholders = !unresolvedMatch;
+                if (unresolvedMatch) {
+                  errors.push(`mock-data(${target.name}): unresolved placeholders: ${unresolvedMatch.join(', ')}`);
+                }
+
+                // Check 2: declared entity types appear in mock response field names
+                const entityTypes = (pack.scope_defaults?.entities || []);
+                const fieldNames = mockResponse.mock_response.results.length > 0
+                  ? Object.keys(mockResponse.mock_response.results[0]).map(k => k.toLowerCase())
+                  : [];
+                const entityFieldMatches = entityTypes.map(entity => ({
+                  entity,
+                  found: fieldNames.some(f => f.includes(entity.replace('-', '_').replace('-', ''))),
+                }));
+                entry.checks.entity_field_alignment = entityFieldMatches;
+              }
+
+              mock_data_output.push(entry);
+            }
+          }
         } catch (err) {
           errors.push(`render-targets: ${err.message}`);
         }
       }
+
+      // Mock data: check bootstrap phase_seed and receipt_tags (independent of render)
+      if (mockData && bootstrap_ok) {
+        try {
+          const bootstrapResult = packLib.buildPackBootstrap(cwd, pack.id, exampleParameters);
+          const phaseSeed = bootstrapResult.bootstrap?.phase_seed;
+          if (!phaseSeed) {
+            errors.push('mock-data: bootstrap phase_seed is missing');
+          }
+
+          const receiptTags = pack.publish?.receipt_tags || [];
+          const hasPackTag = receiptTags.some(t => t.includes(pack.id));
+          if (!hasPackTag) {
+            warnings.push(`mock-data: publish.receipt_tags does not contain pack ID "${pack.id}"`);
+          }
+        } catch (err) {
+          // Already caught above
+        }
+      }
+    }
+
+    // Coverage report
+    if (coverage) {
+      const templateUsage = packLib.getPackTemplateUsage(pack);
+
+      // Telemetry coverage
+      const telemetryCoverage = (pack.telemetry_requirements || []).map(req => {
+        const coveredByTargets = (pack.execution_targets || []).some(t =>
+          req.connectors.includes(t.connector)
+        );
+        return { surface: req.surface, connectors: req.connectors, covered: coveredByTargets };
+      });
+
+      // Connector coverage
+      const connectorTargetCounts = {};
+      for (const target of pack.execution_targets || []) {
+        connectorTargetCounts[target.connector] = (connectorTargetCounts[target.connector] || 0) + 1;
+      }
+      const connectorCoverage = (pack.required_connectors || []).map(c => ({
+        connector: c,
+        targets: connectorTargetCounts[c] || 0,
+        covered: (connectorTargetCounts[c] || 0) > 0,
+      }));
+
+      // Entity coverage
+      const allTargetQueries = (pack.execution_targets || []).map(t => t.query_template || '').join(' ').toLowerCase();
+      const entityCoverage = (pack.scope_defaults?.entities || []).map(entity => ({
+        entity,
+        covered: allTargetQueries.includes(entity.replace('-', '_')) || allTargetQueries.includes(entity),
+      }));
+
+      // Template parameter coverage
+      const parameterTargetCounts = {};
+      for (const targetUsage of templateUsage.execution_targets) {
+        for (const param of targetUsage.parameters) {
+          parameterTargetCounts[param] = (parameterTargetCounts[param] || 0) + 1;
+        }
+      }
+      const parameterCoverage = (pack.parameters || []).map(p => ({
+        parameter: p.name,
+        used_in_targets: parameterTargetCounts[p.name] || 0,
+        covered: (parameterTargetCounts[p.name] || 0) > 0,
+      }));
+
+      coverage_output = {
+        telemetry: telemetryCoverage,
+        connectors: connectorCoverage,
+        entities: entityCoverage,
+        parameters: parameterCoverage,
+      };
     }
 
     results.push({
@@ -896,6 +1028,10 @@ async function cmdPackTest(cwd, args, raw) {
       bootstrap_ok,
       render_ok,
       errors,
+      warnings,
+      ...(verbose_output ? { verbose: verbose_output } : {}),
+      ...(mock_data_output ? { mock_data: mock_data_output } : {}),
+      ...(coverage_output ? { coverage: coverage_output } : {}),
     });
   }
 
@@ -927,7 +1063,7 @@ async function cmdPackInit(cwd, args, raw) {
   const title = options.title || formatPackTitle(packId);
   const slugSource = packId.includes('.') ? packId.split('.').slice(1).join('-') : packId;
   const slug = generateSlugInternal(slugSource) || 'new-pack';
-  const packDir = path.join(packLib.getProjectPackRegistryDir(cwd), getPackFolderForKind(kind));
+  const packDir = path.join(packLib.getProjectPackRegistryDir(cwd), packLib.getPackFolderForKind(kind));
   const outputPath = path.join(packDir, `${slug}.json`);
 
   if (fs.existsSync(outputPath)) {
