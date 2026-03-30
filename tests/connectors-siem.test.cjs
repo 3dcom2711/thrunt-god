@@ -577,7 +577,7 @@ describe('built-in SIEM connectors', () => {
     }
   });
 
-  test('elastic executes EQL sequence query and normalizes hits.events response', async () => {
+  test('elastic executes EQL sequence query and normalizes hits.sequences response', async () => {
     process.env.ELASTIC_API_KEY = 'elastic-key';
     let capturedReq = null;
     let capturedBody = null;
@@ -591,30 +591,35 @@ describe('built-in SIEM connectors', () => {
           timed_out: false,
           hits: {
             total: { value: 3, relation: 'eq' },
-            events: [
+            sequences: [
               {
-                _index: 'test-sysmon',
-                _id: 'abc123',
-                _source: {
-                  '@timestamp': '2026-03-28T12:00:00.000Z',
-                  'host.name': 'ws-01',
-                  'user.name': 'alice',
-                  'source.ip': '10.0.0.1',
-                  'event.action': 'process_create',
-                  'event.code': '1',
-                },
-              },
-              {
-                _index: 'test-sysmon',
-                _id: 'def456',
-                _source: {
-                  '@timestamp': '2026-03-28T12:01:00.000Z',
-                  'host.name': 'ws-02',
-                  'user.name': 'bob',
-                  'source.ip': '10.0.0.2',
-                  'event.action': 'network_connect',
-                  'event.code': '3',
-                },
+                join_keys: ['ws-01'],
+                events: [
+                  {
+                    _index: 'test-sysmon',
+                    _id: 'abc123',
+                    _source: {
+                      '@timestamp': '2026-03-28T12:00:00.000Z',
+                      'host.name': 'ws-01',
+                      'user.name': 'alice',
+                      'source.ip': '10.0.0.1',
+                      'event.action': 'process_create',
+                      'event.code': '1',
+                    },
+                  },
+                  {
+                    _index: 'test-sysmon',
+                    _id: 'def456',
+                    _source: {
+                      '@timestamp': '2026-03-28T12:01:00.000Z',
+                      'host.name': 'ws-02',
+                      'user.name': 'bob',
+                      'source.ip': '10.0.0.2',
+                      'event.action': 'network_connect',
+                      'event.code': '3',
+                    },
+                  },
+                ],
               },
             ],
           },

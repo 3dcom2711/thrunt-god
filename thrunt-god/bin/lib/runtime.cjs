@@ -2265,12 +2265,53 @@ function createElasticAdapter() {
       });
     },
     normalizeResponse({ response, spec }) {
-      // EQL response shape: { hits: { events: [{ _source: {...} }] } }
+      // Helper to normalize a single EQL hit envelope into a row with _id merged
+      const normalizeEqlHit = (hit) => {
+        const row = { ...hit._source };
+        if (hit._id && !row._id) row._id = hit._id;
+        return row;
+      };
+
+      // EQL sequence response shape: { hits: { sequences: [{ join_keys, events: [{ _id, _source }] }] } }
+      const eqlSequences = response.data?.hits?.sequences;
+      if (Array.isArray(eqlSequences)) {
+        const entities = [];
+        const events = [];
+        for (const seq of eqlSequences) {
+          for (const hit of toArray(seq.events)) {
+            const row = normalizeEqlHit(hit);
+            addEntitiesFromRecord(entities, 'elastic', row, [
+              { kind: 'host', paths: ['host.name', 'host'] },
+              { kind: 'user', paths: ['user.name', 'user'] },
+              { kind: 'ip', paths: ['source.ip', 'destination.ip', 'client.ip'] },
+              { kind: 'cloud-account', paths: ['cloud.account.id'] },
+            ]);
+            events.push(normalizeEvent('elastic', row, {
+              datasetKind: spec.dataset.kind,
+              timestampPaths: ['@timestamp', 'timestamp'],
+              idPaths: ['event.id', '_id'],
+              titlePath: 'event.action',
+            }));
+          }
+        }
+        return {
+          events,
+          entities,
+          warnings: [],
+          metadata: {
+            backend: 'elastic',
+            endpoint: '/_eql/search',
+          },
+          has_more: false,
+        };
+      }
+
+      // EQL non-sequence response shape: { hits: { events: [{ _id, _source: {...} }] } }
       const eqlEvents = response.data?.hits?.events;
       if (Array.isArray(eqlEvents)) {
         const entities = [];
         const events = eqlEvents.map(hit => {
-          const row = hit._source || {};
+          const row = normalizeEqlHit(hit);
           addEntitiesFromRecord(entities, 'elastic', row, [
             { kind: 'host', paths: ['host.name', 'host'] },
             { kind: 'user', paths: ['user.name', 'user'] },
