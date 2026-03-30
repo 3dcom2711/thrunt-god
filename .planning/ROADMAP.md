@@ -67,10 +67,11 @@ Plans:
   1. Operator can select a query, trigger execution from the console, and see results stream in as they arrive
   2. After agent execution, the gate framework automatically checks evidence manifest SHA-256 hashes and reports pass/fail
   3. After agent execution, the gate framework verifies that every query has a receipt linked to evidence and reports any gaps in the chain
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 25-01: TBD
+- [ ] 25-01-PLAN.md — Runtime bridge module, THRUNT gate implementations, and gate registry rewiring
+- [ ] 25-02-PLAN.md — TUI execution dispatch, streaming display, gate auto-trigger, status bar indicator, and gate overlay
 
 ### Phase 26: Rebrand & Dead Code Removal
 **Goal**: The codebase carries zero ClawdStrike references and all dead modules are removed, leaving a clean THRUNT GOD identity
@@ -95,6 +96,6 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 23. Bridge Foundation | 2/2 | Complete    | 2026-03-29 |
-| 24. Hunt Observation Screens | 3/3 | Complete   | 2026-03-29 |
-| 25. Execution & Verification | 0/? | Not started | - |
+| 24. Hunt Observation Screens | 3/3 | Complete    | 2026-03-29 |
+| 25. Execution & Verification | 0/2 | Not started | - |
 | 26. Rebrand & Dead Code Removal | 0/? | Not started | - |
