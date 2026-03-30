@@ -2206,7 +2206,7 @@ function createElasticAdapter() {
       display_name: 'Elastic ES|QL',
       auth_types: ['api_key', 'basic', 'bearer'],
       dataset_kinds: ['events', 'alerts', 'entities', 'cloud', 'endpoint'],
-      languages: ['esql'],
+      languages: ['esql', 'eql'],
       pagination_modes: ['none'],
       docs_url: 'https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-esql-query',
       limitations: [
@@ -2220,6 +2220,22 @@ function createElasticAdapter() {
       }
     },
     prepareQuery({ spec, profile }) {
+      if (spec.query.language === 'eql') {
+        return {
+          request: {
+            method: 'POST',
+            url: joinUrl(normalizeBaseUrl(profile), '_eql/search'),
+            headers: {
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: spec.query.statement,
+              filter: spec.parameters.filter || undefined,
+              size: 100,
+            }),
+          },
+        };
+      }
       return {
         request: {
           method: 'POST',
@@ -2249,6 +2265,38 @@ function createElasticAdapter() {
       });
     },
     normalizeResponse({ response, spec }) {
+      // EQL response shape: { hits: { events: [{ _source: {...} }] } }
+      const eqlEvents = response.data?.hits?.events;
+      if (Array.isArray(eqlEvents)) {
+        const entities = [];
+        const events = eqlEvents.map(hit => {
+          const row = hit._source || {};
+          addEntitiesFromRecord(entities, 'elastic', row, [
+            { kind: 'host', paths: ['host.name', 'host'] },
+            { kind: 'user', paths: ['user.name', 'user'] },
+            { kind: 'ip', paths: ['source.ip', 'destination.ip', 'client.ip'] },
+            { kind: 'cloud-account', paths: ['cloud.account.id'] },
+          ]);
+          return normalizeEvent('elastic', row, {
+            datasetKind: spec.dataset.kind,
+            timestampPaths: ['@timestamp', 'timestamp'],
+            idPaths: ['event.id', '_id'],
+            titlePath: 'event.action',
+          });
+        });
+        return {
+          events,
+          entities,
+          warnings: [],
+          metadata: {
+            backend: 'elastic',
+            endpoint: '/_eql/search',
+          },
+          has_more: false,
+        };
+      }
+
+      // ES|QL response shape: { columns, values }
       const { rows, warnings } = normalizeElasticRows(response.data);
       const entities = [];
       const events = rows.map(row => {
