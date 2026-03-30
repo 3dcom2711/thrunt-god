@@ -449,32 +449,51 @@ function renderHuntStatusPanel(state: AppState): string[] {
 function renderStatusSubtitle(state: AppState): string {
   const ctx = state.thruntContext
   if (!ctx) {
-    return `${THEME.dim}No active hunt${THEME.reset}`
+    return ""
+  }
+
+  // Only show if we have real data (not all placeholders)
+  const phaseNum = ctx.phase.number
+  const phaseName = ctx.phase.name
+  if (!phaseNum && !phaseName) {
+    return ""
   }
 
   const parts: string[] = []
 
-  // Phase
-  const phaseNum = ctx.phase.number ?? "?"
-  const phaseName = ctx.phase.name ?? "unknown"
-  parts.push(`${THEME.dim}Phase${THEME.reset} ${THEME.secondary}${phaseNum}${THEME.reset}${THEME.dim}: ${phaseName}${THEME.reset}`)
+  // Phase name
+  parts.push(`${THEME.secondary}Phase ${phaseNum ?? ""}${THEME.reset}${THEME.dim}: ${phaseName ?? ""}${THEME.reset}`)
 
-  // Plan progress
-  const planCurrent = ctx.plan.current ?? "?"
-  const planTotal = ctx.plan.total ?? "?"
-  parts.push(`${THEME.dim}${planCurrent}/${planTotal}${THEME.reset}`)
+  // Plan progress (only if meaningful)
+  const planCurrent = ctx.plan.current
+  const planTotal = ctx.plan.total
+  if (planCurrent != null && planTotal != null) {
+    parts.push(`${THEME.dim}${planCurrent}/${planTotal}${THEME.reset}`)
+  }
 
-  // Progress percentage with mini bar
+  // Progress bar (only if > 0)
   const percent = ctx.progressPercent ?? 0
-  const barWidth = 8
-  const filled = Math.round((percent / 100) * barWidth)
-  const empty = barWidth - filled
-  parts.push(`${THEME.success}${"█".repeat(filled)}${THEME.dim}${"░".repeat(empty)}${THEME.reset} ${THEME.dim}${percent}%${THEME.reset}`)
+  if (percent > 0) {
+    const barWidth = 8
+    const filled = Math.round((percent / 100) * barWidth)
+    const empty = barWidth - filled
+    parts.push(`${THEME.secondary}${"█".repeat(filled)}${THEME.dim}${"░".repeat(empty)}${THEME.reset} ${THEME.dim}${percent}%${THEME.reset}`)
+  }
 
-  // Health
-  parts.push(renderHealthStatus(state))
+  // Health (compact)
+  const healthItems = state.health
+    ? [...state.health.security, ...state.health.ai, ...state.health.infra, ...state.health.mcp]
+    : []
+  if (healthItems.length > 0) {
+    const down = healthItems.filter((i) => !i.available).length
+    if (down === 0) {
+      parts.push(`${THEME.success}healthy${THEME.reset}`)
+    } else {
+      parts.push(`${THEME.warning}${down} down${THEME.reset}`)
+    }
+  }
 
-  // Blockers (if any)
+  // Blockers
   if (ctx.blockers.length > 0) {
     parts.push(`${THEME.warning}${ctx.blockers.length} blocker${ctx.blockers.length > 1 ? "s" : ""}${THEME.reset}`)
   }
@@ -482,23 +501,28 @@ function renderStatusSubtitle(state: AppState): string {
   return parts.join(`${THEME.dim}  ·  ${THEME.reset}`)
 }
 
-function buildActionRows(ctx: ScreenContext, width: number): string[] | null {
-  const boxWidth = Math.min(84, width - 8)
-  if (boxWidth < 28) {
+function buildActionRows(ctx: ScreenContext, inputWidth: number): string[] | null {
+  if (inputWidth < 28) {
     return null
   }
-  return renderHomeActionRows(ctx, boxWidth - 2)
+  // Use same width as the prompt box inner area for alignment
+  return renderHomeActionRows(ctx, inputWidth - 4)
 }
 
 function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
   const { state, width, height } = ctx
   const lines: string[] = []
-  const actionRows = buildActionRows(ctx, width)
-  const actionHeight = actionRows ? actionRows.length + 1 : 0
+
+  // Compute input width early — action grid uses it for alignment
+  const inputWidth = Math.min(78, width - 10)
+  const actionRows = buildActionRows(ctx, inputWidth)
+  const actionHeight = actionRows ? actionRows.length + 2 : 0
+  const subtitle = renderStatusSubtitle(state)
+  const subtitleHeight = subtitle ? 1 : 0
   const statusHeight = state.statusMessage ? 2 : 0
 
   // Calculate vertical centering
-  const contentHeight = LOGO.main.length + LOGO.god.length + 10 + actionHeight + statusHeight
+  const contentHeight = LOGO.main.length + LOGO.god.length + 9 + subtitleHeight + actionHeight + statusHeight
   const startY = Math.max(1, Math.floor((height - contentHeight) / 3))
 
   // Top padding
@@ -516,13 +540,14 @@ function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
   const animatedGod = getAnimatedGod(state.animationFrame)
   lines.push(...centerBlock(animatedGod, width))
 
-  // Status subtitle — compact inline under logo
-  lines.push(centerLine(renderStatusSubtitle(state), width))
+  // Status subtitle — only if there's real data
+  if (subtitle) {
+    lines.push(centerLine(subtitle, width))
+  }
 
   lines.push("")
 
   // Hero prompt box
-  const inputWidth = Math.min(78, width - 10)
   const prompt = state.promptBuffer
   const placeholder = 'Ask anything... "Fix broken tests"'
   const cursor = prompt ? THEME.secondary + "▎" + THEME.reset : ""
@@ -572,10 +597,11 @@ function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
     lines.push(centerLine(state.statusMessage, width))
   }
 
-  // Action grid (standalone, below hints)
+  // Action grid — padded to match prompt box width for alignment
   if (actionRows) {
     lines.push("")
-    lines.push(...centerBlock(actionRows, width))
+    const paddedActions = actionRows.map((row) => `  ${row}`)
+    lines.push(...centerBlock(paddedActions, width))
   }
 
   // Fill remaining space
