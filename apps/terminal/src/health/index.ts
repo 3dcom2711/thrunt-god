@@ -193,13 +193,13 @@ async function checkIntegration(
       const { exitCode, stdout, stderr } = raceResult
       const output = stdout || stderr
 
-      if (exitCode === 0 || output.length > 0) {
+      if (exitCode === 0) {
         const version = def.versionParser?.(output)
         result.available = true
         result.version = version
       } else {
         result.available = false
-        result.error = `exit code ${exitCode}`
+        result.error = output.trim().slice(0, 100) || `exit code ${exitCode}`
       }
     }
   } catch (err) {

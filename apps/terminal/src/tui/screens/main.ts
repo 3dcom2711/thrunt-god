@@ -663,20 +663,13 @@ function handleDispatchSheetInput(key: string, ctx: ScreenContext): boolean {
   if (key === "\x1b[C" || key === "right" || key === "\x1b[D" || key === "left") {
     const direction: -1 | 1 = key === "\x1b[D" || key === "left" ? -1 : 1
     if (sheet.focusedField === 1) {
-      sheet.action = sheet.action === "dispatch" ? "speculate" : "dispatch"
+      // Speculate module removed — action is always dispatch
     } else if (sheet.focusedField === 2) {
       const modes = ["managed", "attach", "external"] as const
       sheet.mode = modes[cycleDispatchSheetOption(modes.indexOf(sheet.mode), modes.length, direction)]
     } else if (sheet.focusedField === 3) {
       sheet.agentIndex = cycleDispatchSheetOption(sheet.agentIndex, AGENTS.length, direction)
     }
-    sheet.error = null
-    app.render()
-    return true
-  }
-
-  if (key === "d" || key === "s") {
-    sheet.action = key === "d" ? "dispatch" : "speculate"
     sheet.error = null
     app.render()
     return true
