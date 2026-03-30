@@ -576,4 +576,104 @@ describe('built-in SIEM connectors', () => {
       await fixture.close();
     }
   });
+
+  test('elastic executes EQL sequence query and normalizes hits.events response', async () => {
+    process.env.ELASTIC_API_KEY = 'elastic-key';
+    let capturedReq = null;
+    let capturedBody = null;
+    const fixture = await startJsonServer(async ({ req, body }) => {
+      capturedReq = req;
+      capturedBody = body;
+      return {
+        json: {
+          is_running: false,
+          took: 42,
+          timed_out: false,
+          hits: {
+            total: { value: 3, relation: 'eq' },
+            events: [
+              {
+                _index: 'test-sysmon',
+                _id: 'abc123',
+                _source: {
+                  '@timestamp': '2026-03-28T12:00:00.000Z',
+                  'host.name': 'ws-01',
+                  'user.name': 'alice',
+                  'source.ip': '10.0.0.1',
+                  'event.action': 'process_create',
+                  'event.code': '1',
+                },
+              },
+              {
+                _index: 'test-sysmon',
+                _id: 'def456',
+                _source: {
+                  '@timestamp': '2026-03-28T12:01:00.000Z',
+                  'host.name': 'ws-02',
+                  'user.name': 'bob',
+                  'source.ip': '10.0.0.2',
+                  'event.action': 'network_connect',
+                  'event.code': '3',
+                },
+              },
+            ],
+          },
+        },
+      };
+    });
+
+    try {
+      const result = await runtime.executeQuerySpec({
+        connector: { id: 'elastic', profile: 'prod' },
+        dataset: { kind: 'events' },
+        time_window: {
+          start: '2026-03-28T00:00:00.000Z',
+          end: '2026-03-29T00:00:00.000Z',
+        },
+        query: {
+          language: 'eql',
+          statement: 'sequence [process where event.code == "1"] [network where event.code == "3"]',
+        },
+      }, runtime.createBuiltInConnectorRegistry(), {
+        config: {
+          connector_profiles: {
+            elastic: {
+              prod: {
+                auth_type: 'api_key',
+                base_url: fixture.baseUrl,
+                secret_refs: {
+                  api_key: { type: 'env', value: 'ELASTIC_API_KEY' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Request routed to /_eql/search
+      assert.ok(capturedReq.url.endsWith('/_eql/search'), `Expected /_eql/search but got ${capturedReq.url}`);
+      const parsedBody = JSON.parse(capturedBody);
+      assert.strictEqual(parsedBody.query, 'sequence [process where event.code == "1"] [network where event.code == "3"]');
+
+      // Envelope is correct
+      assert.strictEqual(result.envelope.status, 'ok');
+      assert.strictEqual(result.envelope.counts.events, 2);
+
+      // Entities extracted from _source fields
+      assert.ok(result.envelope.entities.some(e => e.kind === 'host' && e.value === 'ws-01'));
+      assert.ok(result.envelope.entities.some(e => e.kind === 'user' && e.value === 'alice'));
+
+      // Metadata endpoint is /_eql/search
+      assert.strictEqual(result.envelope.metadata.endpoint, '/_eql/search');
+
+      // Capabilities include eql
+      const connectors = runtime.createBuiltInConnectorRegistry().list();
+      const elastic = connectors.find(c => c.id === 'elastic');
+      assert.ok(elastic.languages.includes('eql'), 'elastic capabilities should include eql language');
+      assert.ok(elastic.languages.includes('esql'), 'elastic capabilities should still include esql language');
+    } finally {
+      delete process.env.ELASTIC_API_KEY;
+      await fixture.close();
+    }
+  });
 });
