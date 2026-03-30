@@ -1,5 +1,5 @@
 /**
- * TUI App - Interactive Terminal User Interface for ClawdStrike
+ * TUI App - Interactive Terminal User Interface for THRUNT GOD
  *
  * Thin coordinator: lifecycle, input routing, screen registry.
  * All screen rendering/input is delegated to screen modules.
@@ -282,7 +282,7 @@ export class TUIApp implements AppController {
       { key: "r", label: "runs", description: "managed backlog", stage: "supported", action: () => this.showRuns() },
       { key: "i", label: "integrations", description: "system status", stage: "supported", action: () => this.setScreen("integrations") },
       { key: "?", label: "help", description: "keyboard shortcuts", stage: "supported", action: () => this.showHelp() },
-      { key: "q", label: "quit", description: "exit clawdstrike", stage: "supported", action: () => this.quit() },
+      { key: "q", label: "quit", description: "exit thrunt-god", stage: "supported", action: () => this.quit() },
     ]
 
     // Build screen registry
@@ -1748,7 +1748,7 @@ export class TUIApp implements AppController {
           attached: false,
           attachState: "returning",
         },
-        { kind: "status", message: "Returning control to ClawdStrike" },
+        { kind: "status", message: "Returning control to THRUNT GOD" },
       )
       this.replaceRun(returningRun)
       this.state.attachedRunId = null
@@ -2305,7 +2305,7 @@ export class TUIApp implements AppController {
     await this.cleanup()
 
     console.log("")
-    console.log(THEME.secondary + THEME.bold + "  ⟨ ClawdStrike Grimoire ⟩" + THEME.reset)
+    console.log(THEME.secondary + THEME.bold + "  ⟨ THRUNT GOD Grimoire ⟩" + THEME.reset)
     console.log(THEME.dim + "  " + "═".repeat(40) + THEME.reset)
     console.log("")
     console.log(THEME.white + THEME.bold + "  Invocations" + THEME.reset)

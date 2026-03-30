@@ -2,7 +2,7 @@
  * Main Screen - Hero input + command palette overlay
  */
 
-import { THEME, LOGO, AGENTS, getAnimatedStrike } from "../theme"
+import { THEME, LOGO, AGENTS, getAnimatedGod } from "../theme"
 import type { Screen, ScreenContext, Command, HomeFocus } from "../types"
 import { renderBox } from "../components/box"
 import { centerBlock, centerLine, joinColumns, wrapText } from "../components/layout"
@@ -542,16 +542,16 @@ function renderMainContent(ctx: ScreenContext, _commands: Command[]): string {
     lines.push("")
   }
 
-  // Logo - stacked layout: CLAWD on top, STRIKE below
-  // Render CLAWD lines in crimson
+  // Logo - stacked layout: THRUNT on top, GOD below
+  // Render THRUNT lines in crimson
   lines.push(...centerBlock(
     LOGO.main.map((line) => `${THEME.accent}${line}${THEME.reset}`),
     width,
   ))
 
-  // Get animated STRIKE for current frame and render below
-  const animatedStrike = getAnimatedStrike(state.animationFrame)
-  lines.push(...centerBlock(animatedStrike, width))
+  // Get animated GOD for current frame and render below
+  const animatedGod = getAnimatedGod(state.animationFrame)
+  lines.push(...centerBlock(animatedGod, width))
 
   lines.push("")
 

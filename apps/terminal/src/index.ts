@@ -1,17 +1,16 @@
 /**
- * clawdstrike - Security-Aware AI Coding Agent Orchestrator
+ * thrunt-god - Agentic Threat Hunting Operator Console
  *
- * A security-aware orchestration engine that dispatches coding tasks to native AI CLIs
+ * An orchestration engine that dispatches coding tasks to native AI CLIs
  * (Codex, Claude Code, OpenCode) while preserving subscription authentication.
  *
  * Features:
  * - Intelligent task routing based on risk, size, and task characteristics
  * - Speculate+Vote: parallel multi-agent execution for high-stakes tasks
- * - Quality gates (pytest, mypy, ruff) with fail-fast semantics
- * - Beads work graph integration for issue tracking
+ * - Quality gates with fail-fast semantics
  * - Git worktree isolation for safe concurrent execution
  *
- * @module clawdstrike
+ * @module thrunt-god
  */
 
 // Core types
@@ -61,12 +60,12 @@ export {
 } from "./tools"
 
 /**
- * clawdstrike version
+ * thrunt-god version
  */
 export const VERSION = "0.1.0"
 
 /**
- * clawdstrike initialization options
+ * thrunt-god initialization options
  */
 export interface InitOptions {
   telemetryDir?: string
@@ -78,7 +77,7 @@ export interface InitOptions {
 let initialized = false
 
 /**
- * Initialize clawdstrike with configuration
+ * Initialize thrunt-god with configuration
  */
 export async function init(options: InitOptions = {}): Promise<void> {
   if (initialized) {
@@ -101,7 +100,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 }
 
 /**
- * Shutdown clawdstrike cleanly
+ * Shutdown thrunt-god cleanly
  */
 export async function shutdown(): Promise<void> {
   if (!initialized) {
@@ -128,7 +127,7 @@ export async function shutdown(): Promise<void> {
 }
 
 /**
- * Check if clawdstrike is initialized
+ * Check if thrunt-god is initialized
  */
 export function isInitialized(): boolean {
   return initialized

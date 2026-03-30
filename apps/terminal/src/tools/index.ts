@@ -1,5 +1,5 @@
 /**
- * Tools - Agent tool definitions for ClawdStrike operations
+ * Tools - Agent tool definitions for THRUNT GOD operations
  *
  * Exposes dispatch, speculate, and gate tools for use by OpenCode agents.
  * These tools allow agents to orchestrate other agents and run quality checks.
@@ -153,7 +153,7 @@ The task runs in an isolated workcell with quality gates.`,
           taskId,
           routing,
           error: error.includes("Not a git repository")
-            ? "Not a git repository. Run 'clawdstrike init' or launch the TUI for guided setup."
+            ? "Not a git repository. Run 'thrunt-god init' or launch the TUI for guided setup."
             : `Failed to acquire workcell: ${error}`,
         }
       }
@@ -321,7 +321,7 @@ Use before committing or after making changes to verify quality.`,
 // =============================================================================
 
 /**
- * All ClawdStrike tools
+ * All THRUNT GOD tools
  */
 export const tools: ToolDefinition[] = [dispatchTool, gateTool]
 

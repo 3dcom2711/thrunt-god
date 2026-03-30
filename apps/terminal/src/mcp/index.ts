@@ -1,7 +1,7 @@
 /**
- * MCP Server - Model Context Protocol server for ClawdStrike
+ * MCP Server - Model Context Protocol server for THRUNT GOD
  *
- * Exposes ClawdStrike tools (dispatch, speculate, gate) over MCP protocol.
+ * Exposes THRUNT GOD tools (dispatch, gate) over MCP protocol.
  * Also supports connecting to external MCP servers (bidirectional hub).
  *
  * Discovery: Writes port to `.thrunt-god/mcp.json` for other tools to find.
@@ -257,7 +257,7 @@ class McpServerImpl {
             result: {
               protocolVersion: "2024-11-05",
               serverInfo: {
-                name: "clawdstrike",
+                name: "thrunt-god",
                 version: "0.1.0",
               },
               capabilities: {
@@ -422,7 +422,7 @@ class McpClientManager {
           // Initialize and get tools list
           await this.sendRequest(socket, "initialize", {
             protocolVersion: "2024-11-05",
-            clientInfo: { name: "clawdstrike", version: "0.1.0" },
+            clientInfo: { name: "thrunt-god", version: "0.1.0" },
             capabilities: {},
           })
 

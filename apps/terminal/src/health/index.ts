@@ -1,11 +1,10 @@
 /**
- * Health - Integration healthcheck system for ClawdStrike
+ * Health - Integration healthcheck system for THRUNT GOD
  *
  * Provides lightweight, parallel healthchecks for:
- * - Security: hushd, hush-cli
  * - AI Toolchains: Claude, Codex, OpenCode
  * - Infrastructure: Git, Python, Bun
- * - MCP Server: ClawdStrike's own MCP server status
+ * - MCP Server: THRUNT GOD's own MCP server status
  */
 
 // =============================================================================
@@ -303,8 +302,8 @@ export namespace Health {
 
     // Add MCP server status
     summary.mcp.push({
-      id: "clawdstrike-mcp",
-      name: "ClawdStrike MCP",
+      id: "thrunt-god-mcp",
+      name: "THRUNT GOD MCP",
       category: "mcp",
       available: mcpServerStatus.running,
       version: mcpServerStatus.port ? `:${mcpServerStatus.port}` : undefined,
@@ -323,10 +322,10 @@ export namespace Health {
    * Get status for a single integration from cache
    */
   export function getStatus(id: string): HealthStatus | undefined {
-    if (id === "clawdstrike-mcp") {
+    if (id === "thrunt-god-mcp") {
       return {
-        id: "clawdstrike-mcp",
-        name: "ClawdStrike MCP",
+        id: "thrunt-god-mcp",
+        name: "THRUNT GOD MCP",
         category: "mcp",
         available: mcpServerStatus.running,
         version: mcpServerStatus.port ? `:${mcpServerStatus.port}` : undefined,

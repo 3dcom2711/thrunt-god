@@ -35,7 +35,7 @@ function attachInstruction(run: RunRecord): string {
     return "Claude interactive sessions start at a blank prompt. Use the staged task below, then press Enter."
   }
 
-  return "The agent is attached to this terminal. Continue the session here and press Ctrl+C to return to ClawdStrike."
+  return "The agent is attached to this terminal. Continue the session here and press Ctrl+C to return to THRUNT GOD."
 }
 
 export function buildAttachLauncherScript(
@@ -47,13 +47,13 @@ export function buildAttachLauncherScript(
   const commandLine = command.map(shellQuote).join(" ")
 
   const bannerLines = [
-    "ClawdStrike interactive attach",
+    "THRUNT GOD interactive attach",
     `Agent: ${run.agentLabel}`,
     `Mode: ${run.mode} -> attach`,
     `Worktree: ${worktreePath}`,
     "",
     attachInstruction(run),
-    "Press Ctrl+C or exit the agent to return to ClawdStrike.",
+    "Press Ctrl+C or exit the agent to return to THRUNT GOD.",
   ]
 
   const printBannerLines = bannerLines.map((line) => `print -r -- ${shellQuote(line)}`)

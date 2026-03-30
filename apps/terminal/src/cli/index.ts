@@ -99,7 +99,7 @@ function parseCliArgs(): { command: string; args: string[]; options: CLIOptions 
 
 function getHelpText(): string {
   return `
-${TUI.header("thrunt-god - Security-Aware AI Coding Agent Orchestrator")}
+${TUI.header("thrunt-god - Agentic Threat Hunting Operator Console")}
 
 ${TUI.info("Usage:")} thrunt-god <command> [options] [args]
 
