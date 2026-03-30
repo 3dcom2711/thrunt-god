@@ -34,9 +34,14 @@ function skipIfNoDocker(t) {
  * @param {object} [opts]
  * @param {number} [opts.timeout=120000] - Max wait in ms
  * @param {number} [opts.interval=3000] - Delay between attempts in ms
+ * @param {RequestInit} [opts.requestInit] - Request options passed to fetch
+ * @param {(response: Response) => boolean} [opts.isHealthy] - Optional custom readiness predicate
  * @returns {Promise<void>}
  */
-async function waitForHealthy(url, { timeout = 120000, interval = 3000 } = {}) {
+async function waitForHealthy(
+  url,
+  { timeout = 120000, interval = 3000, requestInit, isHealthy = (response) => response.status === 200 } = {}
+) {
   const start = Date.now();
   while (true) {
     const elapsed = Date.now() - start;
@@ -44,8 +49,8 @@ async function waitForHealthy(url, { timeout = 120000, interval = 3000 } = {}) {
       throw new Error(`waitForHealthy: ${url} did not return HTTP 200 within ${timeout}ms (elapsed: ${elapsed}ms)`);
     }
     try {
-      const resp = await fetch(url);
-      if (resp.status === 200) return;
+      const resp = await fetch(url, requestInit);
+      if (isHealthy(resp)) return;
     } catch {
       // Connection refused or network error — retry
     }

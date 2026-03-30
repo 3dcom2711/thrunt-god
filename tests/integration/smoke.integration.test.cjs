@@ -12,6 +12,7 @@ const {
   SPLUNK_PASSWORD,
 } = require('./helpers.cjs');
 const { seedSplunk, seedElastic, seedOpenSearch } = require('./fixtures/seed-data.cjs');
+const SPLUNK_AUTH = 'Basic ' + Buffer.from(`${SPLUNK_USER}:${SPLUNK_PASSWORD}`).toString('base64');
 
 describe('docker infrastructure smoke test', async (t) => {
   if (skipIfNoDocker(t)) return;
@@ -20,7 +21,14 @@ describe('docker infrastructure smoke test', async (t) => {
   // It verifies health and seeds data, then asserts seed data is queryable.
 
   test('splunk container is healthy and accepts seed data', async () => {
-    await waitForHealthy(`${SPLUNK_URL}/services/server/info`, { timeout: 120000 });
+    await waitForHealthy(`${SPLUNK_URL}/services/server/info`, {
+      timeout: 120000,
+      requestInit: {
+        headers: {
+          Authorization: SPLUNK_AUTH,
+        },
+      },
+    });
     const result = await seedSplunk(SPLUNK_URL, { user: SPLUNK_USER, password: SPLUNK_PASSWORD });
     assert.ok(result.indexed >= 3, `Expected at least 3 indexed events, got ${result.indexed}`);
   });
@@ -38,11 +46,10 @@ describe('docker infrastructure smoke test', async (t) => {
   });
 
   test('splunk seed data is queryable via REST search', async () => {
-    const auth = 'Basic ' + Buffer.from(`${SPLUNK_USER}:${SPLUNK_PASSWORD}`).toString('base64');
     const resp = await fetch(`${SPLUNK_URL}/services/search/v2/jobs/export`, {
       method: 'POST',
-      headers: { Authorization: auth, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'search=search index%3Dtest_sysmon | head 10&output_mode=json&earliest_time=-24h&latest_time=now',
+      headers: { Authorization: SPLUNK_AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'search=search index%3Dtest_sysmon | head 10&output_mode=json&earliest_time=0&latest_time=now',
     });
     assert.strictEqual(resp.status, 200, `Splunk search returned ${resp.status}`);
     const text = await resp.text();

@@ -38,26 +38,36 @@ jobs:
           node-version: ${{ inputs.node-version }}
 
       - name: Install THRUNT GOD
-        run: npm install -g thrunt-god@${{ inputs.thrunt-version }}
+        env:
+          THRUNT_VERSION: ${{ inputs.thrunt-version }}
+        run: npm install -g "thrunt-god@${THRUNT_VERSION}"
 
       - name: Discover and validate packs
+        env:
+          PACKS_DIR: ${{ inputs.packs-directory }}
         run: |
-          PACKS_DIR="${{ inputs.packs-directory }}"
           if [ ! -d "$PACKS_DIR" ]; then
             echo "No packs directory found at $PACKS_DIR"
             exit 1
           fi
 
           FAILED=0
-          for pack_file in "$PACKS_DIR"/**/*.json; do
+          FOUND=0
+          while IFS= read -r -d '' pack_file; do
+            FOUND=1
             echo "Validating: $pack_file"
-            PACK_ID=$(node -e "console.log(require('./$pack_file').id)")
+            PACK_ID=$(node -e "console.log(require(process.argv[1]).id)" "./$pack_file")
             mkdir -p .planning/packs/
             cp "$pack_file" .planning/packs/
             if ! thrunt-god pack test "$PACK_ID" 2>&1; then
               FAILED=$((FAILED + 1))
             fi
-          done
+          done < <(find "$PACKS_DIR" -type f -name '*.json' -print0)
+
+          if [ "$FOUND" -eq 0 ]; then
+            echo "No pack JSON files found under $PACKS_DIR"
+            exit 1
+          fi
 
           if [ "$FAILED" -gt 0 ]; then
             echo "FAILED: $FAILED pack(s) failed validation"

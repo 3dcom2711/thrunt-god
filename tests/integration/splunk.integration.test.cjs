@@ -11,6 +11,7 @@ const {
   SPLUNK_PASSWORD,
 } = require('./helpers.cjs');
 const { seedSplunk } = require('./fixtures/seed-data.cjs');
+const SPLUNK_AUTH = 'Basic ' + Buffer.from(`${SPLUNK_USER}:${SPLUNK_PASSWORD}`).toString('base64');
 
 describe('splunk integration', async (t) => {
   if (skipIfNoDocker(t)) return;
@@ -19,13 +20,20 @@ describe('splunk integration', async (t) => {
   let queryResult;
 
   test('bootstraps bearer token from Splunk REST API', async () => {
-    await waitForHealthy(`${SPLUNK_URL}/services/server/info`, { timeout: 120000 });
+    await waitForHealthy(`${SPLUNK_URL}/services/server/info`, {
+      timeout: 120000,
+      requestInit: {
+        headers: {
+          Authorization: SPLUNK_AUTH,
+        },
+      },
+    });
     await seedSplunk(SPLUNK_URL, { user: SPLUNK_USER, password: SPLUNK_PASSWORD });
     bearerToken = await createSplunkBearerToken(SPLUNK_URL, { user: SPLUNK_USER, password: SPLUNK_PASSWORD });
     assert.ok(typeof bearerToken === 'string' && bearerToken.length > 0, 'Bearer token should be a non-empty string');
   });
 
-  test('executes SPL query through adapter and extracts host/user entities', async () => {
+  test('executes SPL query through adapter and extracts host/user entities', async (t) => {
     if (!bearerToken) {
       t.skip('Bearer token not available (previous test may have failed)');
       return;
