@@ -2331,7 +2331,6 @@ export class TUIApp implements AppController {
     console.log(THEME.white + THEME.bold + "  Hunt Commands" + THEME.reset)
     console.log("")
     console.log(`  ${THEME.secondary}W${THEME.reset}                   Watch (live stream) ${THEME.success}[beta]${THEME.reset}`)
-    console.log(`  ${THEME.secondary}X${THEME.reset}                   Scan (MCP explorer) ${THEME.success}[beta]${THEME.reset}`)
     console.log(`  ${THEME.secondary}T${THEME.reset}                   Timeline replay ${THEME.success}[beta]${THEME.reset}`)
     console.log(`  ${THEME.secondary}R${THEME.reset}                   Rule builder ${THEME.warning}[exp]${THEME.reset}`)
     console.log(`  ${THEME.secondary}Q${THEME.reset}                   Query REPL ${THEME.success}[beta]${THEME.reset}`)

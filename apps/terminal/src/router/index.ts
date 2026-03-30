@@ -194,7 +194,10 @@ export namespace Router {
    * Get default configuration
    */
   export function getDefaultConfig(): RouterConfig {
-    return { ...DEFAULT_CONFIG }
+    return {
+      rules: [...DEFAULT_CONFIG.rules.map((r) => ({ ...r, match: { ...r.match }, action: { ...r.action } }))],
+      defaults: { ...DEFAULT_CONFIG.defaults, gates: [...DEFAULT_CONFIG.defaults.gates] },
+    }
   }
 }
 
