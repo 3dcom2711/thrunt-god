@@ -24,7 +24,7 @@
 - [x] **Phase 33: SDK Export Surface** - Export ~15 internal runtime.cjs functions needed by standalone connector files (completed 2026-03-30)
 - [x] **Phase 34: Connector Scaffolding CLI** - thrunt-tools init connector command with interactive mode, zero-dep templates, post-scaffold validation (completed 2026-03-30)
 - [x] **Phase 35: Pack Authoring Interactive CLI** - MITRE ATT&CK technique picker, hypothesis builder with quality checks, pack type selection (completed 2026-03-30)
-- [ ] **Phase 36: Pack Query Wiring & Validation** - Per-connector query template starters for all 10 connectors, entity extraction rule builder, schema validation pipeline
+- [x] **Phase 36: Pack Query Wiring & Validation** - Per-connector query template starters for all 10 connectors, entity extraction rule builder, schema validation pipeline (completed 2026-03-30)
 - [ ] **Phase 37: Pack Testing & Publishing** - Enhanced pack test with mock data and coverage, fixture generation, pack distribution
 
 ## Phase Details
@@ -102,7 +102,7 @@ Plans:
 **Goal**: Ship per-connector query template starters and entity extraction rule builder with incremental schema validation
 **Depends on**: Phase 35 (interactive pack creation flow exists)
 **Requirements**: PACK-02
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 36-01-PLAN.md -- query-starters.cjs module with 10 connector starter templates, entity scope types, incremental validation helpers
 - [ ] 36-02-PLAN.md -- Extend pack-author.cjs with query starter integration, entity selection, and 4-checkpoint validation
@@ -272,7 +272,7 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 33. SDK Export Surface | 1/1 | Complete    | 2026-03-30 |
 | 34. Connector Scaffolding CLI | 2/2 | Complete    | 2026-03-30 |
 | 35. Pack Authoring Interactive CLI | 3/3 | Complete    | 2026-03-30 |
-| 36. Pack Query Wiring & Validation | 2/3 | In Progress|  |
+| 36. Pack Query Wiring & Validation | 3/3 | Complete   | 2026-03-30 |
 | 37. Pack Testing & Publishing | 0/0 | Not Started | |
 | 38. Replay Engine Core | 0/0 | Not Started | |
 | 39. Per-Language Query Rewriters | 0/0 | Not Started | |
