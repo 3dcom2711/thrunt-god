@@ -86,6 +86,11 @@ Plans:
 **Goal**: Ship thrunt pack create command with interactive guided flow for creating hunt packs including MITRE ATT&CK technique selection
 **Depends on**: Nothing (builds on existing pack init command)
 **Requirements**: PACK-01
+**Plans:** 3 plans
+Plans:
+- [ ] 35-01-PLAN.md -- MITRE ATT&CK data bundle, mitre-data.cjs module, and mitre-data tests
+- [ ] 35-02-PLAN.md -- pack-author.cjs interactive engine, cmdPackCreate routing
+- [ ] 35-03-PLAN.md -- Pack author test suite and end-to-end verification
 **Success Criteria** (what must be TRUE):
   1. thrunt pack create launches interactive 8-step guided flow
   2. MITRE ATT&CK technique picker supports search by ID (T1078), name (Valid Accounts), and tactic (Initial Access)
@@ -260,8 +265,8 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 31. Core CI Pipeline | 1/1 | Complete    | 2026-03-30 |
 | 32. Integration Test CI & Pack Validation | 1/1 | Complete    | 2026-03-30 |
 | 33. SDK Export Surface | 1/1 | Complete    | 2026-03-30 |
-| 34. Connector Scaffolding CLI | 2/2 | Complete   | 2026-03-30 |
-| 35. Pack Authoring Interactive CLI | 0/0 | Not Started | |
+| 34. Connector Scaffolding CLI | 2/2 | Complete    | 2026-03-30 |
+| 35. Pack Authoring Interactive CLI | 0/3 | In Progress | |
 | 36. Pack Query Wiring & Validation | 0/0 | Not Started | |
 | 37. Pack Testing & Publishing | 0/0 | Not Started | |
 | 38. Replay Engine Core | 0/0 | Not Started | |
