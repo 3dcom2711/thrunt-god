@@ -2042,6 +2042,70 @@ function normalizeDefenderResults(payload) {
   return toArray(payload?.Results);
 }
 
+async function executeSplunkAsyncJob({ spec, profile, secrets, auth, options }) {
+  const baseUrl = normalizeBaseUrl(profile);
+  const headers = await authorizeRequest({}, profile, secrets, auth, options);
+  const fetchOptions = { fetch: options?.fetch };
+
+  // Build search body for job creation
+  const searchBody = new URLSearchParams();
+  const statement = spec.query.statement;
+  searchBody.set('search', statement.trim().startsWith('|') ? statement : `search ${statement}`);
+  if (spec.time_window.start) searchBody.set('earliest_time', spec.time_window.start);
+  if (spec.time_window.end) searchBody.set('latest_time', spec.time_window.end);
+  searchBody.set('output_mode', 'json');
+
+  // Step 1: Create search job
+  const createUrl = buildUrl(baseUrl, 'services/search/jobs', { output_mode: 'json' });
+  const createResponse = await performHttpRequest({
+    method: 'POST',
+    url: createUrl,
+    headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
+    body: searchBody.toString(),
+  }, fetchOptions);
+
+  const sid = createResponse.data?.sid;
+  if (!sid) {
+    const err = new Error('Splunk async job creation did not return a sid');
+    err.code = 'SPLUNK_ASYNC_JOB_NO_SID';
+    throw err;
+  }
+
+  // Step 2: Poll until isDone
+  const pollUrl = buildUrl(baseUrl, `services/search/jobs/${encodeURIComponent(sid)}`, { output_mode: 'json' });
+  const maxAttempts = 30;
+  const waitFn = typeof options?.sleep === 'function' ? options.sleep : sleep;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const pollResponse = await performHttpRequest({
+      method: 'GET',
+      url: pollUrl,
+      headers,
+    }, fetchOptions);
+
+    const isDone = pollResponse.data?.entry?.[0]?.content?.isDone;
+    if (isDone === '1' || isDone === 1 || isDone === true) {
+      break;
+    }
+
+    if (attempt === maxAttempts - 1) {
+      const err = new Error(`Splunk async job ${sid} did not complete within ${maxAttempts * 2} seconds`);
+      err.code = 'SPLUNK_ASYNC_JOB_TIMEOUT';
+      throw err;
+    }
+
+    await waitFn(2000);
+  }
+
+  // Step 3: Fetch results
+  const resultsUrl = buildUrl(baseUrl, `services/search/jobs/${encodeURIComponent(sid)}/results`, { output_mode: 'json', count: '0' });
+  return performHttpRequest({
+    method: 'GET',
+    url: resultsUrl,
+    headers,
+  }, fetchOptions);
+}
+
 function createSplunkAdapter() {
   return {
     capabilities: createConnectorCapabilities({
@@ -2085,14 +2149,24 @@ function createSplunkAdapter() {
         },
       };
     },
-    executeRequest({ prepared, profile, secrets, options }) {
-      return executeConnectorRequest({
-        request: prepared.request,
-        profile,
-        secrets,
-        auth: { type: profile?.auth_type || 'bearer' },
-        options,
-      });
+    async executeRequest({ prepared, profile, secrets, spec, options }) {
+      const auth = { type: profile?.auth_type || 'bearer' };
+      try {
+        return await executeConnectorRequest({
+          request: prepared.request,
+          profile,
+          secrets,
+          auth,
+          options,
+        });
+      } catch (err) {
+        if (err.status === 504) {
+          const response = await executeSplunkAsyncJob({ spec, profile, secrets, auth, options });
+          response.__splunk_async = true;
+          return response;
+        }
+        throw err;
+      }
     },
     normalizeResponse({ response, spec }) {
       const { rows, messages } = parseSplunkResultsPayload(response.data);
@@ -2116,7 +2190,7 @@ function createSplunkAdapter() {
         warnings: messages.map(message => createWarning('splunk_message', message.text || String(message))),
         metadata: {
           backend: 'splunk',
-          endpoint: 'search/v2/jobs/export',
+          endpoint: response.__splunk_async ? 'search/jobs' : 'search/v2/jobs/export',
           output_mode: 'json_rows',
         },
         has_more: false,
