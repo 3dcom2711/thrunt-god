@@ -592,8 +592,25 @@ async function runCommand(command, args, cwd, raw) {
         await commands.cmdRuntimeExecute(cwd, args.slice(2), raw);
       } else if (subcommand === 'replay') {
         await commands.cmdRuntimeReplay(cwd, args.slice(2), raw);
+      } else if (subcommand === 'tenant') {
+        const tenantSub = args[2];
+        if (tenantSub === 'list') {
+          await commands.cmdTenantList(cwd, raw);
+        } else if (tenantSub === 'status') {
+          await commands.cmdTenantStatus(cwd, args[3], raw);
+        } else if (tenantSub === 'add') {
+          await commands.cmdTenantAdd(cwd, args.slice(3), raw);
+        } else if (tenantSub === 'disable') {
+          await commands.cmdTenantDisable(cwd, args[3], raw);
+        } else if (tenantSub === 'enable') {
+          await commands.cmdTenantEnable(cwd, args[3], raw);
+        } else if (tenantSub === 'doctor') {
+          await commands.cmdTenantDoctor(cwd, args.slice(3), raw);
+        } else {
+          error('Unknown tenant subcommand. Available: list, status, add, disable, enable, doctor');
+        }
       } else {
-        error('Unknown runtime subcommand. Available: list-connectors, doctor, smoke, execute, replay');
+        error('Unknown runtime subcommand. Available: list-connectors, doctor, smoke, execute, replay, tenant');
       }
       break;
     }

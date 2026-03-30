@@ -8,6 +8,9 @@ const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, com
 const { extractFrontmatter } = require('./frontmatter.cjs');
 const { MODEL_PROFILES } = require('./model-profiles.cjs');
 
+// Lazy-require tenant module to avoid circular deps at load time
+function getTenant() { return require('./tenant.cjs'); }
+
 function isPlainObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -2727,6 +2730,15 @@ async function cmdReplayDiff(cwd, args, raw) {
   }, raw, summary.join('\n'));
 }
 
+// ─── Tenant command delegates ────────────────────────────────────────────────
+
+async function cmdTenantList(cwd, raw) { return getTenant().cmdTenantList(cwd, raw); }
+async function cmdTenantStatus(cwd, tenantId, raw) { return getTenant().cmdTenantStatus(cwd, tenantId, raw); }
+async function cmdTenantAdd(cwd, args, raw) { return getTenant().cmdTenantAdd(cwd, args, raw); }
+async function cmdTenantDisable(cwd, tenantId, raw) { return getTenant().cmdTenantDisable(cwd, tenantId, raw); }
+async function cmdTenantEnable(cwd, tenantId, raw) { return getTenant().cmdTenantEnable(cwd, tenantId, raw); }
+async function cmdTenantDoctor(cwd, args, raw) { return getTenant().cmdTenantDoctor(cwd, args, raw); }
+
 module.exports = {
   cmdGenerateSlug,
   cmdCurrentTimestamp,
@@ -2762,4 +2774,10 @@ module.exports = {
   cmdScaffold,
   cmdStats,
   cmdInitConnector,
+  cmdTenantList,
+  cmdTenantStatus,
+  cmdTenantAdd,
+  cmdTenantDisable,
+  cmdTenantEnable,
+  cmdTenantDoctor,
 };

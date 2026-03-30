@@ -28,6 +28,8 @@ const VALID_CONFIG_KEYS = new Set([
   'planning.commit_docs', 'planning.search_gitignored',
   'hooks.context_warnings', 'hooks.workflow_guard',
   'connector_profiles',
+  'tenants',
+  'tenant_isolation_mode',
   'publish_quality_threshold',
   'promotion_readiness_threshold',
   'promotion_hooks_enabled',
@@ -44,6 +46,10 @@ function isValidConfigKey(keyPath) {
   if (/^agent_skills\.[a-zA-Z0-9_-]+$/.test(keyPath)) return true;
   // Allow connector_profiles.<connector-id>.<profile-name> as full profile writes
   if (/^connector_profiles\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(keyPath)) return true;
+  // Allow tenants.<tenant-id> for individual tenant config writes
+  if (/^tenants\.[a-z0-9][a-z0-9-]*$/.test(keyPath)) return true;
+  // Allow tenants.<tenant-id>.<field> for nested tenant field writes (e.g., tenants.acme.enabled)
+  if (/^tenants\.[a-z0-9][a-z0-9-]+\.[a-z0-9_]+$/.test(keyPath)) return true;
   return false;
 }
 
