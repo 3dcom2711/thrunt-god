@@ -552,7 +552,7 @@ export class TUIApp implements AppController {
 
     // Gate overlay (centered, replaces screen rows)
     if (this._showGateOverlay && this.state.thruntGateResults) {
-      const overlayLines = renderGateOverlay(this.state.thruntGateResults, this.width, this.height, THEME)
+      const overlayLines = renderGateOverlay(this.state.thruntGateResults, this.width, THEME)
       const startRow = Math.max(0, Math.floor((this.height - overlayLines.length) / 2))
       const screenLines = screenContent.split("\n")
       for (let i = 0; i < overlayLines.length && (startRow + i) < screenLines.length; i++) {

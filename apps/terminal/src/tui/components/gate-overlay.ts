@@ -9,7 +9,6 @@ import type { ThruntGateResults } from "../types"
 export function renderGateOverlay(
   results: ThruntGateResults,
   width: number,
-  height: number,
   theme: ThemeColors,
 ): string[] {
   const boxWidth = Math.min(60, width - 4)
