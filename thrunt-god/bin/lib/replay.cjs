@@ -1089,6 +1089,151 @@ function applyIocInjection(statement, language, connectorId, iocInjection) {
   return { statement: currentStatement, modifications: allModifications, warnings: allWarnings };
 }
 
+// ─── buildDiff ──────────────────────────────────────────────────────────────
+
+const VALID_DIFF_MODES = ['full', 'counts_only', 'entities_only'];
+
+/**
+ * Compute entity-level delta between two result envelopes.
+ *
+ * @param {object} originalEnvelope - baseline result envelope
+ * @param {object} replayEnvelope - replay result envelope
+ * @param {string} [mode='full'] - one of 'full', 'counts_only', 'entities_only'
+ * @returns {object} DiffResult with baseline, replay, delta, summary, mode
+ */
+function buildDiff(originalEnvelope, replayEnvelope, mode = 'full') {
+  if (!VALID_DIFF_MODES.includes(mode)) {
+    throw new Error(`Invalid diff mode: "${mode}". Must be one of: ${VALID_DIFF_MODES.join(', ')}`);
+  }
+
+  // Build baseline summary
+  const baseline = {
+    query_id: originalEnvelope.query_id,
+    connector_id: originalEnvelope.connector && originalEnvelope.connector.id,
+    time_window: {
+      start: originalEnvelope.time_window && originalEnvelope.time_window.start,
+      end: originalEnvelope.time_window && originalEnvelope.time_window.end,
+    },
+    counts: { ...originalEnvelope.counts },
+    status: originalEnvelope.status,
+  };
+
+  // Build replay summary
+  const replay = {
+    query_id: replayEnvelope.query_id,
+    connector_id: replayEnvelope.connector && replayEnvelope.connector.id,
+    time_window: {
+      start: replayEnvelope.time_window && replayEnvelope.time_window.start,
+      end: replayEnvelope.time_window && replayEnvelope.time_window.end,
+    },
+    counts: { ...replayEnvelope.counts },
+    status: replayEnvelope.status,
+  };
+
+  const delta = {
+    events: { added: 0, removed: 0, unchanged: 0 },
+    entities: { added: [], removed: [], unchanged: 0 },
+    new_findings: [],
+    missing_findings: [],
+  };
+
+  // Event count delta (used in full and counts_only modes)
+  if (mode === 'full' || mode === 'counts_only') {
+    const baseEvents = baseline.counts.events || 0;
+    const replayEvents = replay.counts.events || 0;
+    delta.events.added = Math.max(0, replayEvents - baseEvents);
+    delta.events.removed = Math.max(0, baseEvents - replayEvents);
+    delta.events.unchanged = Math.min(baseEvents, replayEvents);
+  }
+
+  // Entity set diff (used in full and entities_only modes)
+  if (mode === 'full' || mode === 'entities_only') {
+    const originalEntities = originalEnvelope.entities || [];
+    const replayEntities = replayEnvelope.entities || [];
+
+    const originalSet = new Set(originalEntities.map(e => `${e.kind}:${e.value}`));
+    const replaySet = new Set(replayEntities.map(e => `${e.kind}:${e.value}`));
+
+    // Added: in replay but not in original
+    for (const e of replayEntities) {
+      const key = `${e.kind}:${e.value}`;
+      if (!originalSet.has(key)) {
+        delta.entities.added.push({ kind: e.kind, value: e.value });
+      }
+    }
+    // Deduplicate added entities (in case of duplicates within replay)
+    const seenAdded = new Set();
+    delta.entities.added = delta.entities.added.filter(e => {
+      const key = `${e.kind}:${e.value}`;
+      if (seenAdded.has(key)) return false;
+      seenAdded.add(key);
+      return true;
+    });
+
+    // Removed: in original but not in replay
+    for (const e of originalEntities) {
+      const key = `${e.kind}:${e.value}`;
+      if (!replaySet.has(key)) {
+        delta.entities.removed.push({ kind: e.kind, value: e.value });
+      }
+    }
+    // Deduplicate removed entities
+    const seenRemoved = new Set();
+    delta.entities.removed = delta.entities.removed.filter(e => {
+      const key = `${e.kind}:${e.value}`;
+      if (seenRemoved.has(key)) return false;
+      seenRemoved.add(key);
+      return true;
+    });
+
+    // Unchanged: count of keys in both sets
+    let unchangedCount = 0;
+    for (const key of originalSet) {
+      if (replaySet.has(key)) unchangedCount++;
+    }
+    delta.entities.unchanged = unchangedCount;
+  }
+
+  // Findings diff (full mode only)
+  if (mode === 'full') {
+    const originalEvidence = originalEnvelope.evidence || [];
+    const replayEvidence = replayEnvelope.evidence || [];
+
+    const originalKeys = new Set(originalEvidence.map(e => JSON.stringify(e)));
+    const replayKeys = new Set(replayEvidence.map(e => JSON.stringify(e)));
+
+    delta.new_findings = replayEvidence.filter(e => !originalKeys.has(JSON.stringify(e)));
+    delta.missing_findings = originalEvidence.filter(e => !replayKeys.has(JSON.stringify(e)));
+  }
+
+  // Generate summary string
+  let summary;
+  const addedEvents = delta.events.added;
+  const addedEntities = delta.entities.added.length;
+  const removedEvents = delta.events.removed;
+  const removedEntities = delta.entities.removed.length;
+
+  if (addedEvents === 0 && removedEvents === 0 && addedEntities === 0 && removedEntities === 0) {
+    summary = 'No changes detected between original and replay.';
+  } else {
+    const parts = [];
+    if (addedEvents > 0) parts.push(`${addedEvents} new event(s)`);
+    if (removedEvents > 0) parts.push(`${removedEvents} removed event(s)`);
+    if (addedEntities > 0) parts.push(`${addedEntities} new entity/entities`);
+    if (removedEntities > 0) parts.push(`${removedEntities} removed entity/entities`);
+    summary = `Replay found ${parts.join(' and ')} compared to original.`;
+  }
+
+  return {
+    replay_id: replayEnvelope.query_id,
+    baseline,
+    replay,
+    delta,
+    summary,
+    mode,
+  };
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -1114,4 +1259,5 @@ module.exports = {
   sanitizeIocForLanguage,
   injectIoc,
   applyIocInjection,
+  buildDiff,
 };
