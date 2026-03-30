@@ -69,8 +69,8 @@ export namespace Router {
     task: TaskInput,
     config: RouterConfig = DEFAULT_CONFIG
   ): Promise<RoutingDecision> {
-    // Combine default rules with config rules (config rules take precedence via priority)
-    const allRules = [...rules.DEFAULT_RULES, ...config.rules]
+    // Use config rules (which default to DEFAULT_RULES, may be overridden)
+    const allRules = config.rules
 
     // Evaluate rules to get merged action
     const action = rules.evaluateRules(task, allRules)
