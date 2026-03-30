@@ -1056,6 +1056,107 @@ function resolvePack(cwd, packId, options = {}) {
   return { pack, registry };
 }
 
+function getPackFolderForKind(kind) {
+  switch (kind) {
+    case 'technique': return 'techniques';
+    case 'domain': return 'domains';
+    case 'family': return 'families';
+    case 'campaign': return 'campaigns';
+    case 'custom':
+    case 'example':
+    default:
+      return 'custom';
+  }
+}
+
+function generateTestFixture(pack) {
+  const exampleParameters = pack.examples?.parameters || {};
+  const hasExamples = isPlainObject(exampleParameters) && Object.keys(exampleParameters).length > 0;
+
+  return {
+    pack_id: pack.id,
+    parameters: hasExamples ? { ...exampleParameters } : {},
+    expected: {
+      bootstrap_ok: true,
+      render_ok: pack.execution_targets.length > 0,
+      target_count: pack.execution_targets.length,
+      template_parameters_resolved: true,
+      no_undeclared_parameters: true,
+    },
+  };
+}
+
+function generateTestFile(pack) {
+  const slug = pack.id.includes('.') ? pack.id.split('.').slice(1).join('-') : pack.id;
+  return `'use strict';
+
+const { test, describe } = require('node:test');
+const assert = require('node:assert');
+const path = require('path');
+const packLib = require(path.join(__dirname, '..', '..', 'thrunt-god', 'bin', 'lib', 'pack.cjs'));
+
+describe('${pack.id}', () => {
+  const fixture = require('./${slug}.fixture.json');
+  const cwd = path.join(__dirname, '..', '..');
+
+  test('pack loads from registry', () => {
+    const registry = packLib.loadPackRegistry(cwd);
+    const pack = registry.packs.find(p => p.id === fixture.pack_id);
+    assert.ok(pack, 'Pack should be in registry');
+  });
+
+  test('bootstrap succeeds with example parameters', () => {
+    const result = packLib.buildPackBootstrap(cwd, fixture.pack_id, fixture.parameters);
+    assert.ok(result.bootstrap, 'Bootstrap should succeed');
+  });
+
+  test('execution targets render with example parameters', () => {
+    const result = packLib.buildPackExecutionTargets(
+      cwd, fixture.pack_id, fixture.parameters, { profile: 'default' }
+    );
+    assert.strictEqual(result.targets.length, fixture.expected.target_count);
+  });
+
+  test('no undeclared template parameters', () => {
+    const registry = packLib.loadPackRegistry(cwd);
+    const pack = registry.packs.find(p => p.id === fixture.pack_id);
+    const usage = packLib.getPackTemplateUsage(pack);
+    assert.deepStrictEqual(usage.undeclared, []);
+  });
+});
+`;
+}
+
+function writeTestArtifacts(cwd, pack) {
+  const slug = pack.id.includes('.') ? pack.id.split('.').slice(1).join('-') : pack.id;
+  const testsDir = path.join(cwd, PLANNING_DIR_NAME, 'packs', 'tests');
+  fs.mkdirSync(testsDir, { recursive: true });
+
+  const fixture = generateTestFixture(pack);
+  const fixturePath = path.join(testsDir, `${slug}.fixture.json`);
+  fs.writeFileSync(fixturePath, JSON.stringify(fixture, null, 2) + '\n');
+
+  const testContent = generateTestFile(pack);
+  const testPath = path.join(testsDir, `${slug}.test.cjs`);
+  fs.writeFileSync(testPath, testContent);
+
+  return {
+    fixture_path: path.relative(cwd, fixturePath),
+    test_path: path.relative(cwd, testPath),
+  };
+}
+
+function getMockResponseDir() {
+  return path.join(__dirname, '..', '..', 'data', 'mock-responses');
+}
+
+function loadMockResponse(connectorId) {
+  const mockDir = getMockResponseDir();
+  const filePath = path.join(mockDir, `${connectorId}.json`);
+  if (!fs.existsSync(filePath)) return null;
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+}
+
 module.exports = {
   PACK_SCHEMA_VERSION,
   PACK_KINDS,
@@ -1077,4 +1178,10 @@ module.exports = {
   mergePackDefinitions,
   loadPackRegistry,
   resolvePack,
+  getPackFolderForKind,
+  generateTestFixture,
+  generateTestFile,
+  writeTestArtifacts,
+  getMockResponseDir,
+  loadMockResponse,
 };
