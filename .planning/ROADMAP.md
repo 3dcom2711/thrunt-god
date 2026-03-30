@@ -102,7 +102,7 @@ Plans:
 **Goal**: Ship per-connector query template starters and entity extraction rule builder with incremental schema validation
 **Depends on**: Phase 35 (interactive pack creation flow exists)
 **Requirements**: PACK-02
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 - [ ] 36-01-PLAN.md -- query-starters.cjs module with 10 connector starter templates, entity scope types, incremental validation helpers
 - [ ] 36-02-PLAN.md -- Extend pack-author.cjs with query starter integration, entity selection, and 4-checkpoint validation
@@ -272,7 +272,7 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 33. SDK Export Surface | 1/1 | Complete    | 2026-03-30 |
 | 34. Connector Scaffolding CLI | 2/2 | Complete    | 2026-03-30 |
 | 35. Pack Authoring Interactive CLI | 3/3 | Complete    | 2026-03-30 |
-| 36. Pack Query Wiring & Validation | 1/3 | In Progress|  |
+| 36. Pack Query Wiring & Validation | 2/3 | In Progress|  |
 | 37. Pack Testing & Publishing | 0/0 | Not Started | |
 | 38. Replay Engine Core | 0/0 | Not Started | |
 | 39. Per-Language Query Rewriters | 0/0 | Not Started | |
