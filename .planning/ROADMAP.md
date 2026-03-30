@@ -21,7 +21,7 @@
 
 - [x] **Phase 23: Bridge Foundation** - Subprocess executor, state adapter, file watcher, and streaming infrastructure (completed 2026-03-29)
 - [x] **Phase 24: Hunt Observation Screens** - Domain modules and all read-only hunt screens wired to THRUNT state (completed 2026-03-29)
-- [ ] **Phase 25: Execution & Verification** - Query execution trigger and post-execution gate verification
+- [x] **Phase 25: Execution & Verification** - Query execution trigger and post-execution gate verification (completed 2026-03-30)
 - [ ] **Phase 26: Rebrand & Dead Code Removal** - Systematic ClawdStrike-to-THRUNT rename and module cleanup
 
 ## Phase Details
@@ -67,7 +67,7 @@ Plans:
   1. Operator can select a query, trigger execution from the console, and see results stream in as they arrive
   2. After agent execution, the gate framework automatically checks evidence manifest SHA-256 hashes and reports pass/fail
   3. After agent execution, the gate framework verifies that every query has a receipt linked to evidence and reports any gaps in the chain
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 25-01-PLAN.md — Runtime bridge module, THRUNT gate implementations, and gate registry rewiring
@@ -83,10 +83,11 @@ Plans:
   3. All environment variables use THRUNT_* prefix; no CLAWDSTRIKE_* variables referenced anywhere
   4. The hushd/, beads/, desktop-agent/, and speculate/voting modules are deleted and no import references remain
   5. The application starts cleanly with no dead-code warnings or missing-module errors
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 26-01: TBD
+- [ ] 26-01-PLAN.md — Delete dead modules (hushd, beads, speculate, desktop-agent, old gates) and scrub all import references
+- [ ] 26-02-PLAN.md — Rename all ClawdStrike references to THRUNT GOD (env vars, config paths, logo, strings, comments)
 
 ## Progress
 
@@ -97,5 +98,5 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 |-------|----------------|--------|-----------|
 | 23. Bridge Foundation | 2/2 | Complete    | 2026-03-29 |
 | 24. Hunt Observation Screens | 3/3 | Complete    | 2026-03-29 |
-| 25. Execution & Verification | 1/2 | In Progress|  |
-| 26. Rebrand & Dead Code Removal | 0/? | Not started | - |
+| 25. Execution & Verification | 2/2 | Complete    | 2026-03-30 |
+| 26. Rebrand & Dead Code Removal | 0/2 | Not started | - |

@@ -4,7 +4,6 @@
 
 import type { ThemeColors } from "./types"
 import type { ScreenStage } from "../types"
-import type { HushdConnectionState } from "../../hushd"
 import { fitString, stripAnsi } from "./types"
 
 export interface StatusBarData {
@@ -19,10 +18,7 @@ export interface StatusBarData {
     infra: Array<{ available: boolean }>
     mcp: Array<{ available: boolean }>
   } | null
-  hushdStatus: HushdConnectionState
-  deniedCount: number
   activeRuns: number
-  openBeads: number
   agentId: string
   investigation: {
     origin: string
@@ -63,28 +59,6 @@ function renderStageBadge(stage: ScreenStage, theme: ThemeColors): string {
   return `${theme.success}beta${theme.reset}`
 }
 
-function renderHushdBadge(status: HushdConnectionState, theme: ThemeColors): string {
-  switch (status) {
-    case "connected":
-      return `${theme.dim}hushd${theme.reset} ${theme.success}online${theme.reset}`
-    case "connecting":
-      return `${theme.dim}hushd${theme.reset} ${theme.warning}connecting${theme.reset}`
-    case "degraded":
-      return `${theme.dim}hushd${theme.reset} ${theme.warning}degraded${theme.reset}`
-    case "stale":
-      return `${theme.dim}hushd${theme.reset} ${theme.warning}stale${theme.reset}`
-    case "unauthorized":
-      return `${theme.dim}hushd${theme.reset} ${theme.error}unauthorized${theme.reset}`
-    case "error":
-      return `${theme.dim}hushd${theme.reset} ${theme.error}error${theme.reset}`
-    case "not_configured":
-      return `${theme.dim}hushd${theme.reset} ${theme.muted}unset${theme.reset}`
-    case "disconnected":
-    default:
-      return `${theme.dim}hushd${theme.reset} ${theme.muted}offline${theme.reset}`
-  }
-}
-
 export function renderStatusBar(
   data: StatusBarData,
   width: number,
@@ -108,18 +82,8 @@ export function renderStatusBar(
     }
   }
 
-  segments.push(renderHushdBadge(data.hushdStatus, theme))
-
-  if (data.deniedCount > 0) {
-    segments.push(`${theme.dim}deny${theme.reset} ${theme.error}${data.deniedCount}${theme.reset}`)
-  }
-
   if (data.activeRuns > 0) {
     segments.push(`${theme.dim}runs${theme.reset} ${theme.secondary}${data.activeRuns}${theme.reset}`)
-  }
-
-  if (data.openBeads > 0) {
-    segments.push(`${theme.dim}beads${theme.reset} ${theme.tertiary}${data.openBeads}${theme.reset}`)
   }
 
   if (data.thruntPhase) {

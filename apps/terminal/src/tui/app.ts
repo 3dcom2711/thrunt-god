@@ -7,13 +7,10 @@
 
 import * as path from "node:path"
 import { VERSION, init, shutdown, isInitialized } from "../index"
-import { Beads } from "../beads"
 import { Telemetry } from "../telemetry"
 import { Health } from "../health"
 import { MCP } from "../mcp"
-import { Hushd, eventDecision } from "../hushd"
 import { Config } from "../config"
-import { loadDesktopAgentSnapshotSync } from "../desktop-agent"
 import { ThruntPlanningWatcher } from "../thrunt-bridge"
 import { executeQueryStream } from "../thrunt-bridge/runtime"
 import { Verifier } from "../verifier"
@@ -35,7 +32,6 @@ import type {
   InteractiveSurfaceFocus,
 } from "./types"
 import {
-  createInitialAuditLogState,
   createInitialDispatchSheetState,
   createInitialExternalExecutionSheetState,
   createInitialHuntState,
@@ -111,7 +107,6 @@ import { huntDetectionsScreen } from "./screens/hunt-detections"
 import { huntConnectorsScreen } from "./screens/hunt-connectors"
 import { huntPacksScreen } from "./screens/hunt-packs"
 
-const AUDIT_PREVIEW_REFRESH_INTERVAL_MS = 15_000
 const INTERACTIVE_ACTIVITY_LIMIT = 8
 
 function stripInteractiveControlSequences(rawChunk: string): string {
@@ -192,11 +187,7 @@ export class TUIApp implements AppController {
   private state: AppState
   private refreshTimer: ReturnType<typeof setInterval> | null = null
   private animationTimer: ReturnType<typeof setInterval> | null = null
-  private hushdReconnectTimer: ReturnType<typeof setTimeout> | null = null
   private thruntWatcher: ThruntPlanningWatcher | null = null
-  private hushdLifecycleToken = 0
-  private auditPreviewRefreshing = false
-  private lastAuditPreviewRefreshAt = 0
   private width: number = 80
   private height: number = 24
   private cwd: string
@@ -240,25 +231,11 @@ export class TUIApp implements AppController {
       statusMessage: "",
       isRunning: false,
       activeRuns: 0,
-      openBeads: 0,
       lastRefresh: new Date(),
       health: null,
       healthChecking: false,
       animationFrame: 0,
       runtimeInfo: resolveRuntimeInfo(),
-      desktopAgent: loadDesktopAgentSnapshotSync(),
-      hushdStatus: "disconnected",
-      hushdConnected: false,
-      hushdLastEventAt: null,
-      hushdLastError: null,
-      hushdReconnectAttempts: 0,
-      hushdDroppedEvents: 0,
-      recentEvents: [],
-      recentAuditPreview: [],
-      auditLog: createInitialAuditLogState(),
-      auditStats: null,
-      activePolicy: null,
-      securityError: null,
       dispatchSheet: createInitialDispatchSheetState(),
       externalSheet: createInitialExternalExecutionSheetState(),
       runs: createInitialRunListState(),
@@ -302,7 +279,6 @@ export class TUIApp implements AppController {
       { key: "H", label: "history", description: "exported report index", stage: "supported", action: () => this.setScreen("hunt-report-history") },
       { key: "M", label: "mitre", description: "MITRE ATT&CK heatmap", stage: "experimental", action: () => this.setScreen("hunt-mitre") },
       { key: "P", label: "playbook", description: "playbook runner", stage: "experimental", action: () => this.setScreen("hunt-playbook") },
-      { key: "b", label: "beads", description: "view work graph", stage: "supported", action: () => this.showBeads() },
       { key: "r", label: "runs", description: "managed backlog", stage: "supported", action: () => this.showRuns() },
       { key: "i", label: "integrations", description: "system status", stage: "supported", action: () => this.setScreen("integrations") },
       { key: "?", label: "help", description: "keyboard shortcuts", stage: "supported", action: () => this.showHelp() },
@@ -384,9 +360,7 @@ export class TUIApp implements AppController {
   }
 
   private startBackgroundServices(): void {
-    this.state.desktopAgent = loadDesktopAgentSnapshotSync()
     this.startMcpServer()
-    this.connectHushd()
     this.runHealthcheck()
     this.refreshTimer = setInterval(() => this.refresh(), 2000)
 
@@ -411,7 +385,6 @@ export class TUIApp implements AppController {
   }
 
   runHealthcheck(): void {
-    this.state.desktopAgent = loadDesktopAgentSnapshotSync()
     this.state.healthChecking = true
     this.render()
 
@@ -426,202 +399,6 @@ export class TUIApp implements AppController {
         this.state.healthChecking = false
         this.render()
       })
-  }
-
-  connectHushd(): void {
-    const lifecycleToken = ++this.hushdLifecycleToken
-
-    if (this.hushdReconnectTimer) {
-      clearTimeout(this.hushdReconnectTimer)
-      this.hushdReconnectTimer = null
-    }
-
-    if (Hushd.isInitialized()) {
-      Hushd.reset()
-    }
-    Hushd.init()
-    const client = Hushd.getClient()
-    this.state.hushdStatus = "connecting"
-    this.state.hushdLastError = null
-    this.state.securityError = null
-    this.state.recentAuditPreview = []
-    this.render()
-
-    client.probe()
-      .then(async (connected) => {
-        if (lifecycleToken !== this.hushdLifecycleToken) {
-          return
-        }
-        this.state.hushdConnected = connected
-
-        if (!connected) {
-          this.state.hushdStatus = "disconnected"
-          this.state.hushdLastError = "health probe failed"
-          this.state.securityError = "hushd is unreachable."
-          this.state.recentAuditPreview = []
-          this.scheduleHushdReconnect(lifecycleToken)
-          return
-        }
-
-        const [policyResult, statsResult, previewResult] = await Promise.all([
-          client.getPolicyDetailed(),
-          client.getAuditStatsDetailed(),
-          client.getAuditDetailed({ limit: 6 }),
-        ])
-        if (lifecycleToken !== this.hushdLifecycleToken) {
-          return
-        }
-        const unauthorized = [policyResult.status, statsResult.status, previewResult.status].some(
-          (status) => status === 401 || status === 403,
-        )
-        const errors = [policyResult.error, statsResult.error].filter(Boolean)
-
-        this.state.activePolicy = policyResult.data ?? null
-        this.state.auditStats = statsResult.data ?? null
-        this.state.recentAuditPreview = previewResult.data?.events ?? []
-        this.lastAuditPreviewRefreshAt = previewResult.ok ? Date.now() : 0
-        this.state.hushdConnected = !unauthorized
-        this.state.hushdStatus = unauthorized
-          ? "unauthorized"
-          : policyResult.ok && statsResult.ok
-            ? "connected"
-            : "degraded"
-        this.state.hushdLastError = errors[0] ?? null
-        this.state.securityError = errors[0] ?? null
-
-        if (unauthorized) {
-          return
-        }
-
-        client.connectSSE(
-          (event) => {
-            if (lifecycleToken !== this.hushdLifecycleToken) {
-              return
-            }
-            this.state.recentEvents.unshift(event)
-            if (this.state.recentEvents.length > 50) {
-              this.state.recentEvents.length = 50
-            }
-            this.state.hushdConnected = true
-            this.state.hushdStatus = "connected"
-            this.state.hushdLastEventAt = event.timestamp
-            this.state.hushdLastError = null
-            this.state.hushdReconnectAttempts = 0
-            this.render()
-          },
-          (error) => {
-            if (lifecycleToken !== this.hushdLifecycleToken) {
-              return
-            }
-            const message = error.message || "stream error"
-            this.state.hushdLastError = message
-            this.state.securityError = message
-
-            if (message.startsWith("Failed to parse")) {
-              this.state.hushdDroppedEvents += 1
-              this.state.hushdStatus = "degraded"
-              this.render()
-              return
-            }
-
-            if (message.includes("401") || message.includes("403")) {
-              this.state.hushdConnected = false
-              this.state.hushdStatus = "unauthorized"
-              this.render()
-              return
-            }
-
-            this.state.hushdConnected = false
-            this.state.hushdStatus = this.state.hushdLastEventAt ? "stale" : "disconnected"
-            this.scheduleHushdReconnect(lifecycleToken)
-            this.render()
-          },
-        )
-      })
-      .catch((err) => {
-        if (lifecycleToken !== this.hushdLifecycleToken) {
-          return
-        }
-        this.state.hushdConnected = false
-        this.state.hushdStatus = "error"
-        this.state.hushdLastError = err instanceof Error ? err.message : String(err)
-        this.state.securityError = this.state.hushdLastError
-        this.state.recentAuditPreview = []
-        this.scheduleHushdReconnect(lifecycleToken)
-      })
-      .finally(() => {
-        if (lifecycleToken === this.hushdLifecycleToken) {
-          this.render()
-        }
-      })
-  }
-
-  private scheduleHushdReconnect(lifecycleToken: number = this.hushdLifecycleToken): void {
-    if (lifecycleToken !== this.hushdLifecycleToken) {
-      return
-    }
-    if (this.hushdReconnectTimer || this.state.hushdStatus === "unauthorized") {
-      return
-    }
-
-    const attempt = this.state.hushdReconnectAttempts + 1
-    const delay = Math.min(15_000, 1_000 * (2 ** Math.min(attempt - 1, 4)))
-    this.state.hushdReconnectAttempts = attempt
-    this.hushdReconnectTimer = setTimeout(() => {
-      if (lifecycleToken !== this.hushdLifecycleToken) {
-        this.hushdReconnectTimer = null
-        return
-      }
-      this.hushdReconnectTimer = null
-      this.connectHushd()
-    }, delay)
-  }
-
-  private async refreshRecentAuditPreview(force = false): Promise<void> {
-    if (this.auditPreviewRefreshing || !Hushd.isInitialized()) {
-      return
-    }
-
-    if (
-      !force &&
-      Date.now() - this.lastAuditPreviewRefreshAt < AUDIT_PREVIEW_REFRESH_INTERVAL_MS
-    ) {
-      return
-    }
-
-    if (
-      this.state.hushdStatus === "connecting" ||
-      this.state.hushdStatus === "disconnected" ||
-      this.state.hushdStatus === "error" ||
-      this.state.hushdStatus === "not_configured" ||
-      this.state.hushdStatus === "unauthorized"
-    ) {
-      return
-    }
-
-    this.auditPreviewRefreshing = true
-    try {
-      const result = await Hushd.getClient().getAuditDetailed({ limit: 6 })
-      if (result.ok && result.data) {
-        this.state.recentAuditPreview = result.data.events
-        this.lastAuditPreviewRefreshAt = Date.now()
-        if (this.state.inputMode === "main" || this.state.inputMode === "security") {
-          this.render()
-        }
-        return
-      }
-
-      if (result.status === 401 || result.status === 403) {
-        this.state.hushdConnected = false
-        this.state.hushdStatus = "unauthorized"
-        this.state.hushdLastError = result.error ?? "audit access denied"
-        this.state.securityError = this.state.hushdLastError
-        this.state.recentAuditPreview = []
-        this.render()
-      }
-    } finally {
-      this.auditPreviewRefreshing = false
-    }
   }
 
   private async checkFirstRun(): Promise<void> {
@@ -642,8 +419,6 @@ export class TUIApp implements AppController {
   }
 
   private async cleanup(): Promise<void> {
-    this.hushdLifecycleToken += 1
-
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer)
       this.refreshTimer = null
@@ -657,18 +432,12 @@ export class TUIApp implements AppController {
     this.thruntWatcher?.stop()
     this.thruntWatcher = null
 
-    if (this.hushdReconnectTimer) {
-      clearTimeout(this.hushdReconnectTimer)
-      this.hushdReconnectTimer = null
-    }
-
     try {
       await MCP.stop()
     } catch {
       // Ignore MCP shutdown errors
     }
 
-    Hushd.reset()
     this.detachTerminalListeners()
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(false)
@@ -834,10 +603,7 @@ export class TUIApp implements AppController {
         currentScreenStage: surface.stage,
         healthChecking: this.state.healthChecking,
         health: this.state.health,
-        hushdStatus: this.state.hushdStatus,
-        deniedCount: this.state.recentEvents.filter((event) => eventDecision(event) === "deny").length,
         activeRuns: this.state.activeRuns,
-        openBeads: this.state.openBeads,
         agentId: AGENTS[this.state.agentIndex].id,
         investigation:
           investigation.origin || investigationCounts.events > 0 || investigationCounts.findings > 0
@@ -1336,11 +1102,6 @@ export class TUIApp implements AppController {
     return this.cwd
   }
 
-  refreshDesktopAgent(): void {
-    this.state.desktopAgent = loadDesktopAgentSnapshotSync()
-    this.render()
-  }
-
   interactiveSendInput(input: string): void {
     if (!this.interactiveRuntime || this.state.interactiveSession.focus !== "pty") {
       return
@@ -1469,11 +1230,7 @@ export class TUIApp implements AppController {
       const active = Telemetry.getActive()
       this.state.activeRuns = Math.max(active.length, this.getManagedActiveRunCount())
 
-      const beads = await Beads.query({ status: "open", limit: 100 })
-      this.state.openBeads = beads.length
-
       this.state.lastRefresh = new Date()
-      await this.refreshRecentAuditPreview()
 
       if (this.state.inputMode === "main" && !this.state.isRunning) {
         this.render()
@@ -2525,45 +2282,6 @@ export class TUIApp implements AppController {
     }, 5000)
   }
 
-  async showBeads(): Promise<void> {
-    await this.cleanup()
-
-    console.log("")
-    console.log(THEME.secondary + THEME.bold + "  ⟨ Beads ◇ Work Graph ⟩" + THEME.reset)
-    console.log(THEME.dim + "  " + "═".repeat(40) + THEME.reset)
-    console.log("")
-
-    try {
-      const beads = await Beads.query({ limit: 20 })
-
-      if (beads.length === 0) {
-        console.log(THEME.muted + "  No tasks inscribed" + THEME.reset)
-      } else {
-        for (const bead of beads) {
-          const statusColor =
-            bead.status === "open" ? THEME.secondary :
-            bead.status === "in_progress" ? THEME.accent :
-            bead.status === "completed" ? THEME.success :
-            THEME.muted
-          const statusIcon =
-            bead.status === "open" ? "◇" :
-            bead.status === "in_progress" ? "◈" :
-            bead.status === "completed" ? "◆" :
-            "◇"
-          console.log(`  ${statusColor}${statusIcon}${THEME.reset} ${THEME.dim}${bead.id}${THEME.reset}  ${bead.title}`)
-        }
-      }
-    } catch (err) {
-      console.log(THEME.error + `  Error: ${err}` + THEME.reset)
-    }
-
-    console.log("")
-    console.log(THEME.dim + "  Press any key to return..." + THEME.reset)
-
-    await this.waitForKey()
-    await this.start()
-  }
-
   async showRuns(): Promise<void> {
     const selectedRunId = this.state.activeRunId ?? this.state.runs.selectedRunId
     const selectedRun = selectedRunId
@@ -2598,7 +2316,6 @@ export class TUIApp implements AppController {
     console.log(`  ${THEME.secondary}Tab${THEME.reset}                 Switch between prompt and actions`)
     console.log(`  ${THEME.secondary}Esc${THEME.reset}                 Toggle prompt and nav focus`)
     console.log(`  ${THEME.secondary}g${THEME.reset}                   Gates`)
-    console.log(`  ${THEME.secondary}b${THEME.reset}                   Beads`)
     console.log(`  ${THEME.secondary}r${THEME.reset}                   Runs`)
     console.log(`  ${THEME.secondary}i${THEME.reset}                   Integrations`)
     console.log(`  ${THEME.secondary}Ctrl+N${THEME.reset}              Cycle agents`)

@@ -4,14 +4,6 @@
 
 import type { ThemeColors } from "./theme"
 import type { HealthSummary } from "../health"
-import type { DesktopAgentSnapshot } from "../desktop-agent"
-import type {
-  AuditEvent,
-  AuditStats,
-  DaemonEvent,
-  HushdConnectionState,
-  PolicyResponse,
-} from "../hushd"
 import type { DetectionResult } from "../config"
 import type { ThruntHuntContext } from "../thrunt-bridge/types"
 import type { EvidenceAuditResult } from "../thrunt-bridge/evidence"
@@ -101,14 +93,10 @@ export interface AppController {
   render(): void
   /** Run healthcheck */
   runHealthcheck(): void
-  /** Reconnect to hushd */
-  connectHushd(): void
   /** Submit a prompt */
   submitPrompt(action: "dispatch" | "speculate"): void
   /** Run quality gates */
   runGates(): void
-  /** Show beads (exits TUI) */
-  showBeads(): void
   /** Show the managed runs surface */
   showRuns(): void
   /** Show help (exits TUI) */
@@ -117,8 +105,6 @@ export interface AppController {
   quit(): void
   /** Get CWD */
   getCwd(): string
-  /** Refresh local desktop-agent snapshot */
-  refreshDesktopAgent(): void
   /** Send raw input to the embedded interactive PTY */
   interactiveSendInput?(input: string): void
   /** Send the staged task into the embedded interactive PTY */
@@ -338,26 +324,6 @@ export interface RuntimeInfo {
   bunVersion: string | null
 }
 
-export interface AuditLogFilters {
-  decision: "any" | "allowed" | "blocked"
-  eventType: "any" | "check" | "violation" | "report_export"
-  sessionId: string
-}
-
-export interface AuditLogState {
-  events: AuditEvent[]
-  list: ListViewport
-  loading: boolean
-  error: string | null
-  statusMessage: string | null
-  filters: AuditLogFilters
-  limit: number
-  cursor: string | null
-  previousCursors: Array<string | null>
-  offset: number
-  nextCursor: string | null
-  hasMore: boolean
-}
 
 // =============================================================================
 // HUNT STATE
@@ -570,7 +536,6 @@ export interface AppState {
   statusMessage: string
   isRunning: boolean
   activeRuns: number
-  openBeads: number
   lastRefresh: Date
 
   // Health
@@ -580,21 +545,8 @@ export interface AppState {
   // Animation
   animationFrame: number
 
-  // Security (hushd)
+  // Runtime
   runtimeInfo: RuntimeInfo | null
-  desktopAgent: DesktopAgentSnapshot | null
-  hushdStatus: HushdConnectionState
-  hushdConnected: boolean
-  hushdLastEventAt: string | null
-  hushdLastError: string | null
-  hushdReconnectAttempts: number
-  hushdDroppedEvents: number
-  recentEvents: DaemonEvent[]
-  recentAuditPreview: AuditEvent[]
-  auditLog: AuditLogState
-  auditStats: AuditStats | null
-  activePolicy: PolicyResponse | null
-  securityError: string | null
 
   // Dispatch sheet and managed runs
   dispatchSheet: DispatchSheetState
@@ -749,27 +701,6 @@ export function createInitialHuntState(): HuntState {
       error: null,
       report: null,
     },
-  }
-}
-
-export function createInitialAuditLogState(): AuditLogState {
-  return {
-    events: [],
-    list: { offset: 0, selected: 0 },
-    loading: false,
-    error: null,
-    statusMessage: null,
-    filters: {
-      decision: "any",
-      eventType: "any",
-      sessionId: "",
-    },
-    limit: 20,
-    cursor: null,
-    previousCursors: [],
-    offset: 0,
-    nextCursor: null,
-    hasMore: false,
   }
 }
 
