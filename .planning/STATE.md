@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Developer Experience & CI
-status: Not started — needs discuss -> plan -> execute
-stopped_at: Completed 34-02-PLAN.md
-last_updated: "2026-03-30T19:47:46Z"
-last_activity: 2026-03-30 -- Activated v2.0/v2.1/v2.2 milestones from research specs
+status: executing
+stopped_at: Completed 35-01-PLAN.md
+last_updated: "2026-03-30T20:17:37.849Z"
+last_activity: 2026-03-30 -- Completed 35-01 MITRE ATT&CK data bundle
 progress:
   total_phases: 19
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 0
+  completed_phases: 4
+  total_plans: 8
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.0 Developer Experience & CI — Phase 31 (Core CI Pipeline)
+**Current focus:** v2.0 Developer Experience & CI — Phase 35 (Pack Authoring Interactive CLI)
 
 ## Current Milestone: v2.0 Developer Experience & CI
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 31 of 37 (Core CI Pipeline)
-Plan: 0 of 0 (not yet planned)
-Status: Not started — needs discuss -> plan -> execute
-Last activity: 2026-03-30 -- Activated v2.0/v2.1/v2.2 milestones from research specs
+Phase: 35 of 37 (Pack Authoring Interactive CLI)
+Plan: 1 of 3 (MITRE ATT&CK Data Bundle)
+Status: In progress — executing phase 35
+Last activity: 2026-03-30 -- Completed 35-01 MITRE ATT&CK data bundle
 
-Progress: [..........] 0% (v2.0 not started)
+Progress: [████████░░] 75% (6/8 plans complete)
 
 ## Upcoming Milestones
 
@@ -64,6 +64,8 @@ All historical decisions logged in PROJECT.md Key Decisions table.
 - [Phase 34-connector-scaffolding-cli]: PORT-AUTOSCAN: Docker host port auto-assigned by scanning docker-compose.yml for highest 19xxx port and incrementing; starts from 19300 if no 19xxx ports exist
 - [Phase 34-connector-scaffolding-cli]: SUBPROCESS-TESTING: Test cmdInitConnector via execFileSync subprocess rather than direct function call — tests full CLI dispatch path
 - [Phase 34-connector-scaffolding-cli]: INLINE-TEMPLATE-TEST: Reimplemented renderTemplate algorithm inline in test file since it is not exported from commands.cjs
+- [Phase 35-pack-authoring-interactive-cli]: BUNDLED-JSON: Ship 160-technique bundled JSON extract rather than runtime STIX fetch -- zero network dependency for CLI
+- [Phase 35-pack-authoring-interactive-cli]: DUPLICATE-DEDUP: Removed duplicate T1548 entry during data bundle creation -- kept the version with sub-techniques
 
 ### Research Specs Available
 
@@ -93,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T19:47:46Z
-Stopped at: Completed 34-02-PLAN.md
+Last session: 2026-03-30T20:17:37.845Z
+Stopped at: Completed 35-01-PLAN.md
 Resume file: None
