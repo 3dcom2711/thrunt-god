@@ -13,9 +13,9 @@ Requirements for the Live Connector Integrations milestone. Each maps to roadmap
 - [x] **CONN-02**: User can run Advanced Hunting queries against Defender XDR via new adapter with dedicated OAuth scope and `{Schema, Results}` normalizer
 - [x] **CONN-03**: Elastic adapter reports `status:'partial'` when ES|QL 10K-row ceiling is hit instead of silently truncating
 - [x] **CONN-04**: Sentinel adapter detects `PartialError` in HTTP 200 responses and reports `status:'partial'` instead of silent data loss
-- [ ] **CONN-05**: User can run EQL sequence queries against Elasticsearch via `/_eql/search` as a second query surface
+- [x] **CONN-05**: User can run EQL sequence queries against Elasticsearch via `/_eql/search` as a second query surface
 - [x] **CONN-06**: Splunk adapter falls back to async job mode (create-job + poll) for queries exceeding export endpoint timeout
-- [ ] **CONN-07**: OpenSearch adapter supports AWS SigV4 authentication for Amazon OpenSearch Service managed clusters
+- [x] **CONN-07**: OpenSearch adapter supports AWS SigV4 authentication for Amazon OpenSearch Service managed clusters
 
 ### Test Infrastructure
 
@@ -67,9 +67,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | CONN-02 | Phase 27 | Complete |
 | CONN-03 | Phase 27 | Complete |
 | CONN-04 | Phase 27 | Complete |
-| CONN-05 | Phase 30 | Pending |
+| CONN-05 | Phase 30 | Complete |
 | CONN-06 | Phase 29 | Complete |
-| CONN-07 | Phase 30 | Pending |
+| CONN-07 | Phase 30 | Complete |
 | TEST-01 | Phase 28 | Complete |
 | TEST-02 | Phase 28 | Complete |
 | TEST-03 | Phase 28 | Complete |

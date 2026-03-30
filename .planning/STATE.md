@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Live Connector Integrations
-status: completed
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-03-30T07:30:28.013Z"
-last_activity: 2026-03-30 -- Completed 29-01 Splunk integration
+status: in_progress
+stopped_at: Completed 30-01-PLAN.md
+last_updated: "2026-03-30T07:51:34Z"
+last_activity: 2026-03-30 -- Completed 30-01 EQL & SigV4
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v1.6 Phase 29 — Splunk Integration
+**Current focus:** v1.6 Phase 30 — Elastic/OpenSearch Integration
 
 ## Current Milestone: v1.6 Live Connector Integrations
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 29 of 30 (Splunk Integration)
-Plan: 1 of 1 (complete)
-Status: Phase Complete
-Last activity: 2026-03-30 -- Completed 29-01 Splunk integration
+Phase: 30 of 30 (Elastic/OpenSearch Integration)
+Plan: 1 of 2
+Status: In Progress
+Last activity: 2026-03-30 -- Completed 30-01 EQL & SigV4
 
-Progress: [██████████] 100% (v1.6 phase 29)
+Progress: [█████████░] 90% (v1.6 phase 30 plan 1/2)
 
 ## Performance Metrics
 
@@ -50,9 +50,10 @@ Progress: [██████████] 100% (v1.6 phase 29)
 | 27 | 2 | 6min | 3min |
 | 28 | 1 | 5min | 5min |
 | 29 | 1 | 5min | 5min |
+| 30 | 1 | 3min | 3min |
 
 *Updated after each plan completion*
-| Phase 29 P01 | 5min | 2 tasks | 4 files |
+| Phase 30 P01 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,9 @@ Progress: [██████████] 100% (v1.6 phase 29)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [30-01]: EQL detection uses hits.events array presence rather than spec.query.language for robust normalizeResponse
+- [30-01]: SigV4 for OpenSearch reuses signAwsRequest with service='es' (same pattern as AWS CloudTrail with service='cloudtrail')
+- [30-01]: EQL prepareQuery sends {query, filter, size} body shape per Elasticsearch EQL search API
 - [29-01]: executeSplunkAsyncJob catches 504 inside adapter executeRequest rather than relying on outer retry loop
 - [29-01]: Async job poll uses options.sleep injection for zero-delay unit tests
 - [29-01]: Bearer token bootstrapped via /services/authorization/tokens with type=static
@@ -94,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T07:30:22.072Z
-Stopped at: Completed 29-01-PLAN.md
+Last session: 2026-03-30T07:51:34Z
+Stopped at: Completed 30-01-PLAN.md
 Resume file: None
