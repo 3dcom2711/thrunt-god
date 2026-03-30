@@ -134,6 +134,9 @@ Plans:
 **Goal**: Ship ReplaySpec schema and core replay infrastructure that reconstructs original hunt queries from receipts and applies time window mutations
 **Depends on**: Nothing (first v2.1 phase, uses existing evidence system)
 **Requirements**: REPLAY-01
+**Plans:** 1/1 plans complete
+Plans:
+- [ ] 38-01-PLAN.md -- ReplaySpec Zod schema, createReplaySpec, parseShiftDuration, applyMutations, resolveReplaySource with three-strategy artifact resolution
 **Success Criteria** (what must be TRUE):
   1. ReplaySpec Zod schema validates replay configurations with time_mutation, source_override, and ioc_injection fields
   2. resolveReplaySource() reconstructs original QuerySpecs from MANIFESTS/QUERIES/METRICS artifacts
@@ -277,8 +280,8 @@ Phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 ->
 | 34. Connector Scaffolding CLI | 2/2 | Complete    | 2026-03-30 |
 | 35. Pack Authoring Interactive CLI | 3/3 | Complete    | 2026-03-30 |
 | 36. Pack Query Wiring & Validation | 3/3 | Complete    | 2026-03-30 |
-| 37. Pack Testing & Publishing | 2/2 | Complete   | 2026-03-30 |
-| 38. Replay Engine Core | 0/0 | Not Started | |
+| 37. Pack Testing & Publishing | 2/2 | Complete    | 2026-03-30 |
+| 38. Replay Engine Core | 1/1 | Complete   | 2026-03-30 |
 | 39. Per-Language Query Rewriters | 0/0 | Not Started | |
 | 40. Source Retargeting & IOC Injection | 0/0 | Not Started | |
 | 41. Replay Diffing & Receipt Lineage | 0/0 | Not Started | |

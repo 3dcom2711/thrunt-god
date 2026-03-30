@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Developer Experience & CI
-status: completed
-stopped_at: Completed 37-02-PLAN.md
-last_updated: "2026-03-30T21:40:16.804Z"
-last_activity: 2026-03-30 -- Completed 37-02 Pack Promote, Registry Extension & Comprehensive Tests
+milestone: v2.1
+milestone_name: Advanced Hunt Features
+status: in_progress
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-03-30T21:58:41.000Z"
+last_activity: 2026-03-30 -- Completed 38-01 Replay Engine Core (ReplaySpec schema, source resolution, mutations)
 progress:
-  total_phases: 19
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 1
+  completed_plans: 1
+  percent: 14
 ---
 
 # Project State
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.0 Developer Experience & CI — Phase 37 (Pack Testing & Publishing)
+**Current focus:** v2.1 Advanced Hunt Features — Phase 38 (Replay Engine Core)
 
-## Current Milestone: v2.0 Developer Experience & CI
+## Current Milestone: v2.1 Advanced Hunt Features
 
-**Goal:** Ship CI/CD pipeline, connector scaffolding CLI, and pack authoring tools to accelerate development velocity and enable third-party contributions.
+**Goal:** Ship hunt replay engine, query rewriting, IOC injection, result diffing, and multi-tenant coordination for advanced hunt operations.
 
 ## Current Position
 
-Phase: 37 of 37 (Pack Testing & Publishing)
-Plan: 2 of 2 (Pack Promote, Registry Extension & Comprehensive Tests)
+Phase: 38 of 44 (Replay Engine Core)
+Plan: 1 of 1 (ReplaySpec Schema, Source Resolution & Mutations)
 Status: Complete
-Last activity: 2026-03-30 -- Completed 37-02 Pack Promote, Registry Extension & Comprehensive Tests
+Last activity: 2026-03-30 -- Completed 38-01 Replay Engine Core (ReplaySpec schema, source resolution, mutations)
 
-Progress: [██████████] 100% (13/13 plans complete)
+Progress: [█---------] 14% (1/7 plans complete)
 
 ## Upcoming Milestones
 
@@ -78,6 +78,10 @@ All historical decisions logged in PROJECT.md Key Decisions table.
 - [Phase 37]: PACK-PROMOTE-COPY: Promote copies pack JSON to built-in directory rather than moving -- source local pack preserved for continued development
 - [Phase 37]: REGISTRY-WARNINGS-ARRAY: loadPackRegistry returns warnings array as additional property -- backward compatible, existing callers unaffected
 - [Phase 37]: GIT-REGISTRY-STUB: Git-based pack_registries emit clear warning rather than failing silently -- actionable guidance to clone and use local type
+- [Phase 38-replay-engine-core]: REPLAY-NO-EVIDENCE-IMPORT: Do not import evidence.cjs or telemetry.cjs at top level -- Phase 38 scope is schema + source resolution + mutations only
+- [Phase 38-replay-engine-core]: MANIFEST-FIRST-INTEGRITY: Source resolution checks MANIFESTS/*.json first for content hash verification before reading QUERIES/*.md
+- [Phase 38-replay-engine-core]: UNIFORM-SHIFT-PRESERVES-GAP: Shift mode applies same delta to both start and end, preserving original time window duration
+- [Phase 38-replay-engine-core]: HUNT-PHASE-STUB: hunt_phase source type returns empty array with warning -- full implementation deferred
 
 ### Research Specs Available
 
@@ -107,6 +111,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T21:40:16.798Z
-Stopped at: Completed 37-02-PLAN.md
+Last session: 2026-03-30T21:58:41.000Z
+Stopped at: Completed 38-01-PLAN.md
 Resume file: None
