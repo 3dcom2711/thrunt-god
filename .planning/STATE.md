@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Live Connector Integrations
-status: completed
-stopped_at: Completed 30-02-PLAN.md (v1.6 milestone complete)
-last_updated: "2026-03-30T08:07:26.907Z"
-last_activity: 2026-03-30 -- Completed 30-02 Elastic/OpenSearch integration tests
+milestone: v2.0
+milestone_name: Developer Experience & CI
+status: Not started — needs discuss -> plan -> execute
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-03-30T18:44:22.667Z"
+last_activity: 2026-03-30 -- Activated v2.0/v2.1/v2.2 milestones from research specs
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 19
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -21,75 +21,59 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v1.6 Phase 30 — Elastic/OpenSearch Integration (Complete)
+**Current focus:** v2.0 Developer Experience & CI — Phase 31 (Core CI Pipeline)
 
-## Current Milestone: v1.6 Live Connector Integrations
+## Current Milestone: v2.0 Developer Experience & CI
 
-**Goal:** Ship real, multi-surface connectors for Splunk, Elastic/OpenSearch, and Microsoft Sentinel/Defender XDR with Docker-based integration tests.
+**Goal:** Ship CI/CD pipeline, connector scaffolding CLI, and pack authoring tools to accelerate development velocity and enable third-party contributions.
 
 ## Current Position
 
-Phase: 30 of 30 (Elastic/OpenSearch Integration)
-Plan: 2 of 2 (complete)
-Status: Milestone Complete
-Last activity: 2026-03-30 -- Completed 30-02 Elastic/OpenSearch integration tests
+Phase: 31 of 37 (Core CI Pipeline)
+Plan: 0 of 0 (not yet planned)
+Status: Not started — needs discuss -> plan -> execute
+Last activity: 2026-03-30 -- Activated v2.0/v2.1/v2.2 milestones from research specs
 
-Progress: [██████████] 100% (v1.6 complete)
+Progress: [..........] 0% (v2.0 not started)
+
+## Upcoming Milestones
+
+| Milestone | Phases | Status | Research |
+|-----------|--------|--------|----------|
+| v2.0 Developer Experience & CI | 31-37 | Active | cicd-pipeline-spec.md, thrunt-init-spec.md, pack-authoring-cli-spec.md |
+| v2.1 Advanced Hunt Features | 38-44 | Planned | hunt-replay-spec.md, multi-tenant-coordination-spec.md |
+| v2.2 Connector Ecosystem | 45-49 | Planned | connector-plugin-sdk-spec.md |
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 4 (v1.6)
-- Average duration: 4min
-- Total execution time: 0.3 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 27 | 2 | 6min | 3min |
-| 28 | 1 | 5min | 5min |
-| 29 | 1 | 5min | 5min |
-| 30 | 2 | 8min | 4min |
-
-*Updated after each plan completion*
-| Phase 30 P01 | 3min | 2 tasks | 2 files |
-| Phase 30 P02 | 5min | 2 tasks | 2 files |
+**Velocity (v1.6 baseline):**
+- Average plan duration: 4min
+- Average plans per phase: 1.5
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+All historical decisions logged in PROJECT.md Key Decisions table.
+- [Phase 31-core-ci-pipeline]: CI-INLINE-LCOV: Inline c8 command in CI rather than modifying test:coverage npm script — lcov reporter is CI-only; local dev does not need lcov files on every run
 
-- [30-02]: Elastic integration uses api_key auth with dummy token since xpack.security.enabled=false ignores auth
-- [30-02]: OpenSearch integration uses basic auth with dummy admin/admin since DISABLE_SECURITY_PLUGIN=true ignores auth
-- [30-02]: is_partial not tested in integration (requires 10K+ rows); covered by unit tests in connectors-siem.test.cjs
-- [30-02]: OpenSearch SQL uses backtick-quoted index name for hyphenated test-sysmon
-- [30-01]: EQL detection uses hits.events array presence rather than spec.query.language for robust normalizeResponse
-- [30-01]: SigV4 for OpenSearch reuses signAwsRequest with service='es' (same pattern as AWS CloudTrail with service='cloudtrail')
-- [30-01]: EQL prepareQuery sends {query, filter, size} body shape per Elasticsearch EQL search API
-- [29-01]: executeSplunkAsyncJob catches 504 inside adapter executeRequest rather than relying on outer retry loop
-- [29-01]: Async job poll uses options.sleep injection for zero-delay unit tests
-- [29-01]: Bearer token bootstrapped via /services/authorization/tokens with type=static
-- [29-01]: Integration test folds metadata assertions into adapter round-trip test to avoid test coupling
-- [28-01]: Non-standard host ports (18089, 18088, 19200, 19201) to avoid collisions with local services
-- [28-01]: Seed events use ECS-compatible fields for Elastic/OpenSearch and Splunk-native fields for Splunk
-- [28-01]: Splunk healthcheck polls /services/server/info with basic auth for reliable readiness detection
-- [27-02]: OpenSearch reuses normalizeElasticRows via adapter shim that maps {schema, datarows} to {columns, values}
-- [27-02]: Defender XDR uses dedicated normalizeDefenderResults since Results are pre-formed objects (no column mapping needed)
-- [27-02]: Defender XDR defaults to api.security.microsoft.com for both base URL and OAuth scope
-- [27-01]: status_override uses first-non-null-wins semantics in accumulator for multi-page queries
-- [27-01]: Sentinel PartialError warning includes error.message and error.details for downstream analysis
-- [v1.0-v1.4]: Connector SDK exists with typed interfaces; connectors are stubs — v1.6 upgrades to real network-calling implementations
-- [v1.5]: Shipped TUI Operator Console (phases 23-26) in main thrunt-god repo
-- [v1.6 roadmap]: OpenSearch and Defender XDR built as separate adapters (not subclasses); OpenSearch reuses normalizeElasticRows(); Defender XDR has its own {Schema,Results} normalizer
-- [v1.6 roadmap]: Sentinel/Defender XDR tested via startJsonServer() fixture only — no Docker image exists for SaaS services
-- [v1.6 roadmap]: EQL surface (CONN-05) and SigV4 (CONN-07) grouped with Elastic/OpenSearch integration (Phase 30)
-- [v1.6 roadmap]: Splunk async job fallback (CONN-06) grouped with Splunk integration (Phase 29)
-- [Phase 29]: executeSplunkAsyncJob catches 504 inside adapter executeRequest rather than outer retry loop
-- [Phase 29]: Bearer token bootstrapped via /services/authorization/tokens with type=static for integration tests
+### Research Specs Available
+
+Each phase has a reviewed+corrected research spec in `.planning/research/`:
+- `cicd-pipeline-spec.md` — Phases 31-32 (CI/CD)
+- `thrunt-init-spec.md` — Phases 33-34 (SDK exports + connector scaffolding)
+- `pack-authoring-cli-spec.md` — Phases 35-37 (pack authoring)
+- `hunt-replay-spec.md` — Phases 38-41 (replay engine)
+- `multi-tenant-coordination-spec.md` — Phases 42-44 (multi-tenant)
+- `connector-plugin-sdk-spec.md` — Phases 45-49 (ecosystem)
+
+Review reports in `.planning/research/reviews/` document corrections applied.
+
+### Critical Prerequisites
+
+- Phase 33 (SDK Export Surface) MUST complete before Phase 34 (Connector Scaffolding) — generated adapter files need exported functions
+- Phase 45 (@thrunt/connector-sdk) should reference Phase 33's export decisions
+- v2.0 CI pipeline should be active before v2.1/v2.2 development begins
 
 ### Pending Todos
 
@@ -97,12 +81,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- ~Splunk token creation bootstrap sequence in testcontainers context unverified~ — RESOLVED in 29-01: createSplunkBearerToken validated
-- OpenSearch /_plugins/_esql/query endpoint path in OpenSearch 3.x not confirmed — verify before Phase 30
-- Retry-After header access in executeConnectorRequest retry loop may need targeted refactor
+None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T07:55:32.855Z
-Stopped at: Completed 30-02-PLAN.md (v1.6 milestone complete)
+Last session: 2026-03-30T18:44:22.664Z
+Stopped at: Completed 31-01-PLAN.md
 Resume file: None
