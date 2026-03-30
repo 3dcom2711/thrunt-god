@@ -2751,6 +2751,7 @@ module.exports = {
   cmdRuntimeReplay,
   cmdReplayList,
   cmdReplayDiff,
+  parseRuntimeArgs,
   cmdCommit,
   cmdCommitToSubrepo,
   cmdSummaryExtract,

@@ -44,6 +44,12 @@
  *   runtime smoke [<connector-id>]     Run live connector smoke tests
  *   runtime execute --connector ID --query "..."   Execute a connector-backed hunt query
  *   runtime execute --pack <pack-id>   Execute one or more pack-backed hunt targets
+ *   runtime replay --source QRY-... [--diff] [--shift] [--reason]   Replay a previous hunt query
+ *
+ * Replay:
+ *   replay list [--source QRY-...] [--limit N]   List replay execution records
+ *   replay diff RPL-{id}                          Read and format stored diff result
+ *
  *   config-ensure-section              Initialize .planning/config.json
  *   history-digest                     Aggregate all SUMMARY.md data
  *   summary-extract <path> [--fields]  Extract structured data from SUMMARY.md
@@ -584,8 +590,22 @@ async function runCommand(command, args, cwd, raw) {
         await commands.cmdRuntimeSmoke(cwd, args.slice(2), raw);
       } else if (subcommand === 'execute') {
         await commands.cmdRuntimeExecute(cwd, args.slice(2), raw);
+      } else if (subcommand === 'replay') {
+        await commands.cmdRuntimeReplay(cwd, args.slice(2), raw);
       } else {
-        error('Unknown runtime subcommand. Available: list-connectors, doctor, smoke, execute');
+        error('Unknown runtime subcommand. Available: list-connectors, doctor, smoke, execute, replay');
+      }
+      break;
+    }
+
+    case 'replay': {
+      const subcommand = args[1];
+      if (subcommand === 'list') {
+        await commands.cmdReplayList(cwd, args.slice(2), raw);
+      } else if (subcommand === 'diff') {
+        await commands.cmdReplayDiff(cwd, args.slice(2), raw);
+      } else {
+        error('Unknown replay subcommand. Available: list, diff');
       }
       break;
     }

@@ -1776,3 +1776,206 @@ describe('buildDiff edge cases', () => {
     assert.strictEqual(diff.delta.entities.unchanged, 0);
   });
 });
+
+// ─── CLI Command Handler Tests (Plan 02) ─────────────────────────────────────
+
+describe('parseRuntimeArgs (ioc + replay flags)', () => {
+  const { parseRuntimeArgs } = require('../thrunt-god/bin/lib/commands.cjs');
+
+  test('collects --ioc values into iocs array', () => {
+    const opts = parseRuntimeArgs(['--ioc', 'ip=10.0.0.1', '--ioc', 'hash=abc123']);
+    assert.ok(Array.isArray(opts.iocs));
+    assert.strictEqual(opts.iocs.length, 2);
+    assert.strictEqual(opts.iocs[0], 'ip=10.0.0.1');
+    assert.strictEqual(opts.iocs[1], 'hash=abc123');
+  });
+
+  test('handles --diff as boolean flag', () => {
+    const opts = parseRuntimeArgs(['--diff']);
+    assert.strictEqual(opts.diff, true);
+  });
+
+  test('handles --shift with value', () => {
+    const opts = parseRuntimeArgs(['--shift', '-7d']);
+    assert.strictEqual(opts.shift, '-7d');
+  });
+
+  test('handles --source with QRY prefix', () => {
+    const opts = parseRuntimeArgs(['--source', 'QRY-20260330-ABC123']);
+    assert.strictEqual(opts.source, 'QRY-20260330-ABC123');
+  });
+
+  test('handles --reason with string value', () => {
+    const opts = parseRuntimeArgs(['--reason', 'New IOC intel']);
+    assert.strictEqual(opts.reason, 'New IOC intel');
+  });
+
+  test('handles --diff-mode with value', () => {
+    const opts = parseRuntimeArgs(['--diff-mode', 'counts_only']);
+    assert.strictEqual(opts.diff_mode, 'counts_only');
+  });
+
+  test('handles --ioc-mode with value', () => {
+    const opts = parseRuntimeArgs(['--ioc-mode', 'replace', '--ioc', 'ip=1.2.3.4']);
+    assert.strictEqual(opts.ioc_mode, 'replace');
+    assert.strictEqual(opts.iocs.length, 1);
+  });
+
+  test('iocs array defaults to empty when no --ioc flags', () => {
+    const opts = parseRuntimeArgs(['--diff', '--source', 'QRY-123']);
+    assert.ok(Array.isArray(opts.iocs));
+    assert.strictEqual(opts.iocs.length, 0);
+  });
+});
+
+describe('cmdReplayList', () => {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const toolsPath = path.resolve(__dirname, '..', 'thrunt-god', 'bin', 'thrunt-tools.cjs');
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'replay-list-'));
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(path.join(planningDir, 'METRICS'), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns empty array when no replay records exist', () => {
+    const out = execFileSync('node', [toolsPath, 'replay', 'list', '--raw'], { cwd: tmpDir, encoding: 'utf-8' });
+    const parsed = JSON.parse(out.trim());
+    assert.deepStrictEqual(parsed.replays, []);
+    assert.strictEqual(parsed.total, 0);
+  });
+
+  test('lists replay execution records from METRICS/', () => {
+    const record = {
+      replay_execution_id: 'RE-20260330-ABCDE',
+      record_type: 'replay_execution',
+      timestamp: '2026-03-30T10:00:00Z',
+      replay_id: 'RPL-20260330000000-AAAA1111',
+      source: { type: 'query', ids: ['QRY-123'] },
+      original_query_ids: ['QRY-123'],
+      mutation_types: ['time_window'],
+      diff_mode: 'full',
+      results_summary: { events: 42, entities: 5, status: 'success' },
+    };
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'METRICS', 'RE-20260330-ABCDE.json'),
+      JSON.stringify(record),
+    );
+
+    const out = execFileSync('node', [toolsPath, 'replay', 'list', '--raw'], { cwd: tmpDir, encoding: 'utf-8' });
+    const parsed = JSON.parse(out.trim());
+    assert.strictEqual(parsed.replays.length, 1);
+    assert.strictEqual(parsed.replays[0].replay_execution_id, 'RE-20260330-ABCDE');
+    assert.strictEqual(parsed.total, 1);
+  });
+
+  test('filters by --source when provided', () => {
+    const r1 = {
+      replay_execution_id: 'RE-20260330-AAA01',
+      record_type: 'replay_execution',
+      timestamp: '2026-03-30T10:00:00Z',
+      replay_id: 'RPL-01',
+      source: { type: 'query', ids: ['QRY-100'] },
+      original_query_ids: ['QRY-100'],
+      mutation_types: [],
+      results_summary: { events: 10, entities: 1, status: 'success' },
+    };
+    const r2 = {
+      replay_execution_id: 'RE-20260330-AAA02',
+      record_type: 'replay_execution',
+      timestamp: '2026-03-30T11:00:00Z',
+      replay_id: 'RPL-02',
+      source: { type: 'query', ids: ['QRY-200'] },
+      original_query_ids: ['QRY-200'],
+      mutation_types: [],
+      results_summary: { events: 20, entities: 2, status: 'success' },
+    };
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'METRICS', 'RE-20260330-AAA01.json'), JSON.stringify(r1));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'METRICS', 'RE-20260330-AAA02.json'), JSON.stringify(r2));
+
+    const out = execFileSync('node', [toolsPath, 'replay', 'list', '--source', 'QRY-200', '--raw'], { cwd: tmpDir, encoding: 'utf-8' });
+    const parsed = JSON.parse(out.trim());
+    assert.strictEqual(parsed.replays.length, 1);
+    assert.strictEqual(parsed.replays[0].replay_execution_id, 'RE-20260330-AAA02');
+  });
+});
+
+describe('cmdReplayDiff', () => {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const toolsPath = path.resolve(__dirname, '..', 'thrunt-god', 'bin', 'thrunt-tools.cjs');
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'replay-diff-'));
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(path.join(planningDir, 'QUERIES'), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('errors when no diff file exists', () => {
+    try {
+      execFileSync('node', [toolsPath, 'replay', 'diff', 'RPL-20260330000000-NONEXIST', '--raw'], { cwd: tmpDir, encoding: 'utf-8' });
+      assert.fail('Should have exited with error');
+    } catch (e) {
+      assert.ok(e.stderr.includes('No diff found'));
+    }
+  });
+
+  test('reads and returns stored diff JSON', () => {
+    const diffData = {
+      replay_id: 'QRY-REPLAY-01',
+      baseline: { query_id: 'QRY-ORIG-01', status: 'success', connector_id: 'splunk', time_window: { start: '2026-03-01T00:00:00Z', end: '2026-03-02T00:00:00Z' }, counts: { events: 100, entities: 10 } },
+      replay: { query_id: 'QRY-REPLAY-01', status: 'success', connector_id: 'splunk', time_window: { start: '2026-02-22T00:00:00Z', end: '2026-02-23T00:00:00Z' }, counts: { events: 80, entities: 8 } },
+      delta: { events: { added: 5, removed: 25, unchanged: 75 }, entities: { added: [{ kind: 'ip', value: '10.0.0.99' }], removed: [{ kind: 'ip', value: '10.0.0.1' }, { kind: 'ip', value: '10.0.0.2' }, { kind: 'ip', value: '10.0.0.3' }], unchanged: 7 } },
+      summary: 'Replay shows decreased activity',
+      mode: 'full',
+    };
+    const replayId = 'RPL-20260330000000-TESTDIFF';
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'QUERIES', `DIFF-${replayId}.json`),
+      JSON.stringify(diffData),
+    );
+
+    // No --raw flag so output() emits JSON (--raw would emit human-readable rawValue)
+    const out = execFileSync('node', [toolsPath, 'replay', 'diff', replayId], { cwd: tmpDir, encoding: 'utf-8' });
+    const parsed = JSON.parse(out.trim());
+    assert.strictEqual(parsed.replay_id, replayId);
+    assert.ok(parsed.diff);
+    assert.strictEqual(parsed.diff.baseline.query_id, 'QRY-ORIG-01');
+    assert.strictEqual(parsed.diff.replay.query_id, 'QRY-REPLAY-01');
+    assert.ok(parsed.human_summary.includes('Baseline:'));
+    assert.ok(parsed.human_summary.includes('Events:'));
+    assert.ok(parsed.human_summary.includes('Entities:'));
+  });
+
+  test('includes summary in human-readable output when present', () => {
+    const diffData = {
+      replay_id: 'QRY-RPL-02',
+      baseline: { query_id: 'QRY-B', status: 'success' },
+      replay: { query_id: 'QRY-R', status: 'success' },
+      delta: { events: { added: 0, removed: 0, unchanged: 10 } },
+      summary: 'No significant changes',
+      mode: 'counts_only',
+    };
+    const replayId = 'RPL-20260330000000-SUMMTEST';
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'QUERIES', `DIFF-${replayId}.json`),
+      JSON.stringify(diffData),
+    );
+
+    // No --raw flag so output() emits JSON
+    const out = execFileSync('node', [toolsPath, 'replay', 'diff', replayId], { cwd: tmpDir, encoding: 'utf-8' });
+    const parsed = JSON.parse(out.trim());
+    assert.ok(parsed.human_summary.includes('No significant changes'));
+  });
+});
