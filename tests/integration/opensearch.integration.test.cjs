@@ -41,8 +41,11 @@ describe('opensearch integration', async (t) => {
           start: '2026-03-27T00:00:00.000Z',
           end: '2026-03-29T00:00:00.000Z',
         },
-        // OpenSearch SQL requires backticks around index names containing hyphens
-        query: { language: 'sql', statement: 'SELECT * FROM `test-sysmon` LIMIT 10' },
+        // Alias dotted fields explicitly so the SQL plugin returns stable column names.
+        query: {
+          language: 'sql',
+          statement: 'SELECT "@timestamp", `host.name` AS host, `user.name` AS user, `source.ip` AS source_ip FROM `test-sysmon` LIMIT 10',
+        },
       }, runtime.createBuiltInConnectorRegistry(), {
         config: {
           connector_profiles: {
@@ -66,14 +69,14 @@ describe('opensearch integration', async (t) => {
       // Event count from seed data
       assert.ok(queryResult.envelope.counts.events >= 1, 'Should have at least 1 event from seed data');
 
-      // Entity extraction — dotted column names from JDBC response mapped through normalizeElasticRows
+      // Entity extraction from aliased SQL columns should still produce host/user entities.
       assert.ok(
         queryResult.envelope.entities.some(e => e.kind === 'host'),
-        'Should extract at least one host entity from host.name field'
+        'Should extract at least one host entity from aliased host column'
       );
       assert.ok(
         queryResult.envelope.entities.some(e => e.kind === 'user'),
-        'Should extract at least one user entity from user.name field'
+        'Should extract at least one user entity from aliased user column'
       );
 
       // Verify seeded entity values match expected hosts
