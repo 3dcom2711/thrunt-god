@@ -475,7 +475,7 @@ async function main(): Promise<void> {
     return
   }
 
-  if (options.help && command === "help") {
+  if (options.help || command === "help") {
     await cmdHelp()
     return
   }

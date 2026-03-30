@@ -2117,10 +2117,18 @@ export class TUIApp implements AppController {
     // Store handle for potential kill
     this._activeQueryHandle = handle
 
+    // Shared cleanup to prevent timer leaks
+    let checkCompletion: ReturnType<typeof setInterval>
+    let stableTimer: ReturnType<typeof setInterval>
+    const clearAllTimers = () => {
+      clearInterval(checkCompletion)
+      clearInterval(stableTimer)
+    }
+
     // Monitor process completion by polling for error/stopped state
-    const checkCompletion = setInterval(() => {
+    checkCompletion = setInterval(() => {
       if (this.state.thruntExecution.error || !this.state.thruntExecution.running) {
-        clearInterval(checkCompletion)
+        clearAllTimers()
         if (!streamDone) {
           streamDone = true
           this.onQueryExecutionComplete()
@@ -2131,13 +2139,12 @@ export class TUIApp implements AppController {
     // Stability guard: if no new lines arrive for 3 seconds after at least one, consider done
     let lastLineCount = 0
     let stableChecks = 0
-    const stableTimer = setInterval(() => {
+    stableTimer = setInterval(() => {
       const currentCount = this.state.thruntExecution.log.lines.length
       if (currentCount > 0 && currentCount === lastLineCount) {
         stableChecks++
         if (stableChecks >= 6) { // 3 seconds of stability
-          clearInterval(stableTimer)
-          clearInterval(checkCompletion)
+          clearAllTimers()
           if (!streamDone) {
             streamDone = true
             this.state.thruntExecution.running = false

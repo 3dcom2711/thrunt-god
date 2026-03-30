@@ -53,7 +53,7 @@ export const DEFAULT_CONFIG: RouterConfig = {
   rules: rules.DEFAULT_RULES,
   defaults: {
     toolchain: "claude",
-    gates: ["pytest", "mypy", "ruff"],
+    gates: ["evidence-integrity", "receipt-completeness"],
     retries: 2,
   },
 }
