@@ -612,6 +612,83 @@ async function cmdRuntimeExecute(cwd, args, raw) {
   }, raw);
 }
 
+async function cmdRuntimeDispatch(cwd, args, raw) {
+  const dispatch = require('./dispatch.cjs');
+  const runtime = require('./runtime.cjs');
+  const config = loadConfig(cwd);
+  const options = parseRuntimeArgs(args);
+
+  // Parse dispatch-specific flags
+  const tenantIds = options.tenants ? String(options.tenants).split(',').map(s => s.trim()) : null;
+  const rawTags = options.tags;
+  const tags = rawTags && typeof rawTags === 'string'
+    ? rawTags.split(',').map(s => s.trim())
+    : Array.isArray(rawTags) && rawTags.length > 0 ? rawTags : null;
+  const all = options.all === true;
+  const concurrency = options.concurrency ? parseInt(options.concurrency, 10) : undefined;
+
+  // Require at least one targeting flag
+  if (!tenantIds && !tags && !all) {
+    error('runtime dispatch requires --tenants <ids>, --tags <tags>, or --all');
+  }
+
+  // Resolve targets
+  const resolveOpts = { exclude_disabled: true };
+  if (tenantIds) resolveOpts.tenant_ids = tenantIds;
+  if (tags) resolveOpts.tags = tags;
+  if (options.connector) resolveOpts.connector_id = options.connector;
+
+  const targets = dispatch.resolveTenantTargets(config, resolveOpts);
+  if (targets.length === 0) {
+    error('No tenants matched the specified filters');
+  }
+
+  // Build base spec
+  let baseSpec;
+  if (options.pack) {
+    const packLib = require('./pack.cjs');
+    const executionPlan = packLib.buildPackExecutionTargets(cwd, options.pack, options.parameters || {}, {
+      profile: 'default',
+      start: options.start || null,
+      end: options.end || null,
+    });
+    if (executionPlan.targets.length === 0) {
+      error('Pack produced no execution targets');
+    }
+    baseSpec = executionPlan.targets[0].query_spec;
+  } else {
+    if (!options.connector) error('runtime dispatch requires --connector <id> (or --pack)');
+    if (!options.query) error('runtime dispatch requires --query "<statement>" (or --pack)');
+    const parameters = getTypedRuntimeParameters(options);
+    baseSpec = runtime.createQuerySpec({
+      connector: {
+        id: options.connector,
+        profile: options.profile || 'default',
+      },
+      query: {
+        language: options.language || 'native',
+        statement: options.query,
+      },
+      parameters,
+      time_window: options.start || options.end
+        ? { start: options.start, end: options.end }
+        : { lookback_minutes: options.lookback_minutes ? parseInt(options.lookback_minutes, 10) : 60 },
+      execution: {
+        timeout_ms: options.timeout_ms ? parseInt(options.timeout_ms, 10) : undefined,
+        max_retries: options.max_retries ? parseInt(options.max_retries, 10) : undefined,
+      },
+    });
+  }
+
+  const registry = runtime.createBuiltInConnectorRegistry();
+  const result = await dispatch.dispatchMultiTenant(baseSpec, targets, registry, config, {
+    concurrency,
+    cwd,
+  });
+
+  output(result, raw);
+}
+
 async function cmdPackList(cwd, raw) {
   const pack = require('./pack.cjs');
   const registry = pack.loadPackRegistry(cwd);
@@ -2760,6 +2837,7 @@ module.exports = {
   cmdRuntimeDoctor,
   cmdRuntimeSmoke,
   cmdRuntimeExecute,
+  cmdRuntimeDispatch,
   cmdRuntimeReplay,
   cmdReplayList,
   cmdReplayDiff,
