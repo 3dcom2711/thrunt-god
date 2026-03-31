@@ -442,3 +442,103 @@ describe('correlateFindings', () => {
     }
   });
 });
+
+// ─── writeMultiTenantArtifacts ──────────────────────────────────────────────
+
+describe('writeMultiTenantArtifacts', () => {
+  let writeMultiTenantArtifacts;
+  let tmpDir;
+
+  beforeEach(() => {
+    writeMultiTenantArtifacts = require('../thrunt-god/bin/lib/evidence.cjs').writeMultiTenantArtifacts;
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('writes aggregate receipt file with dispatch_id in filename', () => {
+    const mtr = makeMultiTenantResult([
+      makeTenantResult('acme', [{ id: 'e1', timestamp: NOW_ISO }], [{ kind: 'ip', value: '10.0.0.1' }]),
+    ]);
+    const result = writeMultiTenantArtifacts(tmpDir, mtr);
+    assert.ok(result.aggregate_receipt_path.includes('RCP-aggregate-'));
+    assert.ok(result.aggregate_receipt_path.includes(mtr.dispatch_id));
+    const fullPath = path.join(tmpDir, result.aggregate_receipt_path);
+    assert.ok(fs.existsSync(fullPath), `Aggregate receipt should exist at ${fullPath}`);
+  });
+
+  test('aggregate receipt contains summary table with tenant counts and no raw events', () => {
+    const mtr = makeMultiTenantResult([
+      makeTenantResult('acme', [{ id: 'e1', timestamp: NOW_ISO }, { id: 'e2', timestamp: NOW_ISO }], []),
+      makeTenantResult('globex', [{ id: 'e3', timestamp: NOW_ISO }], []),
+    ]);
+    const result = writeMultiTenantArtifacts(tmpDir, mtr);
+    const fullPath = path.join(tmpDir, result.aggregate_receipt_path);
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    assert.ok(content.includes('Multi-Tenant Aggregate Receipt'), 'Should have header');
+    assert.ok(content.includes('Tenants Targeted'), 'Should have summary table');
+    assert.ok(content.includes('Tenants Succeeded'), 'Should have success count');
+    assert.ok(!content.includes('"id":"e1"'), 'Should not contain raw event data');
+    assert.ok(content.includes('no raw event data'), 'Should state no raw data');
+  });
+
+  test('writes per-tenant receipts for each successful tenant', () => {
+    const mtr = makeMultiTenantResult([
+      makeTenantResult('acme', [{ id: 'e1', timestamp: NOW_ISO }], []),
+      makeTenantResult('globex', [{ id: 'e2', timestamp: NOW_ISO }], []),
+      makeTenantResult('failed', [], [], { status: 'error' }),
+    ]);
+    const result = writeMultiTenantArtifacts(tmpDir, mtr);
+    assert.strictEqual(result.tenant_receipt_paths.length, 2);
+    for (const rp of result.tenant_receipt_paths) {
+      const fullPath = path.join(tmpDir, rp);
+      assert.ok(fs.existsSync(fullPath), `Receipt should exist: ${rp}`);
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      assert.ok(content.includes('tenant:'), 'Receipt should have tenant tag');
+    }
+  });
+
+  test('partitioned mode writes to RECEIPTS/{tenant_id}/ subdirectories', () => {
+    const mtr = makeMultiTenantResult([
+      makeTenantResult('acme', [{ id: 'e1', timestamp: NOW_ISO }], []),
+      makeTenantResult('globex', [{ id: 'e2', timestamp: NOW_ISO }], []),
+    ]);
+    const result = writeMultiTenantArtifacts(tmpDir, mtr, { tenant_isolation_mode: 'partitioned' });
+    assert.strictEqual(result.tenant_isolation_mode, 'partitioned');
+    // Check that tenant-specific subdirs were created
+    const acmeReceipt = result.tenant_receipt_paths.find(p => p.includes('acme'));
+    const globexReceipt = result.tenant_receipt_paths.find(p => p.includes('globex'));
+    assert.ok(acmeReceipt.includes(path.join('RECEIPTS', 'acme')), 'Acme receipt should be in acme subdir');
+    assert.ok(globexReceipt.includes(path.join('RECEIPTS', 'globex')), 'Globex receipt should be in globex subdir');
+    // Verify files exist
+    assert.ok(fs.existsSync(path.join(tmpDir, acmeReceipt)));
+    assert.ok(fs.existsSync(path.join(tmpDir, globexReceipt)));
+  });
+
+  test('flat mode returns tenant_isolation_mode as flat', () => {
+    const mtr = makeMultiTenantResult([
+      makeTenantResult('acme', [], []),
+    ]);
+    const result = writeMultiTenantArtifacts(tmpDir, mtr);
+    assert.strictEqual(result.tenant_isolation_mode, 'flat');
+  });
+});
+
+// ─── Config key registration ────────────────────────────────────────────────
+
+describe('config key registration', () => {
+  test('dispatch.cluster_window_minutes is in VALID_CONFIG_KEYS', () => {
+    // The isValidConfigKey function validates against the VALID_CONFIG_KEYS set
+    // and also accepts dispatch.* pattern, but we want explicit registration
+    const configSource = fs.readFileSync(
+      path.join(__dirname, '..', 'thrunt-god', 'bin', 'lib', 'config.cjs'),
+      'utf-8'
+    );
+    assert.ok(
+      configSource.includes("'dispatch.cluster_window_minutes'"),
+      'cluster_window_minutes should be explicitly registered in VALID_CONFIG_KEYS'
+    );
+  });
+});

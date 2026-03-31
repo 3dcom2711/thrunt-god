@@ -35,6 +35,7 @@ const VALID_CONFIG_KEYS = new Set([
   'promotion_hooks_enabled',
   'dispatch.concurrency',
   'dispatch.global_timeout_ms',
+  'dispatch.cluster_window_minutes',
 ]);
 
 /**

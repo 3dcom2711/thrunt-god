@@ -625,6 +625,142 @@ function writeRuntimeArtifacts(cwd, spec, envelope, options = {}) {
   };
 }
 
+// ─── Multi-Tenant Evidence Artifacts ────────────────────────────────────────
+
+/**
+ * Write per-tenant receipts and one aggregate receipt for a multi-tenant dispatch.
+ *
+ * Aggregate receipt contains only counts and cross-references -- never raw event data --
+ * to maintain tenant data isolation.
+ *
+ * @param {string} cwd - Working directory
+ * @param {object} multiTenantResult - Full MultiTenantResult from dispatchMultiTenant
+ * @param {object} [options] - Configuration options
+ * @param {string} [options.tenant_isolation_mode] - 'partitioned' writes to RECEIPTS/{tenant_id}/
+ * @returns {object} { aggregate_receipt_path, tenant_receipt_paths, tenant_isolation_mode }
+ */
+function writeMultiTenantArtifacts(cwd, multiTenantResult, options = {}) {
+  const baseReceiptDir = path.join(planningDir(cwd), 'RECEIPTS');
+  const isolationMode = options.tenant_isolation_mode || 'flat';
+  const dispatchId = multiTenantResult.dispatch_id;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '').replace('T', '-').slice(0, 15);
+  const tenantReceiptPaths = [];
+
+  // Write per-tenant receipts
+  for (const tr of multiTenantResult.tenant_results) {
+    if (tr.status === 'error' || tr.status === 'timeout') continue;
+    if (tr.envelope == null) continue;
+
+    const receiptDir = isolationMode === 'partitioned'
+      ? path.join(baseReceiptDir, tr.tenant_id)
+      : baseReceiptDir;
+
+    fs.mkdirSync(receiptDir, { recursive: true });
+
+    const eventCount = (tr.envelope.events || []).length;
+    const entityCount = (tr.envelope.entities || []).length;
+
+    const receiptContent = `---
+receipt_id: RCP-${tr.tenant_id}-${timestamp}
+dispatch_id: ${dispatchId}
+tenant_id: ${tr.tenant_id}
+created_at: ${new Date().toISOString()}
+status: ${tr.status}
+tags:
+  - tenant:${tr.tenant_id}
+  - dispatch:${dispatchId}
+---
+
+# Receipt: ${tr.display_name || tr.tenant_id} Dispatch Receipt
+
+## Summary
+
+- **Tenant:** ${tr.tenant_id}
+- **Display Name:** ${tr.display_name || tr.tenant_id}
+- **Status:** ${tr.status}
+- **Events:** ${eventCount}
+- **Entities:** ${entityCount}
+
+## Timing
+
+- **Started:** ${tr.timing?.started_at || 'unknown'}
+- **Completed:** ${tr.timing?.completed_at || 'unknown'}
+- **Duration:** ${tr.timing?.duration_ms || 0}ms
+
+## Notes
+
+Per-tenant receipt for multi-tenant dispatch ${dispatchId}.
+`;
+
+    const receiptFilename = `RCP-${tr.tenant_id}-${timestamp}.md`;
+    const receiptPath = path.join(receiptDir, receiptFilename);
+    fs.writeFileSync(receiptPath, receiptContent, 'utf-8');
+    tenantReceiptPaths.push(toPosixPath(path.relative(cwd, receiptPath)));
+  }
+
+  // Build aggregate receipt
+  const summary = multiTenantResult.summary;
+  const totalEntities = summary.total_entities || 0;
+
+  // Per-tenant cross-reference table rows
+  const crossRefRows = multiTenantResult.tenant_results.map(tr => {
+    const eventCount = tr.envelope ? (tr.envelope.events || []).length : 0;
+    const receiptRef = tr.status !== 'error' && tr.status !== 'timeout' && tr.envelope
+      ? `RCP-${tr.tenant_id}-${timestamp}.md`
+      : 'N/A';
+    return `| ${tr.tenant_id} | ${tr.status} | ${eventCount} | ${receiptRef} |`;
+  }).join('\n');
+
+  const aggregateContent = `---
+receipt_id: RCP-aggregate-${dispatchId}
+dispatch_id: ${dispatchId}
+created_at: ${new Date().toISOString()}
+type: aggregate
+tags:
+  - aggregate
+  - dispatch:${dispatchId}
+---
+
+# Multi-Tenant Aggregate Receipt
+
+## Dispatch
+
+- **Dispatch ID:** ${dispatchId}
+- **Timestamp:** ${new Date().toISOString()}
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| Tenants Targeted | ${summary.tenants_targeted} |
+| Tenants Succeeded | ${summary.tenants_succeeded} |
+| Tenants Failed | ${summary.tenants_failed} |
+| Tenants Timeout | ${summary.tenants_timeout || 0} |
+| Total Events | ${summary.total_events} |
+| Total Entities | ${totalEntities} |
+
+## Per-Tenant Cross-Reference
+
+| Tenant ID | Status | Event Count | Receipt Path |
+|-----------|--------|-------------|--------------|
+${crossRefRows}
+
+## Notes
+
+Aggregate receipt for multi-tenant dispatch. Contains counts and cross-references only -- no raw event data.
+`;
+
+  fs.mkdirSync(baseReceiptDir, { recursive: true });
+  const aggregatePath = path.join(baseReceiptDir, `RCP-aggregate-${dispatchId}.md`);
+  fs.writeFileSync(aggregatePath, aggregateContent, 'utf-8');
+
+  return {
+    aggregate_receipt_path: toPosixPath(path.relative(cwd, aggregatePath)),
+    tenant_receipt_paths: tenantReceiptPaths,
+    tenant_isolation_mode: isolationMode,
+  };
+}
+
 module.exports = {
   cmdAuditEvidence,
   cmdRenderEvidenceCheckpoint,
@@ -633,4 +769,5 @@ module.exports = {
   buildQueryLogDocument,
   buildReceiptDocument,
   writeRuntimeArtifacts,
+  writeMultiTenantArtifacts,
 };
