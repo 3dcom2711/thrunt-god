@@ -3,6 +3,7 @@
 const sdk = require('../connector-sdk.cjs');
 const {
   toArray,
+  isPlainObject,
   executeConnectorRequest,
   addEntity,
   normalizeEvent,
