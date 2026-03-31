@@ -87,7 +87,7 @@ Plans:
 **Goal**: Define thrunt-connector.json manifest format and implement runtime plugin discovery with triple-precedence resolution
 **Depends on**: Phase 45 (@thrunt/connector-sdk package exists)
 **Requirements**: ECO-02
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 46-01-PLAN.md — Plugin manifest schema validation (validatePluginManifest, loadPluginManifest, loadPlugin) with 8 validation rules and cross-check logic
 - [ ] 46-02-PLAN.md — Discovery engine (discoverPlugins, createPluginRegistry, _scanNodeModules), PluginRegistry with provenance tracking, runtime.cjs re-exports
@@ -147,7 +147,7 @@ Plans:
 | 43. Dispatch Coordinator | 2/2 | Complete    | 2026-03-31 |
 | 44. Cross-Tenant Aggregation & Heatmap | 2/2 | Complete    | 2026-03-31 |
 | 45. @thrunt/connector-sdk Package | 1/1 | Complete    | 2026-03-31 |
-| 46. Plugin Manifest & Discovery | 1/2 | In Progress|  |
+| 46. Plugin Manifest & Discovery | 2/2 | Complete   | 2026-03-31 |
 | 47. Contract Test Suite & Plugin Lifecycle | 0/0 | Not Started | |
 | 48. Built-in Connector Migration | 0/0 | Not Started | |
 | 49. Reusable CI & Ecosystem Tooling | 0/0 | Not Started | |
