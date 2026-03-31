@@ -101,7 +101,7 @@ Plans:
 **Goal**: Ship automated contract test suite and full plugin lifecycle management
 **Depends on**: Phase 46 (manifest and discovery exist)
 **Requirements**: ECO-03
-**Plans:** 1/2 plans complete
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 47-01-PLAN.md — Contract test suite (runContractTests with ~25 checks, createTestQuerySpec, createTestProfile, createTestSecrets helpers)
 - [ ] 47-02-PLAN.md — Plugin lifecycle wiring (re-exports through connector-sdk.cjs/runtime.cjs, cmdDoctorConnectors CLI command)
@@ -152,6 +152,6 @@ Plans:
 | 44. Cross-Tenant Aggregation & Heatmap | 2/2 | Complete    | 2026-03-31 |
 | 45. @thrunt/connector-sdk Package | 1/1 | Complete    | 2026-03-31 |
 | 46. Plugin Manifest & Discovery | 2/2 | Complete    | 2026-03-31 |
-| 47. Contract Test Suite & Plugin Lifecycle | 1/2 | In Progress | |
+| 47. Contract Test Suite & Plugin Lifecycle | 2/2 | Complete   | 2026-03-31 |
 | 48. Built-in Connector Migration | 0/0 | Not Started | |
 | 49. Reusable CI & Ecosystem Tooling | 0/0 | Not Started | |

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: in_progress
-stopped_at: Completed 47-01-PLAN.md
-last_updated: "2026-03-31T02:48:21.000Z"
-last_activity: 2026-03-31 -- Completed Phase 47 Plan 01 (Contract Test Suite)
+status: completed
+stopped_at: Completed 47-02-PLAN.md
+last_updated: "2026-03-31T02:59:59.123Z"
+last_activity: 2026-03-31 -- Completed Phase 47 Plan 02 (Plugin Lifecycle Wiring)
 progress:
   total_phases: 7
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 5
+  total_plans: 10
+  completed_plans: 10
   percent: 100
 ---
 
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.2 Phase 47 — Contract Test Suite & Plugin Lifecycle (in progress)
+**Current focus:** v2.2 Phase 47 — Contract Test Suite & Plugin Lifecycle (complete)
 
 ## Current Milestone: v2.2 Connector Ecosystem
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 47 (Contract Test Suite & Plugin Lifecycle) -- In Progress (1 of 2 plans done)
-Status: Plan 47-01 complete -- contract-tests.cjs with runContractTests (~25 checks) and helper factories
-Last activity: 2026-03-31 -- Completed Phase 47 Plan 01 (Contract Test Suite)
+Phase: 47 (Contract Test Suite & Plugin Lifecycle) -- Complete (2 of 2 plans done)
+Status: Phase 47 complete -- contract-tests.cjs, plugin lifecycle wiring, doctor-connectors CLI
+Last activity: 2026-03-31 -- Completed Phase 47 Plan 02 (Plugin Lifecycle Wiring)
 
-Progress: [████████░░] 80% (8 of 10 plans complete)
+Progress: [██████████] 100% (10 of 10 plans complete)
 
 ## Completed This Session
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 80% (8 of 10 plans complete)
 | 46 | Plugin Manifest & Discovery (Plan 01) | 22 tests |
 | 46 | Plugin Manifest & Discovery (Plan 02) | 18 tests |
 | 47 | Contract Test Suite (Plan 01) | 22 tests |
+| 47 | Plugin Lifecycle Wiring (Plan 02) | 15 tests |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@ Progress: [████████░░] 80% (8 of 10 plans complete)
 - [Phase 47]: Error-collecting pattern: all ~25 checks run to completion, failures aggregated into single thrown error with failedChecks array
 - [Phase 47]: Adapter validation gate: invalid adapters cause immediate throw before running individual contract checks
 - [Phase 47]: Timeout check uses Promise.race with manual timer rather than SDK withTimeout, avoiding coupling to adapter internals
+- [Phase 47]: Deferred Object.assign for connector-sdk.cjs re-exports avoids circular require with contract-tests.cjs
+- [Phase 47]: Explicit runtime.cjs contract-test re-exports because ...sdk spread evaluates before deferred Object.assign
+- [Phase 47]: cmdDoctorConnectors performs 3 checks per connector: adapter_registered, adapter_valid, capabilities_complete plus manifest_cross_check for non-built-in plugins
 
 ### Research Specs Available
 
@@ -107,6 +111,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T02:48:21.000Z
-Stopped at: Completed 47-01-PLAN.md
-Resume: Phase 47 Plan 01 complete. contract-tests.cjs with runContractTests (~25 checks) and helper factories (createTestQuerySpec, createTestProfile, createTestSecrets). Ready for Plan 47-02 (Plugin lifecycle wiring).
+Last session: 2026-03-31T02:59:42.564Z
+Stopped at: Completed 47-02-PLAN.md
+Resume: Phase 47 complete. Both plans done: contract-tests.cjs with runContractTests (~25 checks), helper factories re-exported through connector-sdk.cjs and runtime.cjs, cmdDoctorConnectors CLI validates all plugins. Ready for Phase 48 (Built-in Connector Migration).
