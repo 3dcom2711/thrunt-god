@@ -428,6 +428,89 @@ describe('buildPackFromFlags - validation errors', () => {
     );
   });
 
+  test('throws on nonexistent ATT&CK technique ID (T9999)', () => {
+    assert.throws(
+      () => packAuthor.buildPackFromFlags(PROJECT_ROOT, {
+        kind: 'technique',
+        id: 'technique.t9999-nonexistent',
+        title: 'Nonexistent Technique',
+        description: 'References a technique that does not exist in MITRE data.',
+        attack: 'T9999',
+        connectors: 'splunk',
+        datasets: 'events',
+        dryRun: true,
+      }),
+      /unknown att&ck technique id/i
+    );
+  });
+
+  test('throws on nonexistent sub-technique ID (T1078.999)', () => {
+    assert.throws(
+      () => packAuthor.buildPackFromFlags(PROJECT_ROOT, {
+        kind: 'technique',
+        id: 'technique.t1078-999-nonexistent',
+        title: 'Nonexistent Sub-technique',
+        description: 'References a sub-technique that does not exist.',
+        attack: 'T1078.999',
+        connectors: 'splunk',
+        datasets: 'events',
+        dryRun: true,
+      }),
+      /unknown att&ck technique id/i
+    );
+  });
+
+  test('accepts valid ATT&CK technique ID (T1078)', () => {
+    const result = packAuthor.buildPackFromFlags(PROJECT_ROOT, {
+      kind: 'technique',
+      id: 'technique.t1078-valid',
+      title: 'Valid Technique',
+      description: 'References a real technique.',
+      attack: 'T1078',
+      connectors: 'splunk',
+      datasets: 'events',
+      dryRun: true,
+    });
+    assert.strictEqual(result.dry_run, true);
+    assert.deepStrictEqual(result.pack.attack, ['T1078']);
+  });
+
+  test('throws listing all invalid IDs when multiple nonexistent IDs provided', () => {
+    assert.throws(
+      () => packAuthor.buildPackFromFlags(PROJECT_ROOT, {
+        kind: 'technique',
+        id: 'technique.multi-bad',
+        title: 'Multi Bad',
+        description: 'Multiple bad technique IDs.',
+        attack: 'T9999,T8888',
+        connectors: 'splunk',
+        datasets: 'events',
+        dryRun: true,
+      }),
+      (err) => {
+        return /unknown att&ck technique id/i.test(err.message) &&
+               err.message.includes('T9999') &&
+               err.message.includes('T8888');
+      }
+    );
+  });
+
+  test('validates ATT&CK IDs in non-technique packs too', () => {
+    assert.throws(
+      () => packAuthor.buildPackFromFlags(PROJECT_ROOT, {
+        kind: 'domain',
+        id: 'domain.bad-attack-ref',
+        title: 'Bad Attack Ref',
+        description: 'Domain pack with nonexistent attack ref.',
+        attack: 'T9999',
+        connectors: 'splunk',
+        datasets: 'events',
+        dryRun: true,
+      }),
+      /unknown att&ck technique id/i
+    );
+  });
+
 });
 
 // ---------------------------------------------------------------------------

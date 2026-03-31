@@ -1009,6 +1009,17 @@ function buildPackFromFlags(cwd, flags = {}) {
     throw new Error('Technique packs require --attack flag with at least one ATT&CK technique ID');
   }
 
+  // Validate ATT&CK IDs exist in the MITRE data bundle
+  if (attackIds.length > 0) {
+    const invalidIds = attackIds.filter(id => !mitreData.getTechniqueById(id));
+    if (invalidIds.length > 0) {
+      throw new Error(
+        `Unknown ATT&CK technique ID(s): ${invalidIds.join(', ')}. ` +
+        'Verify IDs against the MITRE ATT&CK Enterprise matrix.'
+      );
+    }
+  }
+
   // Generate ID
   const id = flags.id || generatePackId(kind, title, attackIds[0]);
 
