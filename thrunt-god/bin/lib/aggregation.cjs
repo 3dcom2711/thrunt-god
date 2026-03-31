@@ -9,6 +9,8 @@
 
 'use strict';
 
+const crypto = require('crypto');
+
 // ─── tagEventsWithTenant ────────────────────────────────────────────────────
 
 /**
@@ -74,6 +76,58 @@ function deduplicateEntities(tenantResults) {
   }
 
   return Array.from(map.values());
+}
+
+// ─── deduplicateEvents ─────────────────────────────────────────────────────
+
+/**
+ * Compute a dedup key for an event based on the chosen strategy.
+ *
+ * @param {object|null|undefined} event - A single event object
+ * @param {string} strategy - 'by_id' or 'by_content_hash'
+ * @returns {string|null} Dedup key, or null if event is falsy or key cannot be computed
+ */
+function computeEventDedupKey(event, strategy) {
+  if (!event) return null;
+  switch (strategy) {
+    case 'by_id':
+      return event.id || null;
+    case 'by_content_hash': {
+      const seed = [
+        event.connector_id || '',
+        event.title || '',
+        event.summary || '',
+        event.timestamp ? event.timestamp.slice(0, 16) : '',
+      ].join(':');
+      return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
+    }
+    default:
+      return event.id || null;
+  }
+}
+
+/**
+ * Deduplicate an array of events using the specified strategy.
+ *
+ * Strategies:
+ *   - 'by_id' (default): Remove events with duplicate event.id, keep first occurrence
+ *   - 'by_content_hash': Remove events where SHA-256 of connector_id:title:summary:timestamp_minute matches
+ *
+ * @param {Array|null|undefined} events - Array of event objects
+ * @param {object} [options] - Configuration
+ * @param {string} [options.strategy='by_id'] - Dedup strategy
+ * @returns {Array} Deduplicated events
+ */
+function deduplicateEvents(events, options) {
+  if (!Array.isArray(events)) return [];
+  const strategy = options?.strategy || 'by_id';
+  const seen = new Set();
+  return events.filter(event => {
+    const key = computeEventDedupKey(event, strategy);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // ─── aggregateResults ───────────────────────────────────────────────────────
@@ -282,6 +336,7 @@ function correlateFindings(tenantResults, options = {}) {
 module.exports = {
   tagEventsWithTenant,
   deduplicateEntities,
+  deduplicateEvents,
   correlateFindings,
   aggregateResults,
 };
