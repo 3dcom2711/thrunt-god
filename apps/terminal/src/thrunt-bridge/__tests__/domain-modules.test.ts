@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -14,20 +14,10 @@ type MockCommandResponse = {
   exitCode?: number
 }
 
-let tempDirs: string[] = []
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
-  }
-  tempDirs = []
-})
-
 async function installMockThruntTools(
   responses: Record<string, MockCommandResponse>,
 ): Promise<string> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "thrunt-domain-"))
-  tempDirs.push(tempDir)
 
   const projectRoot = path.join(tempDir, "project")
   const toolsDir = path.join(projectRoot, "thrunt-god", "bin")
@@ -68,6 +58,20 @@ async function installSingleResponse(
   return installMockThruntTools({ [args.join(" ")]: response })
 }
 
+async function withSingleResponse<T>(
+  args: string[],
+  response: MockCommandResponse,
+  run: (cwd: string) => Promise<T>,
+): Promise<T> {
+  const projectRoot = await installSingleResponse(args, response)
+
+  try {
+    return await run(projectRoot)
+  } finally {
+    await fs.rm(path.dirname(projectRoot), { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 describe("auditEvidence", () => {
   test("calls runThruntCommand with ['audit-evidence', '--raw'] and returns EvidenceAuditResult[]", async () => {
     const mockData = [
@@ -82,12 +86,11 @@ describe("auditEvidence", () => {
       },
     ]
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["audit-evidence", "--raw"],
       { stdout: mockData },
+      (cwd) => auditEvidence({ cwd }),
     )
-
-    const result = await auditEvidence({ cwd: projectRoot })
 
     expect(result).toHaveLength(1)
     expect(result[0].phase).toBe("23")
@@ -96,12 +99,11 @@ describe("auditEvidence", () => {
   })
 
   test("returns empty array when subprocess fails (ok: false)", async () => {
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["audit-evidence", "--raw"],
       { stderr: "not found", exitCode: 1 },
+      (cwd) => auditEvidence({ cwd }),
     )
-
-    const result = await auditEvidence({ cwd: projectRoot })
     expect(result).toEqual([])
   })
 })
@@ -137,12 +139,11 @@ describe("listDetections", () => {
       },
     ]
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["detection", "list", "--raw"],
       { stdout: mockData },
+      (cwd) => listDetections({ cwd }),
     )
-
-    const result = await listDetections({ cwd: projectRoot })
 
     expect(result).toHaveLength(1)
     expect(result[0].candidate_id).toBe("DET-20260329123456-ABCD1234")
@@ -175,12 +176,11 @@ describe("listDetections", () => {
       { candidate_id: "DET-INVALID", bad_field: true },
     ]
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["detection", "list", "--raw"],
       { stdout: mockData },
+      (cwd) => listDetections({ cwd }),
     )
-
-    const result = await listDetections({ cwd: projectRoot })
     expect(result).toHaveLength(1)
     expect(result[0].candidate_id).toBe("DET-VALID")
   })
@@ -194,12 +194,11 @@ describe("detectionStatus", () => {
       by_confidence: { high: 2, medium: 2, low: 1 },
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["detection", "status", "--raw"],
       { stdout: mockData },
+      (cwd) => detectionStatus({ cwd }),
     )
-
-    const result = await detectionStatus({ cwd: projectRoot })
 
     expect(result).not.toBeNull()
     expect(result!.total).toBe(5)
@@ -225,12 +224,11 @@ describe("listPacks", () => {
       paths: ["/packs"],
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["pack", "list", "--raw"],
       { stdout: mockData },
+      (cwd) => listPacks({ cwd }),
     )
-
-    const result = await listPacks({ cwd: projectRoot })
 
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe("lateral-movement-smb")
@@ -258,12 +256,11 @@ describe("showPack", () => {
       },
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["pack", "show", "lateral-movement-smb", "--raw"],
       { stdout: mockData },
+      (cwd) => showPack("lateral-movement-smb", { cwd }),
     )
-
-    const result = await showPack("lateral-movement-smb", { cwd: projectRoot })
 
     expect(result).not.toBeNull()
     expect(result!.found).toBe(true)
@@ -271,12 +268,11 @@ describe("showPack", () => {
   })
 
   test("returns null when subprocess fails", async () => {
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["pack", "show", "nonexistent", "--raw"],
       { stderr: "not found", exitCode: 1 },
+      (cwd) => showPack("nonexistent", { cwd }),
     )
-
-    const result = await showPack("nonexistent", { cwd: projectRoot })
     expect(result).toBeNull()
   })
 })
@@ -296,12 +292,11 @@ describe("listConnectors", () => {
       ],
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["runtime", "list-connectors", "--raw"],
       { stdout: mockData },
+      (cwd) => listConnectors({ cwd }),
     )
-
-    const result = await listConnectors({ cwd: projectRoot })
 
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe("crowdstrike")
@@ -325,12 +320,11 @@ describe("runtimeDoctor", () => {
       ],
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["runtime", "doctor", "--raw"],
       { stdout: mockData },
+      (cwd) => runtimeDoctor({ cwd }),
     )
-
-    const result = await runtimeDoctor({ cwd: projectRoot })
 
     expect(result).not.toBeNull()
     expect(result!.summary.healthy).toBe(2)
@@ -366,12 +360,11 @@ describe("analyzeHuntmap", () => {
       missing_phase_details: null,
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["huntmap", "analyze", "--raw"],
       { stdout: mockData },
+      (cwd) => analyzeHuntmap({ cwd }),
     )
-
-    const result = await analyzeHuntmap({ cwd: projectRoot })
 
     expect(result).not.toBeNull()
     expect(result!.phase_count).toBe(4)
@@ -391,12 +384,11 @@ describe("getPhaseDetail", () => {
       section: "## Phase 23: Bridge Foundation\n...",
     }
 
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["huntmap", "get-phase", "23", "--raw"],
       { stdout: mockData },
+      (cwd) => getPhaseDetail("23", { cwd }),
     )
-
-    const result = await getPhaseDetail("23", { cwd: projectRoot })
 
     expect(result).not.toBeNull()
     expect(result!.found).toBe(true)
@@ -405,12 +397,11 @@ describe("getPhaseDetail", () => {
   })
 
   test("returns null when subprocess fails", async () => {
-    const projectRoot = await installSingleResponse(
+    const result = await withSingleResponse(
       ["huntmap", "get-phase", "99", "--raw"],
       { stderr: "not found", exitCode: 1 },
+      (cwd) => getPhaseDetail("99", { cwd }),
     )
-
-    const result = await getPhaseDetail("99", { cwd: projectRoot })
     expect(result).toBeNull()
   })
 })
