@@ -184,6 +184,64 @@ function parseQueryLogDocument(content) {
   return { frontmatter, statement, time_window: timeWindow };
 }
 
+function extractMarkdownSection(content, heading) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = content.match(new RegExp(`## ${escapedHeading}\\s*\\n+([\\s\\S]*?)(?=\\n##\\s|\\n#\\s|$)`));
+  return match ? match[1].trim() : '';
+}
+
+function parseResultSummaryPairs(summaryText) {
+  const pairs = {};
+  const pairPattern = /([a-z_]+)\s*=\s*([^,\n]+)/gi;
+  let match;
+
+  while ((match = pairPattern.exec(summaryText)) !== null) {
+    pairs[match[1].toLowerCase()] = match[2].trim();
+  }
+
+  return pairs;
+}
+
+function parseCountValue(value) {
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseQueryLogEnvelope(content, parsed) {
+  const summaryPairs = parseResultSummaryPairs(extractMarkdownSection(content, 'Result Summary'));
+  const statusMatch = content.match(/- \*\*Result status:\*\*\s*(.+)$/m);
+  const status = summaryPairs.status || (statusMatch ? statusMatch[1].trim() : null);
+  const countKeys = ['events', 'entities', 'relationships', 'evidence', 'warnings', 'errors', 'raw_records'];
+  const hasSummaryCounts = countKeys.some(key => Object.prototype.hasOwnProperty.call(summaryPairs, key));
+
+  if (!hasSummaryCounts && !status) {
+    return { envelope: null, detailLevel: null };
+  }
+
+  const counts = {};
+  for (const key of countKeys) {
+    counts[key] = parseCountValue(summaryPairs[key]);
+  }
+
+  return {
+    envelope: {
+      query_id: parsed.frontmatter.query_id || null,
+      connector: {
+        id: parsed.frontmatter.connector_id || null,
+      },
+      dataset: {
+        kind: parsed.frontmatter.dataset || parsed.frontmatter.source || 'events',
+      },
+      time_window: parsed.time_window,
+      counts,
+      entities: [],
+      evidence: [],
+      status: status || 'unknown',
+    },
+    detailLevel: 'summary',
+  };
+}
+
 function findManifestForQueryId(manifestsDir, queryId, cache) {
   if (cache && cache.has(queryId)) {
     return cache.get(queryId);
@@ -257,6 +315,7 @@ function resolveReplaySource(cwd, source) {
         results.push({
           original_spec: null,
           original_envelope: null,
+          baseline_detail_level: null,
           source_path: null,
           warnings: [`hunt_phase source resolution not yet implemented (id: ${id})`],
         });
@@ -292,6 +351,7 @@ function resolveQueryId(queryId, queriesDir, manifestsDir, cache) {
     return {
       original_spec: null,
       original_envelope: null,
+      baseline_detail_level: null,
       source_path: queryFile,
       warnings: [`Query log not found: ${queryFile}`],
     };
@@ -299,6 +359,7 @@ function resolveQueryId(queryId, queriesDir, manifestsDir, cache) {
 
   const content = fs.readFileSync(queryFile, 'utf-8');
   const parsed = parseQueryLogDocument(content);
+  const envelopeResolution = parseQueryLogEnvelope(content, parsed);
 
   const originalSpec = {
     query_id: parsed.frontmatter.query_id || queryId,
@@ -316,7 +377,8 @@ function resolveQueryId(queryId, queriesDir, manifestsDir, cache) {
 
   return {
     original_spec: originalSpec,
-    original_envelope: null,
+    original_envelope: envelopeResolution.envelope,
+    baseline_detail_level: envelopeResolution.detailLevel,
     source_path: queryFile,
     warnings,
   };
@@ -329,6 +391,7 @@ function resolveReceiptId(receiptId, receiptsDir, queriesDir, manifestsDir, cach
     return {
       original_spec: null,
       original_envelope: null,
+      baseline_detail_level: null,
       source_path: receiptFile,
       warnings: [`Receipt not found: ${receiptFile}`],
     };
@@ -354,6 +417,7 @@ function resolveReceiptId(receiptId, receiptsDir, queriesDir, manifestsDir, cach
         },
       },
       original_envelope: null,
+      baseline_detail_level: null,
       source_path: receiptFile,
       warnings: ['No related_queries found in receipt frontmatter'],
     };
@@ -380,6 +444,7 @@ function resolveMetricsId(metricsId, metricsDir, queriesDir, manifestsDir, cache
     return {
       original_spec: null,
       original_envelope: null,
+      baseline_detail_level: null,
       source_path: metricsFile,
       warnings: [`Metrics record not found: ${metricsFile}`],
     };
@@ -394,6 +459,7 @@ function resolveMetricsId(metricsId, metricsDir, queriesDir, manifestsDir, cache
       return {
         original_spec: null,
         original_envelope: null,
+        baseline_detail_level: null,
         source_path: metricsFile,
         warnings: [`No query_id found in metrics record: ${metricsId}`],
       };
@@ -407,10 +473,19 @@ function resolveMetricsId(metricsId, metricsDir, queriesDir, manifestsDir, cache
     return {
       original_spec: null,
       original_envelope: null,
+      baseline_detail_level: null,
       source_path: metricsFile,
       warnings: [`Failed to parse metrics record ${metricsId}: ${err.message}`],
     };
   }
+}
+
+function appendSqlFilter(statement, clause) {
+  const trimmed = statement.trimEnd();
+  const hasSemicolon = trimmed.endsWith(';');
+  const base = hasSemicolon ? trimmed.slice(0, -1) : trimmed;
+  const joiner = /\bwhere\b/i.test(base) ? ' AND ' : ' WHERE ';
+  return `${base}${joiner}${clause}${hasSemicolon ? ';' : ''}`;
 }
 
 /**
@@ -1026,7 +1101,7 @@ function injectIoc(language, statement, iocType, iocValue, mode, connectorId) {
       injected = `${statement} | where ${defaultField} == "${sanitized}"`;
       break;
     case 'sql':
-      injected = `${statement} AND ${defaultField} = '${sanitized}'`;
+      injected = appendSqlFilter(statement, `${defaultField} = '${sanitized}'`);
       break;
     default:
       injected = `${statement} ${defaultField}=${sanitized}`;
