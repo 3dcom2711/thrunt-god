@@ -55,6 +55,10 @@ Plans:
 **Goal**: Ship cross-tenant result merging with entity deduplication and tenant x MITRE technique heatmap generation
 **Depends on**: Phase 43 (dispatch coordinator produces MultiTenantResult)
 **Requirements**: TENANT-03
+**Plans:** 1/2 plans executed
+Plans:
+- [ ] 44-01-PLAN.md — Aggregation module (tagEventsWithTenant, deduplicateEntities, correlateFindings, aggregateResults), writeMultiTenantArtifacts in evidence.cjs, config key
+- [ ] 44-02-PLAN.md — Heatmap module (buildHeatmapFromResults, renderHeatmapTable, writeHeatmapArtifacts), CLI commands (runtime aggregate, runtime heatmap), runtime re-exports
 **Success Criteria** (what must be TRUE):
   1. Events tagged with tenant_id for provenance tracking
   2. Entity deduplication by (kind, value) across tenants with tenant attribution
@@ -133,8 +137,8 @@ Plans:
 | 40. Source Retargeting & IOC Injection | 1/1 | Complete | 2026-03-30 |
 | 41. Replay Diffing & Receipt Lineage | 2/2 | Complete | 2026-03-30 |
 | 42. Tenant Registry & Auth | 2/2 | Complete | 2026-03-30 |
-| 43. Dispatch Coordinator | 2/2 | Complete   | 2026-03-31 |
-| 44. Cross-Tenant Aggregation & Heatmap | 0/0 | Not Started | |
+| 43. Dispatch Coordinator | 2/2 | Complete    | 2026-03-31 |
+| 44. Cross-Tenant Aggregation & Heatmap | 1/2 | In Progress|  |
 | 45. @thrunt/connector-sdk Package | 0/0 | Not Started | |
 | 46. Plugin Manifest & Discovery | 0/0 | Not Started | |
 | 47. Contract Test Suite & Plugin Lifecycle | 0/0 | Not Started | |

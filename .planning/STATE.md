@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: executing
-stopped_at: Completed 43-02-PLAN.md
-last_updated: "2026-03-31T00:40:30.287Z"
-last_activity: 2026-03-31 -- Completed Phase 43 Plan 01 Dispatch Coordinator
+status: completed
+stopped_at: Completed 44-01-PLAN.md
+last_updated: "2026-03-31T01:02:06.458Z"
+last_activity: 2026-03-31 -- Completed Phase 44 Plan 01 (Cross-Tenant Aggregation)
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 68
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.1 Phase 44 — Next phase
+**Current focus:** v2.1 Phase 44 — Cross-Tenant Aggregation & Heatmap (Plan 01 complete)
 
 ## Current Milestone: v2.1 Advanced Hunt Features
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 43 (Dispatch Coordinator) -- COMPLETE
-Status: Phase 43 complete -- all 2 plans executed, 34 dispatch tests passing
-Last activity: 2026-03-31 -- Completed Phase 43 Dispatch Coordinator (Plan 02)
+Phase: 44 (Cross-Tenant Aggregation & Heatmap) -- Plan 01 complete, Plan 02 remaining
+Status: Plan 01 complete -- aggregation module with 32 tests passing
+Last activity: 2026-03-31 -- Completed Phase 44 Plan 01 (Cross-Tenant Aggregation)
 
-Progress: [██████░░░░] 68% (13 of 19 total phases complete)
+Progress: [████████░░] 75% (14 of 19 total phases in progress)
 
 ## Completed This Session
 
@@ -67,6 +67,9 @@ Progress: [██████░░░░] 68% (13 of 19 total phases complete)
 - [Phase 43]: Promise.race semaphore with .finally() for concurrency control in dispatch coordinator
 - [Phase 43]: Per-tenant Map isolation for token cache prevents credential cross-contamination
 - [Phase 43]: Handle parseRuntimeArgs default empty tags array by checking length > 0 before treating as valid filter
+- [Phase 44]: Entity dedup uses Map with composite key kind:value.toLowerCase() for O(1) lookup
+- [Phase 44]: Temporal clustering uses sliding window with configurable cluster_window_minutes (default 15)
+- [Phase 44]: Aggregate receipts carry counts and cross-refs only, never raw event data for tenant isolation
 
 ### Research Specs Available
 
@@ -83,6 +86,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T00:40:30.283Z
-Stopped at: Completed 43-02-PLAN.md
-Resume: Continue from Phase 44
+Last session: 2026-03-31T01:02:06.456Z
+Stopped at: Completed 44-01-PLAN.md
+Resume: Continue with Phase 44 Plan 02 (Heatmap)
