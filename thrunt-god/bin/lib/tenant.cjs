@@ -1,32 +1,23 @@
-/**
- * Tenant — Multi-tenant registry with validation, readiness assessment, and CRUD CLI commands
- *
- * Provides tenant configuration management for MSSP operators. Tenants group
- * connector profiles under named identities, enabling per-tenant credential
- * isolation and readiness tracking.
- */
-
-const { loadConfig, planningDir, planningPaths, output, error } = require('./core.cjs');
+const { loadConfig, output, error } = require('./core.cjs');
 const { setConfigValue } = require('./config.cjs');
-
-// ─── Tenant ID & Schema Validation ──────────────────────────────────────────
 
 const TENANT_ID_REGEX = /^[a-z0-9][a-z0-9-]*$/;
 const TENANT_ID_MAX_LENGTH = 64;
 
-/**
- * Validates a tenant configuration object against the expected schema and
- * cross-references connector profiles in the project config.
- *
- * @param {object} tenant - The tenant object to validate
- * @param {object} config - Full project config (with connector_profiles, tenants, etc.)
- * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
- */
+function addIsolationWarning(warnings, envVar, existing, tenantId, connectorId) {
+  if (existing.tenantId === tenantId) {
+    return;
+  }
+
+  warnings.push(
+    `Credential isolation warning: env var "${envVar}" is used by tenant "${existing.tenantId}" (${existing.connectorId}) and tenant "${tenantId}" (${connectorId})`
+  );
+}
+
 function validateTenantConfig(tenant, config) {
   const errors = [];
   const warnings = [];
 
-  // --- id validation ---
   if (tenant.id === undefined || tenant.id === null) {
     errors.push('Tenant id is required');
   } else if (typeof tenant.id !== 'string') {
@@ -40,12 +31,10 @@ function validateTenantConfig(tenant, config) {
     }
   }
 
-  // --- display_name validation (optional) ---
   if (tenant.display_name !== undefined && tenant.display_name !== null && typeof tenant.display_name !== 'string') {
     errors.push('Tenant display_name must be a string if provided');
   }
 
-  // --- tags validation (optional, default []) ---
   if (tenant.tags !== undefined && tenant.tags !== null) {
     if (!Array.isArray(tenant.tags)) {
       errors.push('Tenant tags must be an array of strings');
@@ -58,12 +47,10 @@ function validateTenantConfig(tenant, config) {
     }
   }
 
-  // --- enabled validation (default true) ---
   if (tenant.enabled !== undefined && tenant.enabled !== null && typeof tenant.enabled !== 'boolean') {
     errors.push('Tenant enabled must be a boolean');
   }
 
-  // --- connectors validation (required, at least 1 entry) ---
   if (!tenant.connectors || typeof tenant.connectors !== 'object' || Array.isArray(tenant.connectors)) {
     errors.push('Tenant connectors is required and must be an object mapping connector IDs to { profile, parameters? }');
   } else {
@@ -87,7 +74,6 @@ function validateTenantConfig(tenant, config) {
         }
       }
 
-      // Cross-reference: verify the profile exists in connector_profiles
       const profileName = entry.profile;
       const profileExists = config?.connector_profiles?.[connectorId]?.[profileName];
       if (!profileExists) {
@@ -96,10 +82,8 @@ function validateTenantConfig(tenant, config) {
     }
   }
 
-  // --- Credential isolation warnings ---
-  // Check if two tenants reference the same env var value across different tenants
   if (config && config.tenants) {
-    const envVarToTenant = new Map(); // envVar -> { tenantId, connectorId }
+    const envVarToTenant = new Map();
 
     const collectEnvVars = (tenantId, tenantObj) => {
       if (!tenantObj || !tenantObj.connectors) return;
@@ -107,36 +91,24 @@ function validateTenantConfig(tenant, config) {
         const profileName = connectorCfg.profile;
         const profile = config?.connector_profiles?.[connectorId]?.[profileName];
         if (!profile) continue;
-        // Look for secret_ref or auth fields that reference env vars
         const secretRefs = profile.secret_ref || profile.secret_refs || {};
         for (const [refName, refValue] of Object.entries(secretRefs)) {
           if (typeof refValue === 'string' && refValue.startsWith('$')) {
             const envVar = refValue.slice(1);
             const key = envVar;
             if (envVarToTenant.has(key)) {
-              const existing = envVarToTenant.get(key);
-              if (existing.tenantId !== tenantId) {
-                warnings.push(
-                  `Credential isolation warning: env var "${envVar}" is used by tenant "${existing.tenantId}" (${existing.connectorId}) and tenant "${tenantId}" (${connectorId})`
-                );
-              }
+              addIsolationWarning(warnings, envVar, envVarToTenant.get(key), tenantId, connectorId);
             } else {
               envVarToTenant.set(key, { tenantId, connectorId });
             }
           }
         }
-        // Also check top-level env-var-like fields (e.g., client_id, client_secret stored as env refs)
         for (const [field, value] of Object.entries(profile)) {
           if (field === 'secret_ref' || field === 'secret_refs') continue;
           if (typeof value === 'string' && value.startsWith('$')) {
             const envVar = value.slice(1);
             if (envVarToTenant.has(envVar)) {
-              const existing = envVarToTenant.get(envVar);
-              if (existing.tenantId !== tenantId) {
-                warnings.push(
-                  `Credential isolation warning: env var "${envVar}" is used by tenant "${existing.tenantId}" (${existing.connectorId}) and tenant "${tenantId}" (${connectorId})`
-                );
-              }
+              addIsolationWarning(warnings, envVar, envVarToTenant.get(envVar), tenantId, connectorId);
             } else {
               envVarToTenant.set(envVar, { tenantId, connectorId });
             }
@@ -145,11 +117,9 @@ function validateTenantConfig(tenant, config) {
       }
     };
 
-    // Collect env vars from all tenants in config
     for (const [tid, tObj] of Object.entries(config.tenants)) {
       collectEnvVars(tid, tObj);
     }
-    // Also collect for the tenant being validated (if not yet in config.tenants)
     if (tenant.id && !config.tenants[tenant.id]) {
       collectEnvVars(tenant.id, tenant);
     }
@@ -158,17 +128,6 @@ function validateTenantConfig(tenant, config) {
   return { valid: errors.length === 0, errors, warnings };
 }
 
-// ─── Readiness Assessment ────────────────────────────────────────────────────
-
-/**
- * Assesses per-connector readiness for a tenant by delegating to
- * assessConnectorReadiness for each connector in the tenant's config.
- *
- * @param {string} tenantId
- * @param {object} config - Full project config
- * @param {object} [options={}]
- * @returns {Promise<{ tenant_id, display_name, enabled, status, connectors }>}
- */
 async function assessTenantReadiness(tenantId, config, options = {}) {
   const tenantConfig = config?.tenants?.[tenantId];
 
@@ -176,7 +135,6 @@ async function assessTenantReadiness(tenantId, config, options = {}) {
     return { tenant_id: tenantId, status: 'not_found', connectors: [] };
   }
 
-  // Lazy-require runtime to avoid circular dependency
   const runtime = require('./runtime.cjs');
 
   const connectorResults = [];
@@ -208,7 +166,6 @@ async function assessTenantReadiness(tenantId, config, options = {}) {
     }
   }
 
-  // Determine overall status
   const readyStatuses = new Set(['ready', 'live_verified']);
   const readyCount = connectorResults.filter(c => readyStatuses.has(c.readiness_status)).length;
   const totalCount = connectorResults.length;
@@ -233,12 +190,6 @@ async function assessTenantReadiness(tenantId, config, options = {}) {
   };
 }
 
-// ─── CLI Commands ────────────────────────────────────────────────────────────
-
-/**
- * List all configured tenants.
- * CLI: runtime tenant list
- */
 function cmdTenantList(cwd, raw) {
   const config = loadConfig(cwd);
   const tenants = config.tenants || {};
@@ -257,10 +208,6 @@ function cmdTenantList(cwd, raw) {
   output({ tenants: result, count: result.length }, raw);
 }
 
-/**
- * Show detailed status for a specific tenant, including per-connector readiness.
- * CLI: runtime tenant status <id>
- */
 async function cmdTenantStatus(cwd, tenantId, raw) {
   if (!tenantId) {
     error('Tenant ID is required. Usage: runtime tenant status <tenant-id>');
@@ -275,14 +222,9 @@ async function cmdTenantStatus(cwd, tenantId, raw) {
   output(readinessResult, raw);
 }
 
-/**
- * Add a new tenant to the configuration.
- * CLI: runtime tenant add <id> --display-name "..." --connector sentinel:profile-name --tag healthcare
- */
 function cmdTenantAdd(cwd, args, raw) {
   const config = loadConfig(cwd);
 
-  // Parse arguments
   let tenantId = null;
   let displayName = null;
   const connectors = {};
@@ -310,7 +252,6 @@ function cmdTenantAdd(cwd, args, raw) {
     error('Tenant ID is required. Usage: runtime tenant add <id> [--display-name "..."] --connector id:profile [--tag ...]');
   }
 
-  // Validate tenant ID format
   if (tenantId.length > TENANT_ID_MAX_LENGTH) {
     error(`Tenant ID must be at most ${TENANT_ID_MAX_LENGTH} characters (got ${tenantId.length})`);
   }
@@ -322,12 +263,10 @@ function cmdTenantAdd(cwd, args, raw) {
     error('At least one --connector is required. Usage: --connector sentinel:profile-name');
   }
 
-  // Check for duplicate
   if (config.tenants && config.tenants[tenantId]) {
     error(`Tenant "${tenantId}" already exists. Use 'runtime tenant disable' or remove it manually.`);
   }
 
-  // Build tenant object
   const tenant = {
     display_name: displayName || undefined,
     tags: tags.length > 0 ? tags : [],
@@ -335,21 +274,15 @@ function cmdTenantAdd(cwd, args, raw) {
     connectors,
   };
 
-  // Validate
   const validation = validateTenantConfig({ ...tenant, id: tenantId }, config);
   if (!validation.valid) {
     error('Tenant validation failed:\n  - ' + validation.errors.join('\n  - '));
   }
 
-  // Write to config
   setConfigValue(cwd, 'tenants.' + tenantId, tenant);
   output({ added: true, tenant_id: tenantId, tenant }, raw);
 }
 
-/**
- * Disable a tenant (sets enabled: false without removing config).
- * CLI: runtime tenant disable <id>
- */
 function cmdTenantDisable(cwd, tenantId, raw) {
   if (!tenantId) {
     error('Tenant ID is required. Usage: runtime tenant disable <tenant-id>');
@@ -364,10 +297,6 @@ function cmdTenantDisable(cwd, tenantId, raw) {
   output({ disabled: true, tenant_id: tenantId }, raw);
 }
 
-/**
- * Enable a tenant (sets enabled: true).
- * CLI: runtime tenant enable <id>
- */
 function cmdTenantEnable(cwd, tenantId, raw) {
   if (!tenantId) {
     error('Tenant ID is required. Usage: runtime tenant enable <tenant-id>');
@@ -382,10 +311,6 @@ function cmdTenantEnable(cwd, tenantId, raw) {
   output({ enabled: true, tenant_id: tenantId }, raw);
 }
 
-/**
- * Run readiness assessment for all configured tenants.
- * CLI: runtime tenant doctor
- */
 async function cmdTenantDoctor(cwd, args, raw) {
   const config = loadConfig(cwd);
   const tenants = config.tenants || {};
@@ -414,8 +339,6 @@ async function cmdTenantDoctor(cwd, args, raw) {
     summary: { total: tenantIds.length, ready, partial, unconfigured },
   }, raw);
 }
-
-// ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
   validateTenantConfig,

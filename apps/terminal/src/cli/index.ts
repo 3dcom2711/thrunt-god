@@ -1,15 +1,4 @@
 #!/usr/bin/env bun
-/**
- * thrunt-god CLI - Command-line interface for the orchestration engine
- *
- * Usage:
- *   thrunt-god dispatch <prompt>     Submit task for execution
- *   thrunt-god gate [gates...]       Run quality gates
- *   thrunt-god status                Show kernel status
- *   thrunt-god init                  Initialize thrunt-god
- *   thrunt-god doctor                Inspect local environment and services
- *   thrunt-god version               Show version
- */
 
 import { parseArgs } from "util"
 import { TUI, launchTUI } from "../tui"
@@ -19,10 +8,6 @@ import { Health, type HealthStatus } from "../health"
 import { Config } from "../config"
 import { executeTool } from "../tools"
 import type { ToolContext } from "../tools"
-
-// =============================================================================
-// CLI TYPES
-// =============================================================================
 
 interface CLIOptions {
   help?: boolean
@@ -39,9 +24,9 @@ interface CLIOptions {
   offset?: number
 }
 
-// =============================================================================
-// ARGUMENT PARSING
-// =============================================================================
+function parseOptionalInt(value: string | undefined): number | undefined {
+  return value ? parseInt(value, 10) : undefined
+}
 
 function parseCliArgs(): { command: string; args: string[]; options: CLIOptions } {
   const { values, positionals } = parseArgs({
@@ -64,12 +49,8 @@ function parseCliArgs(): { command: string; args: string[]; options: CLIOptions 
     strict: false,
   })
 
-  const command = positionals[0] ?? ""  // Empty = launch TUI
+  const command = positionals[0] ?? ""
   const args = positionals.slice(1)
-
-  // Handle --no-color flag
-  const noColor = values["no-color"] as boolean | undefined
-  const color = noColor ? false : true
 
   return {
     command,
@@ -77,23 +58,19 @@ function parseCliArgs(): { command: string; args: string[]; options: CLIOptions 
     options: {
       help: values.help as boolean | undefined,
       version: values.version as boolean | undefined,
-      color,
+      color: values["no-color"] ? false : true,
       json: values.json as boolean | undefined,
       toolchain: values.toolchain as string | undefined,
       gates: values.gate as string[] | undefined,
-      timeout: values.timeout ? parseInt(values.timeout as string, 10) : undefined,
+      timeout: parseOptionalInt(values.timeout as string | undefined),
       strategy: values.strategy as string | undefined,
       cwd: values.cwd as string | undefined,
       project: values.project as string | undefined,
-      limit: values.limit ? parseInt(values.limit as string, 10) : undefined,
-      offset: values.offset ? parseInt(values.offset as string, 10) : undefined,
+      limit: parseOptionalInt(values.limit as string | undefined),
+      offset: parseOptionalInt(values.offset as string | undefined),
     },
   }
 }
-
-// =============================================================================
-// HELP TEXT
-// =============================================================================
 
 function getHelpText(): string {
   return `
@@ -130,11 +107,6 @@ ${TUI.info("Examples:")}
   thrunt-god doctor
 `
 }
-
-
-// =============================================================================
-// COMMANDS
-// =============================================================================
 
 async function cmdDispatch(args: string[], options: CLIOptions): Promise<void> {
   const prompt = args.join(" ")
@@ -297,7 +269,6 @@ async function cmdInit(options: CLIOptions): Promise<void> {
       telemetryDir: `${cwd}/.thrunt-god/runs`,
     })
 
-    // Keep init lightweight and deterministic; richer probing belongs in doctor.
     const project = await Config.inspectProject(cwd)
 
     const config = {
@@ -311,7 +282,6 @@ async function cmdInit(options: CLIOptions): Promise<void> {
 
     console.log(TUI.success("thrunt-god initialized"))
 
-    // Show detection summary
     const rows: [string, string][] = [
       ["Config", ".thrunt-god/config.json"],
       ["Telemetry", ".thrunt-god/runs/"],
@@ -446,10 +416,6 @@ async function cmdHelp(): Promise<void> {
   console.log(getHelpText())
 }
 
-// =============================================================================
-// HELPERS
-// =============================================================================
-
 async function ensureInitialized(options: CLIOptions): Promise<void> {
   if (!isInitialized()) {
     const cwd = options.cwd ?? process.cwd()
@@ -459,17 +425,11 @@ async function ensureInitialized(options: CLIOptions): Promise<void> {
   }
 }
 
-// =============================================================================
-// MAIN
-// =============================================================================
-
 async function main(): Promise<void> {
   const { command, args, options } = parseCliArgs()
 
-  // Configure TUI colors
   TUI.setColors(options.color !== false)
 
-  // Handle global flags
   if (options.version) {
     await cmdVersion()
     return
@@ -480,11 +440,9 @@ async function main(): Promise<void> {
     return
   }
 
-  // Route to command
   try {
     switch (command) {
       case "":
-        // No command - launch interactive TUI
         await launchTUI(options.cwd)
         break
       case "dispatch":
@@ -514,7 +472,6 @@ async function main(): Promise<void> {
         process.exit(1)
     }
   } finally {
-    // Clean shutdown
     if (isInitialized()) {
       await shutdown()
     }

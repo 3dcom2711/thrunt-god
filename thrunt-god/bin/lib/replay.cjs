@@ -1,16 +1,3 @@
-/**
- * THRUNT Replay Engine - Core Module
- *
- * Provides ReplaySpec Zod schema, source resolution from query artifacts,
- * time window mutation engine, and mutation application framework.
- *
- * Dependency chain (no circular imports):
- *   replay.cjs -> runtime.cjs (createQuerySpec, normalizeTimeWindow, isPlainObject, cloneObject)
- *   replay.cjs -> core.cjs (planningPaths, output, error)
- *   replay.cjs -> manifest.cjs (computeContentHash)
- *   replay.cjs -> frontmatter.cjs (extractFrontmatter)
- */
-
 'use strict';
 
 const { z } = require('zod');
@@ -23,15 +10,11 @@ const { computeContentHash } = require('./manifest.cjs');
 const { extractFrontmatter } = require('./frontmatter.cjs');
 const { resolvePack, renderPackTemplate } = require('./pack.cjs');
 
-// ─── ID Generation ───────────────────────────────────────────────────────────
-
 function makeReplayId() {
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
   return `RPL-${stamp}-${suffix}`;
 }
-
-// ─── ReplaySpec Zod Schema ───────────────────────────────────────────────────
 
 const ReplaySpecSchema = z.object({
   version: z.literal('1.0'),
@@ -83,20 +66,13 @@ const ReplaySpecSchema = z.object({
   }).optional(),
 });
 
-// ─── createReplaySpec ────────────────────────────────────────────────────────
-
 function createReplaySpec(input) {
-  const merged = {
-    version: '1.0',
-    replay_id: (input && input.replay_id) ? input.replay_id : makeReplayId(),
+  return ReplaySpecSchema.parse({
     ...input,
-  };
-  // Always enforce version
-  merged.version = '1.0';
-  return ReplaySpecSchema.parse(merged);
+    version: '1.0',
+    replay_id: input && input.replay_id ? input.replay_id : makeReplayId(),
+  });
 }
-
-// ─── parseShiftDuration ──────────────────────────────────────────────────────
 
 const SHIFT_MULTIPLIERS = {
   d: 86400000,
@@ -115,17 +91,13 @@ function parseShiftDuration(str) {
   return sign * value * SHIFT_MULTIPLIERS[unit];
 }
 
-// ─── applyMutations ──────────────────────────────────────────────────────────
-
 function applyMutations(originalSpec, mutations, now = new Date()) {
-  // Deep clone to avoid mutating the original
   const spec = cloneObject(originalSpec);
 
   if (!mutations || !isPlainObject(mutations)) {
     return spec;
   }
 
-  // Time window mutations
   if (mutations.time_window && isPlainObject(mutations.time_window)) {
     const tw = mutations.time_window;
     switch (tw.mode) {
@@ -152,13 +124,11 @@ function applyMutations(originalSpec, mutations, now = new Date()) {
     }
   }
 
-  // Connector mutations
   if (mutations.connector && isPlainObject(mutations.connector)) {
     if (mutations.connector.id) spec.connector.id = mutations.connector.id;
     if (mutations.connector.profile) spec.connector.profile = mutations.connector.profile;
   }
 
-  // IOC mutations rewrite the query statement in-place for replay execution.
   if (mutations.ioc_injection && isPlainObject(mutations.ioc_injection)) {
     const language = spec.query?.language
       || mutations.connector?.language
@@ -183,36 +153,28 @@ function applyMutations(originalSpec, mutations, now = new Date()) {
     }
   }
 
-  // Parameters mutations (merge)
   if (mutations.parameters && isPlainObject(mutations.parameters)) {
     spec.parameters = { ...spec.parameters, ...mutations.parameters };
   }
 
-  // Execution mutations (merge)
   if (mutations.execution && isPlainObject(mutations.execution)) {
     if (mutations.execution.dry_run !== undefined) spec.execution.dry_run = mutations.execution.dry_run;
     if (mutations.execution.timeout_ms !== undefined) spec.execution.timeout_ms = mutations.execution.timeout_ms;
     if (mutations.execution.max_retries !== undefined) spec.execution.max_retries = mutations.execution.max_retries;
   }
 
-  // Validate the mutated spec through createQuerySpec to ensure correctness
-  // This will throw if start >= end or other constraints are violated
   return createQuerySpec(spec);
 }
-
-// ─── parseQueryLogDocument ───────────────────────────────────────────────────
 
 function parseQueryLogDocument(content) {
   const frontmatter = extractFrontmatter(content);
 
-  // Extract statement from ## Query Or Procedure section
   let statement = '';
   const stmtMatch = content.match(/## Query Or Procedure\s*\n+~~~text\n([\s\S]*?)\n~~~/);
   if (stmtMatch) {
     statement = stmtMatch[1].trim();
   }
 
-  // Extract time window from ## Parameters section
   let timeWindow = { start: null, end: null };
   const twMatch = content.match(/\*\*Time window:\*\*\s*(\S+)\s*->\s*(\S+)/);
   if (twMatch) {
@@ -222,10 +184,7 @@ function parseQueryLogDocument(content) {
   return { frontmatter, statement, time_window: timeWindow };
 }
 
-// ─── findManifestForQueryId ──────────────────────────────────────────────────
-
 function findManifestForQueryId(manifestsDir, queryId, cache) {
-  // Check cache first
   if (cache && cache.has(queryId)) {
     return cache.get(queryId);
   }
@@ -244,11 +203,9 @@ function findManifestForQueryId(manifestsDir, queryId, cache) {
             break;
           }
         } catch {
-          // Skip malformed manifest files
         }
       }
     } catch {
-      // Directory read error -- skip
     }
   }
 
@@ -257,8 +214,6 @@ function findManifestForQueryId(manifestsDir, queryId, cache) {
   }
   return manifest;
 }
-
-// ─── resolveReplaySource ─────────────────────────────────────────────────────
 
 function resolveReplaySource(cwd, source) {
   const paths = planningPaths(cwd);
@@ -312,8 +267,6 @@ function resolveReplaySource(cwd, source) {
 
   return results;
 }
-
-// ─── Resolution Helpers ──────────────────────────────────────────────────────
 
 function resolveQueryId(queryId, queriesDir, manifestsDir, cache) {
   const warnings = [];
@@ -459,8 +412,6 @@ function resolveMetricsId(metricsId, metricsDir, queriesDir, manifestsDir, cache
     };
   }
 }
-
-// ─── Per-Language Time Rewriters ─────────────────────────────────────────────
 
 /**
  * SPL rewriter: replaces earliest=/latest= patterns with absolute ISO timestamps.
@@ -665,8 +616,6 @@ function rewriteQueryTime(language, statement, originalTW, newTW, options) {
   return rewriter(statement, originalTW, newTW, options);
 }
 
-// ─── Connector Language Map & Field Mapping Warnings ────────────────────────
-
 const CONNECTOR_LANGUAGE_MAP = {
   splunk: 'spl',
   elastic: 'esql',
@@ -688,8 +637,6 @@ const FIELD_MAPPING_WARNINGS = {
     'AccountName -> Account',
   ],
 };
-
-// ─── validateSameLanguageRetarget ───────────────────────────────────────────
 
 function validateSameLanguageRetarget(sourceConnectorId, targetConnectorId) {
   if (sourceConnectorId === targetConnectorId) {
@@ -721,8 +668,6 @@ function validateSameLanguageRetarget(sourceConnectorId, targetConnectorId) {
     error: 'Cross-language retargeting requires a pack with execution targets for both connectors. Consider creating a custom pack or manually writing the equivalent query.',
   };
 }
-
-// ─── retargetPackExecution ──────────────────────────────────────────────────
 
 function retargetPackExecution(cwd, packId, targetConnectorId, parameters, options) {
   const opts = options || {};
@@ -763,8 +708,6 @@ function retargetPackExecution(cwd, packId, targetConnectorId, parameters, optio
   return { target, rendered: renderedQuery.rendered, warnings };
 }
 
-// ─── IOC Field Map ──────────────────────────────────────────────────────────
-
 const IOC_FIELD_MAP = {
   splunk: {
     ip: ['src', 'dest', 'src_ip', 'dest_ip', 'IPAddress'],
@@ -797,8 +740,6 @@ const IOC_FIELD_MAP = {
     user: ['user.name', 'user', 'username'],
   },
 };
-
-// ─── IOC Validation ─────────────────────────────────────────────────────────
 
 function validateIocValue(type, value) {
   if (typeof value !== 'string') {
@@ -860,8 +801,6 @@ function validateIocValue(type, value) {
   }
 }
 
-// ─── IOC Sanitization ───────────────────────────────────────────────────────
-
 function sanitizeIocForLanguage(language, value) {
   // Universal pre-sanitization: strip control characters (ASCII 0-31 except tab \x09)
   let presanitized = value.replace(/[\x00-\x08\x0a-\x1f]/g, '');
@@ -906,8 +845,6 @@ function sanitizeIocForLanguage(language, value) {
     }
   }
 }
-
-// ─── IOC Injection ──────────────────────────────────────────────────────────
 
 function injectIoc(language, statement, iocType, iocValue, mode, connectorId) {
   const warnings = [];
@@ -1100,8 +1037,6 @@ function injectIoc(language, statement, iocType, iocValue, mode, connectorId) {
   return { injected, modifications, warnings };
 }
 
-// ─── applyIocInjection ──────────────────────────────────────────────────────
-
 function applyIocInjection(statement, language, connectorId, iocInjection) {
   const allModifications = [];
   const allWarnings = [];
@@ -1120,8 +1055,6 @@ function applyIocInjection(statement, language, connectorId, iocInjection) {
 
   return { statement: currentStatement, modifications: allModifications, warnings: allWarnings };
 }
-
-// ─── buildDiff ──────────────────────────────────────────────────────────────
 
 const VALID_DIFF_MODES = ['full', 'counts_only', 'entities_only'];
 
@@ -1265,8 +1198,6 @@ function buildDiff(originalEnvelope, replayEnvelope, mode = 'full') {
     mode,
   };
 }
-
-// ─── Exports ─────────────────────────────────────────────────────────────────
 
 module.exports = {
   createReplaySpec,
