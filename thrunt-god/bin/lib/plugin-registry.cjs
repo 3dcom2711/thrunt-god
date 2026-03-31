@@ -156,7 +156,11 @@ function validatePluginManifest(manifest, options = {}) {
   // -- Rule 3: entry points to existing file (only if packageRoot provided) --
   if (typeof manifest.entry === 'string' && options.packageRoot) {
     const entryPath = path.resolve(options.packageRoot, manifest.entry);
-    if (!fs.existsSync(entryPath)) {
+    // Guard against path traversal — entry must resolve within packageRoot
+    const resolvedRoot = path.resolve(options.packageRoot) + path.sep;
+    if (!entryPath.startsWith(resolvedRoot) && entryPath !== path.resolve(options.packageRoot)) {
+      errors.push(`entry '${manifest.entry}' resolves outside packageRoot (path traversal blocked)`);
+    } else if (!fs.existsSync(entryPath)) {
       errors.push(`entry '${manifest.entry}' does not exist at ${entryPath}`);
     }
   }
@@ -283,6 +287,18 @@ function loadPlugin(packageRoot) {
 
   const manifest = manifestResult.manifest;
   const entryPath = path.resolve(packageRoot, manifest.entry);
+
+  // Guard against path traversal — entry must resolve within packageRoot
+  const resolvedRoot = path.resolve(packageRoot) + path.sep;
+  if (!entryPath.startsWith(resolvedRoot) && entryPath !== path.resolve(packageRoot)) {
+    return {
+      valid: false,
+      adapter: null,
+      manifest,
+      errors: [`entry '${manifest.entry}' resolves outside packageRoot (path traversal blocked)`],
+      warnings: manifestResult.warnings,
+    };
+  }
 
   // Load entry module
   let entryModule;
