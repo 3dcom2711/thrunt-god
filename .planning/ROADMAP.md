@@ -104,7 +104,7 @@ Plans:
 **Plans:** 2/2 plans complete
 Plans:
 - [x] 47-01-PLAN.md — Contract test suite (runContractTests with ~25 checks, createTestQuerySpec, createTestProfile, createTestSecrets helpers)
-- [ ] 47-02-PLAN.md — Plugin lifecycle wiring (re-exports through connector-sdk.cjs/runtime.cjs, cmdDoctorConnectors CLI command)
+- [x] 47-02-PLAN.md — Plugin lifecycle wiring (re-exports through connector-sdk.cjs/runtime.cjs, cmdDoctorConnectors CLI command)
 **Success Criteria** (what must be TRUE):
   1. runContractTests() validates ~25 automated checks
   2. Full lifecycle: install -> validate -> register -> use
@@ -115,6 +115,10 @@ Plans:
 **Goal**: Extract all 10 built-in connectors into individual plugin-format files without breaking the public API
 **Depends on**: Phase 47 (contract test suite validates extracted connectors)
 **Requirements**: ECO-04
+**Plans:** 1/2 plans executed
+Plans:
+- [ ] 48-01-PLAN.md — Extract 5 SIEM connectors (Splunk, Elastic, Sentinel, OpenSearch, Defender XDR) with parsers, create barrel file, update runtime.cjs
+- [ ] 48-02-PLAN.md — Extract 5 remaining connectors (Okta, M365, CrowdStrike, AWS, GCP), finalize barrel, reduce runtime.cjs to thin wrapper, validate all 10 pass contract tests
 **Success Criteria** (what must be TRUE):
   1. All 10 connectors extracted to individual files under connectors/
   2. Connector-specific parsers co-located with their adapters
@@ -152,6 +156,6 @@ Plans:
 | 44. Cross-Tenant Aggregation & Heatmap | 2/2 | Complete    | 2026-03-31 |
 | 45. @thrunt/connector-sdk Package | 1/1 | Complete    | 2026-03-31 |
 | 46. Plugin Manifest & Discovery | 2/2 | Complete    | 2026-03-31 |
-| 47. Contract Test Suite & Plugin Lifecycle | 2/2 | Complete   | 2026-03-31 |
-| 48. Built-in Connector Migration | 0/0 | Not Started | |
+| 47. Contract Test Suite & Plugin Lifecycle | 2/2 | Complete    | 2026-03-31 |
+| 48. Built-in Connector Migration | 1/2 | In Progress|  |
 | 49. Reusable CI & Ecosystem Tooling | 0/0 | Not Started | |

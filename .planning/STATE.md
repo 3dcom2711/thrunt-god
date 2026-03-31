@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: completed
-stopped_at: Completed 47-02-PLAN.md
-last_updated: "2026-03-31T02:59:59.123Z"
-last_activity: 2026-03-31 -- Completed Phase 47 Plan 02 (Plugin Lifecycle Wiring)
+current_plan: 48-02 (remaining 5 connector extraction)
+status: in_progress
+stopped_at: Completed 48-01-PLAN.md
+last_updated: "2026-03-31T03:20:56.492Z"
+last_activity: 2026-03-31 -- Completed Phase 48 Plan 01 (SIEM Connector Extraction)
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 10
+  total_plans: 11
   completed_plans: 10
-  percent: 100
+  percent: 91
 ---
 
 # Project State
@@ -21,7 +22,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v2.2 Phase 47 — Contract Test Suite & Plugin Lifecycle (complete)
+**Current focus:** v2.2 Phase 48 — Built-in Connector Migration (Plan 01 complete, Plan 02 remaining)
 
 ## Current Milestone: v2.2 Connector Ecosystem
 
@@ -29,11 +30,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 47 (Contract Test Suite & Plugin Lifecycle) -- Complete (2 of 2 plans done)
-Status: Phase 47 complete -- contract-tests.cjs, plugin lifecycle wiring, doctor-connectors CLI
-Last activity: 2026-03-31 -- Completed Phase 47 Plan 02 (Plugin Lifecycle Wiring)
+Phase: 48 (Built-in Connector Migration) -- In Progress (1 of 2 plans done)
+Current Plan: 48-02 (remaining 5 connector extraction)
+Status: Plan 01 complete -- 5 SIEM connectors extracted to connectors/ with barrel index
+Last activity: 2026-03-31 -- Completed Phase 48 Plan 01 (SIEM Connector Extraction)
 
-Progress: [██████████] 100% (10 of 10 plans complete)
+Progress: [█████████░] 91% (10 of 11 plans complete)
 
 ## Completed This Session
 
@@ -58,6 +60,7 @@ Progress: [██████████] 100% (10 of 10 plans complete)
 | 46 | Plugin Manifest & Discovery (Plan 02) | 18 tests |
 | 47 | Contract Test Suite (Plan 01) | 22 tests |
 | 47 | Plugin Lifecycle Wiring (Plan 02) | 15 tests |
+| 48 | SIEM Connector Extraction (Plan 01) | 0 tests (pure refactor) |
 
 ## Accumulated Context
 
@@ -95,6 +98,10 @@ Progress: [██████████] 100% (10 of 10 plans complete)
 - [Phase 47]: Deferred Object.assign for connector-sdk.cjs re-exports avoids circular require with contract-tests.cjs
 - [Phase 47]: Explicit runtime.cjs contract-test re-exports because ...sdk spread evaluates before deferred Object.assign
 - [Phase 47]: cmdDoctorConnectors performs 3 checks per connector: adapter_registered, adapter_valid, capabilities_complete plus manifest_cross_check for non-built-in plugins
+- [Phase 48]: normalizeElasticRows shared between elastic.cjs and opensearch.cjs via cross-connector import
+- [Phase 48]: sleep() moved into splunk.cjs as local helper (only used by executeSplunkAsyncJob)
+- [Phase 48]: decodeMaybeJson kept in runtime.cjs for AWS adapter (Plan 02 will move it)
+- [Phase 48]: SDK destructure in runtime.cjs reduced from 26 to 13 functions after SIEM extraction
 
 ### Research Specs Available
 
@@ -111,6 +118,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T02:59:42.564Z
-Stopped at: Completed 47-02-PLAN.md
-Resume: Phase 47 complete. Both plans done: contract-tests.cjs with runContractTests (~25 checks), helper factories re-exported through connector-sdk.cjs and runtime.cjs, cmdDoctorConnectors CLI validates all plugins. Ready for Phase 48 (Built-in Connector Migration).
+Last session: 2026-03-31T03:20:49.573Z
+Stopped at: Completed 48-01-PLAN.md
+Resume: Phase 48 Plan 01 complete. 5 SIEM connectors (splunk, elastic, sentinel, opensearch, defender-xdr) extracted to connectors/ directory with barrel index. runtime.cjs imports from connectors/index.cjs, 83 exports preserved, 10 connectors in registry, 2379 tests pass. Ready for Plan 02 to extract remaining 5 connectors (okta, m365, crowdstrike, aws, gcp).
