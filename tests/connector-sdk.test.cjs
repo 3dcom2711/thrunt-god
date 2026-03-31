@@ -81,3 +81,104 @@ describe('connector SDK primitives', () => {
     assert.deepStrictEqual(registry.list().map(item => item.id), ['okta']);
   });
 });
+
+describe('dataset-aware defaults', () => {
+  const baseInput = (kind) => ({
+    connector: { id: 'test' },
+    dataset: { kind },
+    query: { statement: 'x' },
+    time_window: { lookback_minutes: 60 },
+  });
+
+  test('DATASET_DEFAULTS has an entry for every kind in DATASET_KINDS', () => {
+    for (const kind of runtime.DATASET_KINDS) {
+      assert.ok(
+        runtime.DATASET_DEFAULTS[kind],
+        `DATASET_DEFAULTS missing entry for kind '${kind}'`
+      );
+      assert.ok(runtime.DATASET_DEFAULTS[kind].pagination, `Missing pagination for '${kind}'`);
+      assert.ok(runtime.DATASET_DEFAULTS[kind].execution, `Missing execution for '${kind}'`);
+    }
+  });
+
+  test('identity kind gets limit=200, max_pages=10, timeout_ms=30000', () => {
+    const spec = runtime.createQuerySpec(baseInput('identity'));
+    assert.strictEqual(spec.pagination.limit, 200);
+    assert.strictEqual(spec.pagination.max_pages, 10);
+    assert.strictEqual(spec.execution.timeout_ms, 30000);
+  });
+
+  test('endpoint kind gets limit=1000, max_pages=5, timeout_ms=60000', () => {
+    const spec = runtime.createQuerySpec(baseInput('endpoint'));
+    assert.strictEqual(spec.pagination.limit, 1000);
+    assert.strictEqual(spec.pagination.max_pages, 5);
+    assert.strictEqual(spec.execution.timeout_ms, 60000);
+  });
+
+  test('alerts kind gets limit=100, max_pages=10, timeout_ms=30000', () => {
+    const spec = runtime.createQuerySpec(baseInput('alerts'));
+    assert.strictEqual(spec.pagination.limit, 100);
+    assert.strictEqual(spec.pagination.max_pages, 10);
+    assert.strictEqual(spec.execution.timeout_ms, 30000);
+  });
+
+  test('cloud kind gets limit=500, max_pages=10, timeout_ms=45000', () => {
+    const spec = runtime.createQuerySpec(baseInput('cloud'));
+    assert.strictEqual(spec.pagination.limit, 500);
+    assert.strictEqual(spec.pagination.max_pages, 10);
+    assert.strictEqual(spec.execution.timeout_ms, 45000);
+  });
+
+  test('email kind gets limit=200, max_pages=10, timeout_ms=30000', () => {
+    const spec = runtime.createQuerySpec(baseInput('email'));
+    assert.strictEqual(spec.pagination.limit, 200);
+    assert.strictEqual(spec.pagination.max_pages, 10);
+    assert.strictEqual(spec.execution.timeout_ms, 30000);
+  });
+
+  test('entities kind gets limit=100, max_pages=5, timeout_ms=20000', () => {
+    const spec = runtime.createQuerySpec(baseInput('entities'));
+    assert.strictEqual(spec.pagination.limit, 100);
+    assert.strictEqual(spec.pagination.max_pages, 5);
+    assert.strictEqual(spec.execution.timeout_ms, 20000);
+  });
+
+  test('events kind matches old hardcoded defaults (limit=500, max_pages=10, timeout_ms=30000)', () => {
+    const spec = runtime.createQuerySpec(baseInput('events'));
+    assert.strictEqual(spec.pagination.limit, 500);
+    assert.strictEqual(spec.pagination.max_pages, 10);
+    assert.strictEqual(spec.execution.timeout_ms, 30000);
+  });
+
+  test('other kind matches old hardcoded defaults (limit=500, max_pages=10, timeout_ms=30000)', () => {
+    const spec = runtime.createQuerySpec(baseInput('other'));
+    assert.strictEqual(spec.pagination.limit, 500);
+    assert.strictEqual(spec.pagination.max_pages, 10);
+    assert.strictEqual(spec.execution.timeout_ms, 30000);
+  });
+
+  test('explicit pagination.limit=42 overrides identity defaults', () => {
+    const spec = runtime.createQuerySpec({
+      ...baseInput('identity'),
+      pagination: { limit: 42 },
+    });
+    assert.strictEqual(spec.pagination.limit, 42);
+  });
+
+  test('explicit execution.timeout_ms=15000 overrides endpoint defaults', () => {
+    const spec = runtime.createQuerySpec({
+      ...baseInput('endpoint'),
+      execution: { timeout_ms: 15000 },
+    });
+    assert.strictEqual(spec.execution.timeout_ms, 15000);
+  });
+
+  test('explicit pagination.limit=42 and max_pages=3 both override identity defaults', () => {
+    const spec = runtime.createQuerySpec({
+      ...baseInput('identity'),
+      pagination: { limit: 42, max_pages: 3 },
+    });
+    assert.strictEqual(spec.pagination.limit, 42);
+    assert.strictEqual(spec.pagination.max_pages, 3);
+  });
+});
