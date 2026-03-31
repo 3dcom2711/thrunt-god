@@ -2885,6 +2885,9 @@ async function cmdRuntimeReplay(cwd, args, raw) {
     const warnings = resolved.flatMap(r => r.warnings || []);
     error(`Could not resolve source: ${options.source}${warnings.length ? ' (' + warnings.join('; ') + ')' : ''}`);
   }
+  if (diffConfig.enabled && validResolved.some(r => !r.original_envelope)) {
+    error('runtime replay --diff requires a source with an original result envelope; replay-only query logs cannot produce a trustworthy baseline');
+  }
 
   // Apply mutations to each resolved spec
   const mutatedSpecs = validResolved.map(r => replay.applyMutations(r.original_spec, replaySpec.mutations));
@@ -2926,15 +2929,7 @@ async function cmdRuntimeReplay(cwd, args, raw) {
   let diffResult = null;
   if (diffConfig.enabled && results.length > 0) {
     const originalResolved = validResolved[0];
-    // Build minimal original envelope from resolved spec for diffing
-    const originalEnvelope = originalResolved.original_envelope || {
-      query_id: originalResolved.original_spec.query_id,
-      connector: originalResolved.original_spec.connector,
-      time_window: originalResolved.original_spec.time_window,
-      counts: { events: 0, entities: 0 },
-      entities: [],
-      status: 'unknown',
-    };
+    const originalEnvelope = originalResolved.original_envelope;
 
     const replayEnvelope = results[0].envelope || {
       query_id: mutatedSpecs[0].query_id,

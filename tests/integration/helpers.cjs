@@ -60,7 +60,7 @@ async function waitForHealthy(
 
 /**
  * Bootstrap a bearer token from Splunk REST API for integration test auth.
- * Uses the /services/authorization/tokens endpoint to create a static token.
+ * Uses the /services/authorization/tokens endpoint to create a fresh token.
  *
  * @param {string} baseUrl - Splunk management URL (e.g. http://127.0.0.1:18089)
  * @param {object} opts
@@ -70,36 +70,20 @@ async function waitForHealthy(
  */
 async function createSplunkBearerToken(baseUrl, { user, password }) {
   const auth = 'Basic ' + Buffer.from(`${user}:${password}`).toString('base64');
-  const resp = await fetch(`${baseUrl}/services/authorization/tokens`, {
+  const audience = `integ-${Date.now()}`;
+  const resp = await fetch(`${baseUrl}/services/authorization/tokens?output_mode=json`, {
     method: 'POST',
     headers: {
       Authorization: auth,
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     },
-    body: 'name=integ_test_token&audience=search&type=static',
+    body: new URLSearchParams({
+      name: user,
+      audience,
+      type: 'ephemeral',
+    }).toString(),
   });
-
-  if (resp.status === 409) {
-    // Token already exists — retrieve the existing token
-    const getResp = await fetch(`${baseUrl}/services/authorization/tokens/integ_test_token`, {
-      method: 'GET',
-      headers: {
-        Authorization: auth,
-        Accept: 'application/json',
-      },
-    });
-    if (!getResp.ok) {
-      const text = await getResp.text();
-      throw new Error(`Failed to retrieve existing Splunk bearer token: HTTP ${getResp.status} — ${text}`);
-    }
-    const getData = await getResp.json();
-    const existingToken = getData?.entry?.[0]?.content?.token;
-    if (!existingToken) {
-      throw new Error(`Existing Splunk token response missing entry[0].content.token: ${JSON.stringify(getData)}`);
-    }
-    return existingToken;
-  }
 
   if (!resp.ok) {
     const text = await resp.text();

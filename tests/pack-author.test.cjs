@@ -190,6 +190,10 @@ describe('getPackFolderForKind', () => {
     assert.strictEqual(packAuthor.getPackFolderForKind('custom'), 'custom');
   });
 
+  test('example -> examples', () => {
+    assert.strictEqual(packAuthor.getPackFolderForKind('example'), 'examples');
+  });
+
 });
 
 // ---------------------------------------------------------------------------

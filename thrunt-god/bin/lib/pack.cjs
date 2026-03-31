@@ -1102,8 +1102,8 @@ function getPackFolderForKind(kind) {
     case 'domain': return 'domains';
     case 'family': return 'families';
     case 'campaign': return 'campaigns';
+    case 'example': return 'examples';
     case 'custom':
-    case 'example':
     default:
       return 'custom';
   }

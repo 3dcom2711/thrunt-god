@@ -158,6 +158,31 @@ function applyMutations(originalSpec, mutations, now = new Date()) {
     if (mutations.connector.profile) spec.connector.profile = mutations.connector.profile;
   }
 
+  // IOC mutations rewrite the query statement in-place for replay execution.
+  if (mutations.ioc_injection && isPlainObject(mutations.ioc_injection)) {
+    const language = spec.query?.language
+      || mutations.connector?.language
+      || CONNECTOR_LANGUAGE_MAP[spec.connector?.id]
+      || 'native';
+    const { statement, modifications, warnings } = applyIocInjection(
+      spec.query.statement,
+      language,
+      spec.connector.id,
+      mutations.ioc_injection
+    );
+    spec.query.statement = statement;
+    if (modifications.length > 0 || warnings.length > 0) {
+      spec.query.hints = {
+        ...(spec.query.hints || {}),
+        replay_ioc_injection: {
+          mode: mutations.ioc_injection.mode,
+          modifications,
+          warnings,
+        },
+      };
+    }
+  }
+
   // Parameters mutations (merge)
   if (mutations.parameters && isPlainObject(mutations.parameters)) {
     spec.parameters = { ...spec.parameters, ...mutations.parameters };

@@ -1550,8 +1550,8 @@ function evaluateAuthReadiness(profile, secrets = {}) {
     }
   }
 
-  if (authType === 'sigv4' && !profile?.region && !profile?.base_url) {
-    missing.push('region_or_base_url');
+  if (authType === 'sigv4' && !profile?.region) {
+    missing.push('region');
   }
 
   return {

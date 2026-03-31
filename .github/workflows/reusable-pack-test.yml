@@ -66,7 +66,11 @@ jobs:
           while IFS= read -r -d '' pack_file; do
             FOUND=1
             echo "Validating: $pack_file"
-            PACK_ID=$(node -e "console.log(require(process.argv[1]).id)" "./$pack_file")
+            if ! PACK_ID=$(node -e "const pack = require(process.argv[1]); if (!pack || typeof pack.id !== 'string' || !pack.id.trim()) { throw new Error('Pack JSON missing non-empty id'); } console.log(pack.id);" "./$pack_file"); then
+              echo "Failed to read pack id from $pack_file"
+              FAILED=$((FAILED + 1))
+              continue
+            fi
             mkdir -p .planning/packs/
             cp "$pack_file" .planning/packs/
             if ! node "$THRUNT_TOOLS_PATH" pack test "$PACK_ID" 2>&1; then

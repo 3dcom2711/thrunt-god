@@ -35,7 +35,7 @@ describe('built-in SIEM connectors', () => {
       assert.strictEqual(req.method, 'POST');
       assert.strictEqual(req.url, '/services/search/v2/jobs/export');
       assert.strictEqual(req.headers.authorization, 'Bearer splunk-token');
-      assert.match(body, /search=index%3Dsysmon/);
+      assert.match(body, /search=search\+index%3Dsysmon/);
       return {
         json: {
           results: [
@@ -505,6 +505,85 @@ describe('built-in SIEM connectors', () => {
     }
   });
 
+  test('splunk falls back to async job mode when export transport fails', async () => {
+    process.env.SPLUNK_TOKEN_ASYNC = 'splunk-async-token';
+    let requestCount = 0;
+    const fetch = async (url, init = {}) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        throw new Error('terminated');
+      }
+      if (requestCount === 2) {
+        assert.ok(String(url).includes('/services/search/jobs?output_mode=json'));
+        return new Response(JSON.stringify({ sid: 'test_sid_transport' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (requestCount === 3) {
+        assert.ok(String(url).includes('/services/search/jobs/test_sid_transport?output_mode=json'));
+        return new Response(JSON.stringify({
+          entry: [{ content: { isDone: '1', resultCount: '1' } }],
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (requestCount === 4) {
+        assert.ok(String(url).includes('/services/search/jobs/test_sid_transport/results?output_mode=json&count=0'));
+        return new Response(JSON.stringify({
+          results: [
+            {
+              _cd: 'async:transport:1',
+              _time: '2026-03-24T12:00:00.000Z',
+              host: 'async-host',
+              user: 'alice',
+              sourcetype: 'sysmon',
+            },
+          ],
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected fetch call #${requestCount}: ${url}`);
+    };
+
+    try {
+      const result = await runtime.executeQuerySpec({
+        connector: { id: 'splunk', profile: 'prod' },
+        dataset: { kind: 'events' },
+        time_window: {
+          start: '2026-03-24T00:00:00.000Z',
+          end: '2026-03-25T00:00:00.000Z',
+        },
+        query: { language: 'spl', statement: 'index=sysmon host=async-host' },
+      }, runtime.createBuiltInConnectorRegistry(), {
+        fetch,
+        config: {
+          connector_profiles: {
+            splunk: {
+              prod: {
+                auth_type: 'bearer',
+                base_url: 'http://splunk.example.local',
+                secret_refs: {
+                  access_token: { type: 'env', value: 'SPLUNK_TOKEN_ASYNC' },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      assert.strictEqual(result.envelope.status, 'ok');
+      assert.strictEqual(result.envelope.counts.events, 1);
+      assert.strictEqual(result.envelope.metadata.endpoint, 'search/jobs');
+      assert.ok(result.envelope.entities.some(item => item.kind === 'host' && item.value === 'async-host'));
+    } finally {
+      delete process.env.SPLUNK_TOKEN_ASYNC;
+    }
+  });
+
   test('sentinel reports status partial when response contains PartialError', async () => {
     process.env.SENTINEL_CLIENT_ID = 'sentinel-client';
     process.env.SENTINEL_CLIENT_SECRET = 'sentinel-secret';
@@ -751,6 +830,44 @@ describe('built-in SIEM connectors', () => {
       delete process.env.OPENSEARCH_AWS_KEY;
       delete process.env.OPENSEARCH_AWS_SECRET;
       await fixture.close();
+    }
+  });
+
+  test('opensearch SigV4 preflight requires an explicit region', async () => {
+    process.env.OPENSEARCH_AWS_KEY = 'test-access-key';
+    process.env.OPENSEARCH_AWS_SECRET = 'test-secret-key';
+
+    try {
+      const result = await runtime.executeQuerySpec({
+          connector: { id: 'opensearch', profile: 'aws' },
+          dataset: { kind: 'events' },
+          time_window: {
+            start: '2026-03-28T00:00:00.000Z',
+            end: '2026-03-29T00:00:00.000Z',
+          },
+          query: { language: 'sql', statement: "SELECT * FROM logs WHERE @timestamp > '2026-03-28'" },
+        }, runtime.createBuiltInConnectorRegistry(), {
+          config: {
+            connector_profiles: {
+              opensearch: {
+                aws: {
+                  auth_type: 'sigv4',
+                  base_url: 'https://search.example.amazonaws.com',
+                  secret_refs: {
+                    access_key_id: { type: 'env', value: 'OPENSEARCH_AWS_KEY' },
+                    secret_access_key: { type: 'env', value: 'OPENSEARCH_AWS_SECRET' },
+                  },
+                },
+              },
+            },
+          },
+        });
+      assert.strictEqual(result.envelope.status, 'error');
+      assert.strictEqual(result.envelope.metadata.last_stage, 'preflight');
+      assert.strictEqual(result.envelope.errors[0].code, 'OPENSEARCH_SIGV4_REGION_REQUIRED');
+    } finally {
+      delete process.env.OPENSEARCH_AWS_KEY;
+      delete process.env.OPENSEARCH_AWS_SECRET;
     }
   });
 });

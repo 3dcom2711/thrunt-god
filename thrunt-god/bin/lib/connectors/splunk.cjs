@@ -22,6 +22,14 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function normalizeSplunkSearchStatement(statement) {
+  const trimmed = String(statement || '').trim();
+  if (!trimmed || trimmed.startsWith('|') || /^search\s+/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `search ${trimmed}`;
+}
+
 // --- Splunk-specific parsers ---
 
 function parseSplunkResultsPayload(payload) {
@@ -53,8 +61,7 @@ async function executeSplunkAsyncJob({ spec, profile, secrets, auth, options }) 
 
   // Build search body for job creation
   const searchBody = new URLSearchParams();
-  const statement = spec.query.statement;
-  searchBody.set('search', statement.trim().startsWith('|') ? statement : `search ${statement}`);
+  searchBody.set('search', normalizeSplunkSearchStatement(spec.query.statement));
   if (spec.time_window.start) searchBody.set('earliest_time', spec.time_window.start);
   if (spec.time_window.end) searchBody.set('latest_time', spec.time_window.end);
   searchBody.set('output_mode', 'json');
@@ -144,7 +151,7 @@ function createSplunkAdapter() {
     },
     prepareQuery({ spec, profile }) {
       const body = new URLSearchParams();
-      body.set('search', spec.query.statement);
+      body.set('search', normalizeSplunkSearchStatement(spec.query.statement));
       body.set('output_mode', 'json_rows');
       body.set('earliest_time', spec.time_window.start);
       body.set('latest_time', spec.time_window.end);
@@ -174,7 +181,11 @@ function createSplunkAdapter() {
           options,
         });
       } catch (err) {
-        if (err.status === 504) {
+        const isTransportFailure = !err.status && (
+          err.name === 'TypeError'
+          || /fetch failed|socket|empty reply|terminated/i.test(String(err.message || ''))
+        );
+        if (err.status === 504 || err.retryable === true || isTransportFailure) {
           const response = await executeSplunkAsyncJob({ spec, profile, secrets, auth, options });
           response.__splunk_async = true;
           return response;
@@ -213,4 +224,4 @@ function createSplunkAdapter() {
   };
 }
 
-module.exports = { createSplunkAdapter, parseSplunkResultsPayload, executeSplunkAsyncJob };
+module.exports = { createSplunkAdapter, parseSplunkResultsPayload, executeSplunkAsyncJob, normalizeSplunkSearchStatement };

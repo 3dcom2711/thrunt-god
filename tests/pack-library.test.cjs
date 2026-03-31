@@ -158,9 +158,9 @@ describe('getPackFolderForKind', () => {
     assert.strictEqual(packLib.getPackFolderForKind('campaign'), 'campaigns');
   });
 
-  test('maps custom and example to custom', () => {
+  test('maps custom to custom and example to examples', () => {
     assert.strictEqual(packLib.getPackFolderForKind('custom'), 'custom');
-    assert.strictEqual(packLib.getPackFolderForKind('example'), 'custom');
+    assert.strictEqual(packLib.getPackFolderForKind('example'), 'examples');
   });
 
   test('unknown kind falls back to custom', () => {

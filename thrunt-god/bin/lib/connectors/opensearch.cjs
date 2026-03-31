@@ -37,8 +37,8 @@ function createOpenSearchAdapter() {
       if (!normalizeBaseUrl(profile)) {
         throw Object.assign(new Error('OpenSearch connector requires profile.base_url'), { code: 'OPENSEARCH_BASE_URL_REQUIRED' });
       }
-      if (profile?.auth_type === 'sigv4' && !profile?.region && !profile?.base_url) {
-        throw Object.assign(new Error('OpenSearch SigV4 auth requires profile.region or profile.base_url'), { code: 'OPENSEARCH_SIGV4_REGION_REQUIRED' });
+      if (profile?.auth_type === 'sigv4' && !profile?.region) {
+        throw Object.assign(new Error('OpenSearch SigV4 auth requires profile.region'), { code: 'OPENSEARCH_SIGV4_REGION_REQUIRED' });
       }
     },
     prepareQuery({ spec, profile }) {

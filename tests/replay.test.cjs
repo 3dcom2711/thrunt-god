@@ -208,6 +208,26 @@ describe('applyMutations', () => {
     assert.strictEqual(result.execution.timeout_ms, 5000);
   });
 
+  test('ioc injection rewrites the replayed query statement', () => {
+    const original = makeTestSpec({
+      query: {
+        language: 'spl',
+        statement: 'index=main src=10.0.0.1',
+      },
+    });
+    const result = applyMutations(original, {
+      ioc_injection: {
+        mode: 'append',
+        iocs: [{ type: 'ip', value: '203.0.113.50' }],
+      },
+    });
+    assert.match(result.query.statement, /\(src=10\.0\.0\.1 OR src=203\.0\.113\.50\)/);
+    assert.deepStrictEqual(
+      result.query.hints.replay_ioc_injection.modifications.map(item => item.type),
+      ['append']
+    );
+  });
+
   test('result passes createQuerySpec() validation', () => {
     const original = makeTestSpec();
     const result = applyMutations(original, {
@@ -2019,5 +2039,60 @@ describe('cmdReplayDiff', () => {
     const out = execFileSync('node', [toolsPath, 'replay', 'diff', replayId], { cwd: tmpDir, encoding: 'utf-8' });
     const parsed = JSON.parse(out.trim());
     assert.ok(parsed.human_summary.includes('No significant changes'));
+  });
+});
+
+describe('cmdRuntimeReplay', () => {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const toolsPath = path.resolve(__dirname, '..', 'thrunt-god', 'bin', 'thrunt-tools.cjs');
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-replay-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'QUERIES'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'QUERIES', 'QRY-123.md'),
+      `---
+query_id: QRY-123
+query_spec_version: "1.0"
+source: events
+connector_id: splunk
+dataset: events
+executed_at: 2026-03-30T00:00:00Z
+author: thrunt-runtime
+related_hypotheses:
+  -
+---
+
+# Query Log: replay test
+
+## Query Or Procedure
+
+~~~text
+index=main | head 10
+~~~
+
+## Parameters
+
+- **Time window:** 2026-03-01T00:00:00Z -> 2026-03-02T00:00:00Z
+`
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('fails --diff when the source has no original result envelope', () => {
+    try {
+      execFileSync('node', [toolsPath, 'runtime', 'replay', '--source', 'QRY-123', '--diff', '--raw'], {
+        cwd: tmpDir,
+        encoding: 'utf-8',
+      });
+      assert.fail('Should have exited with error');
+    } catch (e) {
+      assert.ok(e.stderr.includes('runtime replay --diff requires a source with an original result envelope'));
+    }
   });
 });
