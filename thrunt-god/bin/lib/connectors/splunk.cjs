@@ -30,6 +30,19 @@ function normalizeSplunkSearchStatement(statement) {
   return `search ${trimmed}`;
 }
 
+function normalizeSplunkResultRow(row) {
+  if (!isPlainObject(row) || typeof row._raw !== 'string') return row;
+  const trimmed = row._raw.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return row;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!isPlainObject(parsed)) return row;
+    return { ...row, ...parsed };
+  } catch {
+    return row;
+  }
+}
+
 // --- Splunk-specific parsers ---
 
 function parseSplunkResultsPayload(payload) {
@@ -197,12 +210,13 @@ function createSplunkAdapter() {
       const { rows, messages } = parseSplunkResultsPayload(response.data);
       const entities = [];
       const events = rows.map(row => {
-        addEntitiesFromRecord(entities, 'splunk', row, [
-          { kind: 'host', paths: ['host', 'Computer'] },
-          { kind: 'user', paths: ['user', 'src_user', 'dest_user'] },
+        const normalizedRow = normalizeSplunkResultRow(row);
+        addEntitiesFromRecord(entities, 'splunk', normalizedRow, [
+          { kind: 'host', paths: ['host.name', 'host', 'hostname', 'Computer'] },
+          { kind: 'user', paths: ['user.name', 'user', 'username', 'src_user', 'dest_user'] },
           { kind: 'ip', paths: ['src', 'dest', 'src_ip', 'dest_ip'] },
         ]);
-        return normalizeEvent('splunk', row, {
+        return normalizeEvent('splunk', normalizedRow, {
           datasetKind: spec.dataset.kind,
           timestampPaths: ['_time', '_indextime'],
           idPaths: ['_cd', '_serial'],
@@ -224,4 +238,10 @@ function createSplunkAdapter() {
   };
 }
 
-module.exports = { createSplunkAdapter, parseSplunkResultsPayload, executeSplunkAsyncJob, normalizeSplunkSearchStatement };
+module.exports = {
+  createSplunkAdapter,
+  parseSplunkResultsPayload,
+  executeSplunkAsyncJob,
+  normalizeSplunkSearchStatement,
+  normalizeSplunkResultRow,
+};

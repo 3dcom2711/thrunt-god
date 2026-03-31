@@ -51,7 +51,7 @@ jobs:
         run: |
           npx c8 --check-coverage --lines 70 \
             --reporter text --reporter lcov \
-            --include 'thrunt-god/bin/lib/*.cjs' \
+            --include 'thrunt-god/bin/lib/**/*.cjs' \
             --exclude 'tests/**' --all \
             node scripts/run-tests.cjs
 

@@ -510,8 +510,8 @@ describe('writeMultiTenantArtifacts', () => {
     // Check that tenant-specific subdirs were created
     const acmeReceipt = result.tenant_receipt_paths.find(p => p.includes('acme'));
     const globexReceipt = result.tenant_receipt_paths.find(p => p.includes('globex'));
-    assert.ok(acmeReceipt.includes(path.join('RECEIPTS', 'acme')), 'Acme receipt should be in acme subdir');
-    assert.ok(globexReceipt.includes(path.join('RECEIPTS', 'globex')), 'Globex receipt should be in globex subdir');
+    assert.ok(acmeReceipt.includes('RECEIPTS/acme/'), 'Acme receipt should be in acme subdir');
+    assert.ok(globexReceipt.includes('RECEIPTS/globex/'), 'Globex receipt should be in globex subdir');
     // Verify files exist
     assert.ok(fs.existsSync(path.join(tmpDir, acmeReceipt)));
     assert.ok(fs.existsSync(path.join(tmpDir, globexReceipt)));

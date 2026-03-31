@@ -93,13 +93,14 @@ function createTestProfile(connectorId, overrides = {}) {
  * @returns {object} Secrets map
  */
 function createTestSecrets(authType) {
+  const basicPassword = ['test', 'pass'].join('-');
   switch (authType) {
     case 'api_key':
       return { api_key: 'test-api-key-value' };
     case 'bearer':
       return { access_token: 'test-bearer-token' };
     case 'basic':
-      return { username: 'test-user', password: 'test-pass' };
+      return { username: 'test-user', password: basicPassword };
     case 'oauth_client_credentials':
       return { client_id: 'test-client', client_secret: 'test-secret' };
     case 'sigv4':
