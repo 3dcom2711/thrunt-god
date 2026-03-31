@@ -102,9 +102,9 @@ describe('SDK export surface — presence', () => {
     }
   });
 
-  test('total export count is 64 (43 pre-existing + 18 Phase 33 + 3 Phase 43 dispatch)', () => {
-    // 43 pre-Phase 33 + 18 SDK exports + 3 dispatch re-exports = 64
-    assert.strictEqual(Object.keys(runtime).length, 64);
+  test('total export count is 72 (43 pre-existing + 18 Phase 33 + 3 Phase 43 dispatch + 4 Phase 44 aggregation + 4 Phase 44 heatmap)', () => {
+    // 43 pre-Phase 33 + 18 SDK exports + 3 Phase 43 dispatch + 4 Phase 44 aggregation + 4 Phase 44 heatmap = 72
+    assert.strictEqual(Object.keys(runtime).length, 72);
   });
 });
 
