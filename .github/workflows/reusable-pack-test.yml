@@ -1,5 +1,8 @@
 name: Reusable Pack Test
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
