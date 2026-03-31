@@ -2269,6 +2269,14 @@ function cmdStats(cwd, format, raw) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Escape a string for safe interpolation into JavaScript source code.
+ * Prevents injection via single quotes, double quotes, and backslashes.
+ */
+function escapeJsString(str) {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+/**
  * Render a template string by replacing {{#IF_KEY}}...{{/IF_KEY}} block
  * conditionals and {{KEY}} simple substitutions.
  */
@@ -2498,7 +2506,8 @@ async function cmdInitConnector(cwd, args, raw) {
   const datasetKindsArray = JSON.stringify(datasetKinds).replace(/"/g, "'");
   const languagesArray = JSON.stringify(languages).replace(/"/g, "'");
   const paginationModesArray = JSON.stringify(paginationModes).replace(/"/g, "'");
-  const docsUrlVal = docsUrl ? `'${docsUrl}'` : 'null';
+  const docsUrlVal = docsUrl ? `'${escapeJsString(docsUrl)}'` : 'null';
+  const safeDisplayName = escapeJsString(displayName);
   const dateStr = new Date().toISOString().split('T')[0];
   const datasetKindsFirst = datasetKinds[0];
   const languagesFirst = languages[0];
@@ -2522,7 +2531,7 @@ async function cmdInitConnector(cwd, args, raw) {
 
   const vars = {
     CONNECTOR_ID: connectorId,
-    CONNECTOR_DISPLAY_NAME: displayName,
+    CONNECTOR_DISPLAY_NAME: safeDisplayName,
     CONNECTOR_FUNCTION_NAME: functionName,
     AUTH_TYPES_ARRAY: authTypesArray,
     AUTH_TYPES_FIRST: authTypes[0],
@@ -3252,12 +3261,13 @@ async function cmdConnectorsInit(cwd, args, raw) {
   const datasetKindsArray = JSON.stringify(datasetKinds).replace(/"/g, "'");
   const languagesArray = JSON.stringify(languages).replace(/"/g, "'");
   const paginationModesArray = JSON.stringify(paginationModes).replace(/"/g, "'");
-  const docsUrl = cliOptions.docsUrl ? `'${cliOptions.docsUrl}'` : 'null';
+  const docsUrl = cliOptions.docsUrl ? `'${escapeJsString(cliOptions.docsUrl)}'` : 'null';
+  const safeDisplayName = escapeJsString(displayName);
   const dateStr = new Date().toISOString().split('T')[0];
 
   const vars = {
     CONNECTOR_ID: connectorId,
-    CONNECTOR_DISPLAY_NAME: displayName,
+    CONNECTOR_DISPLAY_NAME: safeDisplayName,
     CONNECTOR_FUNCTION_NAME: functionName,
     AUTH_TYPES_ARRAY: authTypesArray,
     AUTH_TYPES_FIRST: authTypes[0],
@@ -3395,4 +3405,6 @@ module.exports = {
   cmdConnectorsList,
   cmdConnectorsSearch,
   cmdConnectorsInit,
+  escapeJsString,
+  renderTemplate,
 };

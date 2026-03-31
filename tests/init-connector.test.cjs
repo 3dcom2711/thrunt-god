@@ -451,7 +451,58 @@ describe('init connector — renderTemplate', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. Meta: existing test suite integrity
+// 5. File safety: overwrite protection and path containment
+// ---------------------------------------------------------------------------
+
+describe('init connector — file safety', () => {
+
+  test('rejects overwrite of existing files without --force', () => {
+    const id = 'test_overwrite_a';
+    try {
+      // First run: scaffold the files
+      const first = runInitConnector([id]);
+      assert.strictEqual(first.success, true, `First run failed: ${first.stderr}`);
+
+      // Second run: should fail with CONNECTOR_FILE_EXISTS
+      const second = runInitConnector([id]);
+      assert.strictEqual(second.success, false, 'Expected failure on second run without --force');
+      assert.ok(
+        second.stderr.includes('CONNECTOR_FILE_EXISTS'),
+        `Expected CONNECTOR_FILE_EXISTS error, got: ${second.stderr}`
+      );
+    } finally {
+      cleanupGeneratedFiles(id);
+    }
+  });
+
+  test('allows overwrite with --force flag', () => {
+    const id = 'test_overwrite_b';
+    try {
+      // First run: scaffold the files
+      const first = runInitConnector([id]);
+      assert.strictEqual(first.success, true, `First run failed: ${first.stderr}`);
+
+      // Second run with --force: should succeed
+      const second = runInitConnector([id, '--force']);
+      assert.strictEqual(second.success, true, `Expected success with --force, got stderr: ${second.stderr}`);
+      assert.strictEqual(second.data.created, true);
+    } finally {
+      cleanupGeneratedFiles(id);
+    }
+  });
+
+  test('rejects --output-dir outside project root', () => {
+    const result = runInitConnector(['test_path_escape', '--output-dir', '/tmp', '--dry-run']);
+    assert.strictEqual(result.success, false);
+    assert.ok(
+      result.stderr.includes('output directory must be within project root'),
+      `Expected path containment error, got: ${result.stderr}`
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Meta: existing test suite integrity
 // ---------------------------------------------------------------------------
 
 describe('init connector — suite integrity', () => {
@@ -463,5 +514,55 @@ describe('init connector — suite integrity', () => {
       exportCount >= 61,
       `Expected >= 61 runtime exports, got ${exportCount}`
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Template variable injection — escapeJsString
+// ---------------------------------------------------------------------------
+
+describe('init connector — escapeJsString', () => {
+  const { escapeJsString, renderTemplate } = require('../thrunt-god/bin/lib/commands.cjs');
+
+  test('escapeJsString escapes single quotes', () => {
+    assert.strictEqual(escapeJsString("it's"), "it\\'s");
+  });
+
+  test('escapeJsString escapes double quotes', () => {
+    assert.strictEqual(escapeJsString('say "hello"'), 'say \\"hello\\"');
+  });
+
+  test('escapeJsString escapes backslashes', () => {
+    assert.strictEqual(escapeJsString('path\\to\\file'), 'path\\\\to\\\\file');
+  });
+
+  test('escapeJsString handles combined special characters', () => {
+    const input = "it's a \"test\" with \\backslash";
+    const expected = "it\\'s a \\\"test\\\" with \\\\backslash";
+    assert.strictEqual(escapeJsString(input), expected);
+  });
+
+  test('escapeJsString leaves safe strings unchanged', () => {
+    assert.strictEqual(escapeJsString('Simple Name'), 'Simple Name');
+    assert.strictEqual(escapeJsString('https://docs.example.com'), 'https://docs.example.com');
+  });
+
+  test('display_name with quotes produces valid JS when rendered in template', () => {
+    const displayName = "O'Reilly \"Special\" Connector";
+    const escaped = escapeJsString(displayName);
+    const template = "display_name: '{{CONNECTOR_DISPLAY_NAME}}'";
+    const rendered = renderTemplate(template, { CONNECTOR_DISPLAY_NAME: escaped });
+    // The rendered string should be valid inside single quotes
+    assert.ok(!rendered.includes("O'Reilly"), 'unescaped single quote should not appear');
+    assert.ok(rendered.includes("O\\'Reilly"), 'single quote should be escaped');
+  });
+
+  test('docs_url with quotes produces valid JS when rendered in template', () => {
+    const docsUrl = "https://example.com/docs?foo='bar'";
+    const escaped = escapeJsString(docsUrl);
+    const template = "docs_url: '{{DOCS_URL}}'";
+    const rendered = renderTemplate(template, { DOCS_URL: escaped });
+    // Should not have unescaped single quotes that break the JS string
+    assert.ok(rendered.includes("\\'bar\\'"), 'single quotes in URL should be escaped');
   });
 });
