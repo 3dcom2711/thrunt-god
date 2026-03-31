@@ -89,8 +89,8 @@ Plans:
 **Requirements**: ECO-02
 **Plans:** 2/2 plans complete
 Plans:
-- [ ] 46-01-PLAN.md — Plugin manifest schema validation (validatePluginManifest, loadPluginManifest, loadPlugin) with 8 validation rules and cross-check logic
-- [ ] 46-02-PLAN.md — Discovery engine (discoverPlugins, createPluginRegistry, _scanNodeModules), PluginRegistry with provenance tracking, runtime.cjs re-exports
+- [x] 46-01-PLAN.md — Plugin manifest schema validation (validatePluginManifest, loadPluginManifest, loadPlugin) with 8 validation rules and cross-check logic
+- [x] 46-02-PLAN.md — Discovery engine (discoverPlugins, createPluginRegistry, _scanNodeModules), PluginRegistry with provenance tracking, runtime.cjs re-exports
 **Success Criteria** (what must be TRUE):
   1. thrunt-connector.json schema defined with name, version, auth_types, query_surfaces, capabilities
   2. validatePluginManifest() enforces 8 validation rules
@@ -101,6 +101,10 @@ Plans:
 **Goal**: Ship automated contract test suite and full plugin lifecycle management
 **Depends on**: Phase 46 (manifest and discovery exist)
 **Requirements**: ECO-03
+**Plans:** 2 plans
+Plans:
+- [ ] 47-01-PLAN.md — Contract test suite (runContractTests with ~25 checks, createTestQuerySpec, createTestProfile, createTestSecrets helpers)
+- [ ] 47-02-PLAN.md — Plugin lifecycle wiring (re-exports through connector-sdk.cjs/runtime.cjs, cmdDoctorConnectors CLI command)
 **Success Criteria** (what must be TRUE):
   1. runContractTests() validates ~25 automated checks
   2. Full lifecycle: install -> validate -> register -> use
@@ -147,7 +151,7 @@ Plans:
 | 43. Dispatch Coordinator | 2/2 | Complete    | 2026-03-31 |
 | 44. Cross-Tenant Aggregation & Heatmap | 2/2 | Complete    | 2026-03-31 |
 | 45. @thrunt/connector-sdk Package | 1/1 | Complete    | 2026-03-31 |
-| 46. Plugin Manifest & Discovery | 2/2 | Complete   | 2026-03-31 |
-| 47. Contract Test Suite & Plugin Lifecycle | 0/0 | Not Started | |
+| 46. Plugin Manifest & Discovery | 2/2 | Complete    | 2026-03-31 |
+| 47. Contract Test Suite & Plugin Lifecycle | 0/2 | Planning | |
 | 48. Built-in Connector Migration | 0/0 | Not Started | |
 | 49. Reusable CI & Ecosystem Tooling | 0/0 | Not Started | |
