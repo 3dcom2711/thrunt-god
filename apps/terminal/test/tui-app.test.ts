@@ -92,6 +92,53 @@ describe("TUIApp", () => {
     expect(recomputeCount).toBe(0)
   })
 
+  test("refreshHomeData retries immediately after a failed refresh", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
+    await writeFakeThruntTools(tempDir)
+
+    const app = new TUIApp(tempDir) as any
+    let recomputeCount = 0
+    app.recomputeHomeSearchResults = () => {
+      recomputeCount += 1
+      if (recomputeCount === 1) {
+        throw new Error("home search failed")
+      }
+    }
+
+    await app.refreshHomeData(true)
+    expect(recomputeCount).toBe(1)
+    expect(app.lastHomeDataRefreshAt).toBe(0)
+    expect(app.state.homeSearch.error).toBe("home search failed")
+
+    await app.refreshHomeData()
+    expect(recomputeCount).toBe(2)
+    expect(app.lastHomeDataRefreshAt).toBeGreaterThan(0)
+    expect(app.state.homeSearch.error).toBeNull()
+  })
+
+  test("refreshAgentActivity retries immediately after a failed refresh", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
+
+    const app = new TUIApp(tempDir) as any
+    let recomputeCount = 0
+    app.recomputeHomeSearchResults = () => {
+      recomputeCount += 1
+      if (recomputeCount === 1) {
+        throw new Error("agent activity failed")
+      }
+    }
+
+    await app.refreshAgentActivity(true)
+    expect(recomputeCount).toBe(1)
+    expect(app.lastAgentActivityRefreshAt).toBe(0)
+    expect(app.state.agentActivity.error).toBe("agent activity failed")
+
+    await app.refreshAgentActivity()
+    expect(recomputeCount).toBe(2)
+    expect(app.lastAgentActivityRefreshAt).toBeGreaterThan(0)
+    expect(app.state.agentActivity.error).toBeNull()
+  })
+
   test("startBackgroundServices wires the planning watcher to the app cwd", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
     await mkdir(join(tempDir, ".planning"), { recursive: true })

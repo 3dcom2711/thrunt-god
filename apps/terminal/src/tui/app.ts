@@ -396,7 +396,6 @@ export class TUIApp implements AppController {
     }
 
     this.homeDataRefreshInFlight = true
-    this.lastHomeDataRefreshAt = now
     this.state.homeSearch = {
       ...this.state.homeSearch,
       loading: true,
@@ -415,6 +414,7 @@ export class TUIApp implements AppController {
       this.state.thruntPacks.packs = packs
       this.state.thruntPhases.analysis = phases
       this.recomputeHomeSearchResults()
+      this.lastHomeDataRefreshAt = Date.now()
       this.state.homeSearch = {
         ...this.state.homeSearch,
         hydrated: true,
@@ -442,7 +442,6 @@ export class TUIApp implements AppController {
     }
 
     this.agentActivityRefreshInFlight = true
-    this.lastAgentActivityRefreshAt = now
     try {
       const events = await readAgentBridgeEvents(this.cwd, 12)
       this.state.agentActivity = {
@@ -451,6 +450,7 @@ export class TUIApp implements AppController {
         error: null,
       }
       this.recomputeHomeSearchResults()
+      this.lastAgentActivityRefreshAt = Date.now()
     } catch (error) {
       this.state.agentActivity = {
         ...this.state.agentActivity,

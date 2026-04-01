@@ -1,9 +1,10 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, open, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { z } from "zod"
 
 const UI_DIR = ".thrunt-god/ui"
 const EVENTS_FILE = "events.jsonl"
+const eventWriteQueues = new Map<string, Promise<void>>()
 
 const baseEvent = {
   id: z.string(),
@@ -85,6 +86,17 @@ function ensureEventDefaults(event: UiBridgeEventInput & Partial<Pick<UiBridgeEv
   })
 }
 
+function enqueueUiBridgeWrite(eventsPath: string, task: () => Promise<void>): Promise<void> {
+  const previous = eventWriteQueues.get(eventsPath) ?? Promise.resolve()
+  const next = previous.catch(() => {}).then(task)
+  eventWriteQueues.set(eventsPath, next)
+  return next.finally(() => {
+    if (eventWriteQueues.get(eventsPath) === next) {
+      eventWriteQueues.delete(eventsPath)
+    }
+  })
+}
+
 export async function appendUiBridgeEvent(
   cwd: string,
   event: UiBridgeEventInput & Partial<Pick<UiBridgeEvent, "id" | "timestamp">>,
@@ -92,14 +104,21 @@ export async function appendUiBridgeEvent(
   const entry = ensureEventDefaults(event)
   const { directory, eventsPath } = resolveUiBridgePaths(cwd)
   await mkdir(directory, { recursive: true })
-  let prefix = ""
-  try {
-    const info = await stat(eventsPath)
-    prefix = info.size > 0 ? "\n" : ""
-  } catch {
-    // Create the file on first write.
-  }
-  await writeFile(eventsPath, `${prefix}${JSON.stringify(entry)}`, { flag: "a" })
+  await enqueueUiBridgeWrite(eventsPath, async () => {
+    const handle = await open(eventsPath, "a+")
+    try {
+      const info = await handle.stat()
+      let prefix = ""
+      if (info.size > 0) {
+        const lastByte = Buffer.alloc(1)
+        await handle.read(lastByte, 0, 1, info.size - 1)
+        prefix = lastByte[0] === 0x0a ? "" : "\n"
+      }
+      await handle.writeFile(`${prefix}${JSON.stringify(entry)}\n`)
+    } finally {
+      await handle.close()
+    }
+  })
   return entry
 }
 

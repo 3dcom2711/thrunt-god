@@ -31,6 +31,7 @@ const REQUIRED_MANIFEST_FIELDS = [
 ];
 
 const WORKFLOW_PATH = path.join(PROJECT_ROOT, '.github', 'workflows', 'reusable-connector-test.yml');
+const PACK_WORKFLOW_PATH = path.join(PROJECT_ROOT, '.github', 'workflows', 'reusable-pack-test.yml');
 const TEMPLATE_DIR = path.join(PROJECT_ROOT, 'thrunt-god', 'templates', 'connector-plugin');
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,14 @@ describe('reusable-connector-test.yml workflow', () => {
       workflowContent.includes('lcov'),
       'Must produce lcov coverage report'
     );
+    assert.ok(
+      workflowContent.includes('find tests -type f'),
+      'Coverage step must discover explicit Node test files'
+    );
+    assert.ok(
+      !workflowContent.includes('npx c8 --reporter text --reporter lcov node --test tests/'),
+      'Coverage step must not pass tests/ as a positional script argument'
+    );
   });
 
   test('contains thrunt-version input', () => {
@@ -88,6 +97,41 @@ describe('reusable-connector-test.yml workflow', () => {
     assert.ok(
       workflowContent.includes('npm test'),
       'Must run npm test for unit tests'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. Reusable pack CI workflow
+// ---------------------------------------------------------------------------
+
+describe('reusable-pack-test.yml workflow', () => {
+  const workflowContent = fs.readFileSync(PACK_WORKFLOW_PATH, 'utf8');
+
+  test('exists and validates discovered pack JSON files', () => {
+    assert.ok(fs.existsSync(PACK_WORKFLOW_PATH), 'Pack workflow file must exist');
+    assert.ok(
+      workflowContent.includes("find \"$PACKS_DIR\" -type f -name '*.json'"),
+      'Pack workflow must iterate over discovered pack JSON files'
+    );
+    assert.ok(
+      workflowContent.includes('pack test "$PACK_ID"'),
+      'Pack workflow must run thrunt-tools pack test for each pack'
+    );
+  });
+
+  test('fails when pack test reports valid=false even if the command exits zero', () => {
+    assert.ok(
+      workflowContent.includes("result.valid !== true"),
+      'Pack workflow must treat valid=false JSON output as a CI failure'
+    );
+    assert.ok(
+      workflowContent.includes('JSON.parse'),
+      'Pack workflow must parse pack test JSON output before deciding success'
+    );
+    assert.ok(
+      workflowContent.includes('mktemp'),
+      'Pack workflow must capture command output before semantic validation'
     );
   });
 });
