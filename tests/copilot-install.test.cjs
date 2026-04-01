@@ -286,7 +286,15 @@ describe('convertClaudeToCopilotContent', () => {
   test('converts thrunt: to thrunt- in command names', () => {
     assert.strictEqual(
       convertClaudeToCopilotContent('run /thrunt:health or thrunt:progress'),
-      'run /thrunt-health or thrunt-progress'
+      'run /thrunt-health or thrunt:progress'
+    );
+  });
+
+  test('only rewrites slash commands, not object keys or plain text labels', () => {
+    const input = "const prefixMap = { hunt: 'HE-', pack: 'PE-' }; use /hunt:new-case and hunt:shape-hypothesis";
+    assert.strictEqual(
+      convertClaudeToCopilotContent(input),
+      "const prefixMap = { hunt: 'HE-', pack: 'PE-' }; use /hunt-new-case and hunt:shape-hypothesis"
     );
   });
 
@@ -299,7 +307,7 @@ describe('convertClaudeToCopilotContent', () => {
     assert.ok(!result.includes('$HOME/.claude/'), '$HOME path converted');
     assert.ok(result.includes('./.github/data'), 'dot-slash path converted');
     assert.ok(result.includes('.github/commands'), 'bare path converted');
-    assert.ok(result.includes('thrunt-health'), 'command name converted');
+    assert.ok(result.includes('thrunt:health'), 'plain text label left intact');
     assert.ok(result.includes('/thrunt-progress'), 'slash command converted');
   });
 
@@ -359,8 +367,7 @@ Body content here referencing ~/.claude/foo and thrunt:health.`;
     assert.ok(result.includes('argument-hint: "[--repair]"'), 'argument-hint double-quoted');
     assert.ok(result.includes('allowed-tools: Read, Bash, Write, AskUserQuestion'), 'tools comma-separated');
     assert.ok(result.includes('.github/foo'), 'CONV-06 applied to body (local mode default)');
-    assert.ok(result.includes('thrunt-health'), 'CONV-07 applied to body');
-    assert.ok(!result.includes('thrunt:health'), 'no thrunt: references remain');
+    assert.ok(result.includes('thrunt:health'), 'plain text label preserved in body');
   });
 
   test('handles skill without allowed-tools', () => {
@@ -445,16 +452,16 @@ description: Test skill
 Run thrunt:health and /thrunt:progress for diagnostics.`;
 
     const result = convertClaudeCommandToCopilotSkill(input, 'thrunt-test');
-    assert.ok(result.includes('thrunt-health'), 'thrunt:health converted');
+    assert.ok(result.includes('thrunt:health'), 'plain text label preserved');
     assert.ok(result.includes('/thrunt-progress'), '/thrunt:progress converted');
-    assert.ok(!result.match(/thrunt:[a-z]/), 'no thrunt: command refs remain');
+    assert.ok(!result.includes('/thrunt:progress'), 'slash command converted');
   });
 
   test('handles content without frontmatter (local mode)', () => {
     const input = 'Just some markdown with ~/.claude/path and thrunt:health.';
     const result = convertClaudeCommandToCopilotSkill(input, 'thrunt-test');
     assert.ok(result.includes('.github/path'), 'CONV-06 applied (local)');
-    assert.ok(result.includes('thrunt-health'), 'CONV-07 applied');
+    assert.ok(result.includes('thrunt:health'), 'plain text label preserved');
     assert.ok(!result.includes('---'), 'no frontmatter added');
   });
 
@@ -560,9 +567,8 @@ Check ~/.claude/settings and run thrunt:health.`;
 
     const result = convertClaudeAgentToCopilotAgent(input);
     assert.ok(result.includes('.github/settings'), 'CONV-06 applied (local)');
-    assert.ok(result.includes('thrunt-health'), 'CONV-07 applied');
+    assert.ok(result.includes('thrunt:health'), 'plain text label preserved');
     assert.ok(!result.includes('~/.claude/'), 'no ~/.claude/ remains');
-    assert.ok(!result.match(/thrunt:[a-z]/), 'no thrunt: command refs remain');
   });
 
   test('applies CONV-06 and CONV-07 to body (global mode)', () => {
@@ -576,14 +582,14 @@ Check ~/.claude/settings and run thrunt:health.`;
 
     const result = convertClaudeAgentToCopilotAgent(input, true);
     assert.ok(result.includes('~/.copilot/settings'), 'CONV-06 applied (global)');
-    assert.ok(result.includes('thrunt-health'), 'CONV-07 applied');
+    assert.ok(result.includes('thrunt:health'), 'plain text label preserved');
   });
 
   test('handles content without frontmatter (local mode)', () => {
     const input = 'Just markdown with ~/.claude/path and thrunt:test.';
     const result = convertClaudeAgentToCopilotAgent(input);
     assert.ok(result.includes('.github/path'), 'CONV-06 applied (local)');
-    assert.ok(result.includes('thrunt-test'), 'CONV-07 applied');
+    assert.ok(result.includes('thrunt:test'), 'plain text label preserved');
     assert.ok(!result.includes('---'), 'no frontmatter added');
   });
 });
@@ -630,7 +636,7 @@ describe('copyCommandsAsCopilotSkills', () => {
     assert.ok(!skillContent.includes('allowed-tools:\n  -'), 'NOT YAML multiline format');
     // CONV-06/07 applied
     assert.ok(!skillContent.includes('~/.claude/'), 'no ~/.claude/ references');
-    assert.ok(!skillContent.match(/thrunt:[a-z]/), 'no thrunt: command references');
+    assert.ok(!skillContent.includes('/thrunt:'), 'no slash command references remain');
   });
 
   test('generates thrunt-autonomous skill from autonomous.md command', () => {
@@ -665,14 +671,12 @@ describe('copyCommandsAsCopilotSkills', () => {
     const srcContent = fs.readFileSync(path.join(srcDir, 'autonomous.md'), 'utf8');
     const result = convertClaudeToCopilotContent(srcContent);
 
-    // thrunt:autonomous references should be converted to thrunt-autonomous
-    assert.ok(!result.match(/thrunt:[a-z]/), 'no thrunt: command references remain after conversion');
-    // Specific: hunt:shape-hypothesis, hunt:plan, hunt:run mentioned in body
-    // The body references thrunt-tools.cjs (not a thrunt: command) — those should be unaffected
-    // But /thrunt:autonomous → /thrunt-autonomous, hunt:shape-hypothesis → hunt-shape-hypothesis etc.
-    if (srcContent.includes('thrunt:autonomous')) {
-      assert.ok(result.includes('thrunt-autonomous'), 'thrunt:autonomous converted to thrunt-autonomous');
-    }
+    // Slash command references should be converted, but plain labels should remain intact.
+    assert.ok(!result.includes('/thrunt:'), 'no slash command references remain after conversion');
+    assert.ok(!result.includes('/hunt:'), 'no slash hunt command references remain after conversion');
+    // The frontmatter name stays source-authored until skillName is applied later by
+    // convertClaudeCommandToCopilotSkill, so bare thrunt: labels may remain here.
+    assert.ok(result.includes('name: thrunt:autonomous'), 'plain frontmatter labels are preserved');
     // Path conversion: ~/.claude/ → .github/
     assert.ok(!result.includes('~/.claude/'), 'no ~/.claude/ paths remain');
   });
@@ -1195,6 +1199,15 @@ describe('E2E: Copilot full install verification', () => {
       'Should contain THRUNT Configuration open marker');
     assert.ok(content.includes('<!-- /THRUNT Configuration -->'),
       'Should contain THRUNT Configuration close marker');
+  });
+
+  test('installed telemetry library remains valid JavaScript', () => {
+    const telemetryPath = path.join(tmpDir, '.github', 'thrunt-god', 'bin', 'lib', 'telemetry.cjs');
+    assert.doesNotThrow(() => {
+      execFileSync(process.execPath, ['--check', telemetryPath], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    }, 'installed telemetry.cjs should pass syntax check');
   });
 
   test('creates manifest with correct structure', () => {

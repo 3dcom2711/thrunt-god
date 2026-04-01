@@ -52,7 +52,7 @@ thrunt:progress
 
     assert.ok(result.includes('/hunt-run 17'), 'slash command remains slash-prefixed');
     assert.ok(result.includes('/thrunt-help'), 'existing slash command is preserved');
-    assert.ok(result.includes('thrunt-progress'), 'non-slash thrunt: references still normalize');
+    assert.ok(result.includes('thrunt:progress'), 'plain text labels remain intact');
     assert.ok(!result.includes('/hunt:run'), 'slash-colon command form is removed');
   });
 });
