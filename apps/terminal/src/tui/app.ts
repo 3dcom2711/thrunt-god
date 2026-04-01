@@ -404,9 +404,9 @@ export class TUIApp implements AppController {
     try {
       const [reportHistoryEntries, connectors, packs, phases] = await Promise.all([
         readReportHistory(this.cwd).catch(() => this.state.hunt.reportHistory.entries),
-        listConnectors().catch(() => this.state.thruntConnectors.connectors),
-        listPacks().catch(() => this.state.thruntPacks.packs),
-        analyzeHuntmap().catch(() => this.state.thruntPhases.analysis),
+        listConnectors({ cwd: this.cwd }).catch(() => this.state.thruntConnectors.connectors),
+        listPacks({ cwd: this.cwd }).catch(() => this.state.thruntPacks.packs),
+        analyzeHuntmap({ cwd: this.cwd }).catch(() => this.state.thruntPhases.analysis),
       ])
 
       this.state.hunt.reportHistory.entries = reportHistoryEntries
@@ -630,8 +630,6 @@ export class TUIApp implements AppController {
   render(): void {
     let output = ESC.moveTo(1, 1)
 
-    this.recomputeHomeSearchResults()
-
     const ctx = this.createContext()
     const screen = this.screens.get(this.getRenderableInputMode(this.state.inputMode))
     let screenContent = screen ? screen.render(ctx) : ""
@@ -753,6 +751,16 @@ export class TUIApp implements AppController {
     }
   }
 
+  refreshHomeSearch(force = false): void {
+    if (force) {
+      void this.refreshHomeData(true)
+      void this.refreshAgentActivity(true)
+      return
+    }
+
+    this.recomputeHomeSearchResults()
+  }
+
   // ===========================================================================
   // APP CONTROLLER INTERFACE
   // ===========================================================================
@@ -769,6 +777,7 @@ export class TUIApp implements AppController {
     if (mode === "main") {
       this.state.homeFocus = "prompt"
       this.state.homePromptTraceStartFrame = this.state.animationFrame
+      this.recomputeHomeSearchResults()
     } else if (mode === "interactive-run") {
       this.syncInteractiveViewport()
     }

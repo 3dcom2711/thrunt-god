@@ -122,6 +122,17 @@ function parseLegacyAgentEventLine(line: string): AgentBridgeEvent | null {
   return null
 }
 
+function isLegacyAgentBridgeEvent(
+  entry: AgentBridgeEvent | UiBridgeEvent,
+): entry is AgentBridgeEvent {
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.timestamp === "string" &&
+    typeof (entry as Partial<AgentBridgeEvent>).title === "string" &&
+    isAgentEventKind(entry.kind)
+  )
+}
+
 function toUiBridgeEventInput(input: AgentBridgeEventInput) {
   const source = input.actor ?? "external-agent"
   switch (input.kind) {
@@ -188,7 +199,7 @@ export async function readAgentBridgeEvents(
       .split("\n")
       .map((line) => parseLegacyAgentEventLine(line) ?? parseUiBridgeEventLine(line))
       .filter((entry): entry is AgentBridgeEvent | UiBridgeEvent => entry !== null)
-      .map((entry) => ("title" in entry ? entry : toLegacyAgentEvent(entry)))
+      .map((entry) => (isLegacyAgentBridgeEvent(entry) ? entry : toLegacyAgentEvent(entry)))
       .slice(-limit)
       .reverse()
   } catch {

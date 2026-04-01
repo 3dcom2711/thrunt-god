@@ -69,4 +69,24 @@ describe("agent bridge", () => {
       actor: "codex",
     })
   })
+
+  test("normalizes show events instead of treating them as legacy agent events", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-agent-bridge-"))
+
+    await appendUiBridgeEvent(tempDir, {
+      kind: "show",
+      source: "codex",
+      title: "Open hunt report",
+      body: "Jump to the latest exported report bundle",
+    })
+
+    const events = await readAgentBridgeEvents(tempDir, 10)
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      kind: "search",
+      title: "Open hunt report",
+      body: "Jump to the latest exported report bundle",
+      actor: "codex",
+    })
+  })
 })

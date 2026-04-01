@@ -20,6 +20,32 @@ describe('hunt docs', () => {
 
     assert.match(workflow, /Write or update:/);
     assert.doesNotMatch(workflow, /Legacy Mirrors/);
+    assert.match(workflow, /Create `\.planning\/QUERIES\/` and `\.planning\/RECEIPTS\/` as empty directories only during bootstrap/);
+    assert.match(workflow, /Do not invent sample query logs, sample receipts, or mark any phase\/plan complete during bootstrap/);
+  });
+
+  test('hunt:new-program uses program-specific environment-first templates', () => {
+    const command = readRepoFile('commands', 'hunt', 'new-program.md');
+
+    assert.match(command, /hunt-program-huntmap\.md/);
+    assert.match(command, /Drive the conversation through `\.planning\/environment\/ENVIRONMENT\.md` and the operator toolchain/);
+    assert.match(command, /Create `\.planning\/QUERIES\/` and `\.planning\/RECEIPTS\/` as empty directories only/);
+  });
+
+  test('program huntmap template starts with environment and tool validation phases', () => {
+    const template = readRepoFile('thrunt-god', 'templates', 'hunt-program-huntmap.md');
+
+    assert.match(template, /Phase 1: Environment Mapping/);
+    assert.match(template, /Phase 2: Tool & Access Validation/);
+    assert.match(template, /Do not write sample query logs or sample receipts during bootstrap/);
+    assert.match(template, /\| 1\. Environment Mapping \| 0\/1 \| Not started \| - \|/);
+  });
+
+  test('environment map template captures tooling and access inventory', () => {
+    const template = readRepoFile('thrunt-god', 'templates', 'environment-map.md');
+
+    assert.match(template, /## Tooling And Access/);
+    assert.match(template, /\| Workflow \| Tool \| Auth \/ Access Path \| Notes \|/);
   });
 
   test('hunt command docs center hunt artifacts only', () => {

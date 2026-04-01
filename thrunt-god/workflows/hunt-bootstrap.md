@@ -72,8 +72,16 @@ node "$HOME/.claude/thrunt-god/bin/thrunt-tools.cjs" generate-claude-md
 
 Program mode defaults:
 
-- Focus on reusable environment context, telemetry inventory, and repeatable hunt loops
-- Make Phase 1 about baseline/environment mapping if that knowledge is missing
+- Focus on reusable environment context, telemetry inventory, tool access, and repeatable hunt loops
+- Start with `.planning/environment/ENVIRONMENT.md` and capture the operator toolchain before creating later hunt phases
+- Use an environment-first huntmap:
+  1. Environment Mapping
+  2. Tool & Access Validation
+  3. Hypothesis Library
+  4. Pilot Hunts
+  5. Publish Cadence
+- Create `.planning/QUERIES/` and `.planning/RECEIPTS/` as empty directories only during bootstrap
+- Do not invent sample query logs, sample receipts, or mark any phase/plan complete during bootstrap
 
 Case mode defaults:
 

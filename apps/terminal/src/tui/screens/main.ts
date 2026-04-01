@@ -7,6 +7,7 @@ import type { Screen, ScreenContext, Command, HomeFocus } from "../types"
 import { renderBox } from "../components/box"
 import { centerBlock, centerLine, joinColumns } from "../components/layout"
 import { fitString } from "../components/types"
+import { buildSearchCatalog, rankSearchResults, type SearchSuggestion } from "../search"
 import type { AppState } from "../types"
 
 const HOME_ACTION_COLUMNS = 2
@@ -31,14 +32,6 @@ interface HomeSearchResult {
   action?: (ctx: ScreenContext) => void
 }
 
-interface SuggestionSpec {
-  id: string
-  title: string
-  subtitle: string
-  preview: string
-  copyText: string
-}
-
 const HOME_ACTIONS: HomeAction[] = [
   { key: "W", label: "Watch", description: "live stream", action: (ctx) => ctx.app.setScreen("hunt-watch") },
   { key: "Q", label: "Query", description: "hunt query", action: (ctx) => ctx.app.setScreen("hunt-query") },
@@ -50,7 +43,7 @@ const HOME_ACTIONS: HomeAction[] = [
   { key: "C", label: "Connectors", description: "status", action: (ctx) => ctx.app.setScreen("hunt-connectors") },
 ]
 
-const SEARCH_SUGGESTIONS: SuggestionSpec[] = [
+const SEARCH_SUGGESTIONS: SearchSuggestion[] = [
   {
     id: "prompt:watch-summary",
     title: "Prompt: summarize suspicious watch activity",
@@ -115,34 +108,6 @@ function renderHealthStatus(state: AppState): string {
   }
 
   return `${THEME.warning}degraded${THEME.reset} ${THEME.dim}${unavailable.length}/${items.length} down${THEME.reset}`
-}
-
-function normalizeSearchQuery(value: string): string {
-  return value.trim().toLowerCase()
-}
-
-function tokenizeQuery(value: string): string[] {
-  return normalizeSearchQuery(value)
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean)
-}
-
-function scoreText(queryTokens: string[], ...parts: string[]): number {
-  if (queryTokens.length === 0) {
-    return 0
-  }
-
-  const haystack = parts.join(" ").toLowerCase()
-  let score = 0
-  for (const token of queryTokens) {
-    if (haystack.includes(token)) {
-      score += haystack.startsWith(token) ? 4 : 2
-    } else {
-      return -1
-    }
-  }
-  return score
 }
 
 function findHomeActionIndex(key: string): number {
@@ -323,199 +288,61 @@ function renderHomeActionRows(ctx: ScreenContext, contentWidth: number): string[
   return rows
 }
 
+function toHomeSearchResult(
+  result: {
+    id: string
+    kind: "suggestion" | "report" | "finding" | "event" | "phase" | "pack" | "connector"
+    title: string
+    subtitle: string
+    preview: string
+    copyText?: string
+    target: { screen: string; selectedIndex?: number; nlQuery?: string } | null
+  },
+  ctx: ScreenContext,
+): HomeSearchResult {
+  const target = result.target
+  return {
+    id: result.id,
+    kind: result.kind === "event" ? "finding" : result.kind,
+    title: result.title,
+    subtitle: result.subtitle,
+    preview: result.preview,
+    copyText: result.copyText,
+    action: target
+      ? () => {
+          if (target.nlQuery) {
+            ctx.state.hunt.query.mode = "nl"
+            ctx.state.hunt.query.nlInput = target.nlQuery
+          }
+          ctx.app.setScreen(target.screen as never)
+        }
+      : undefined,
+  }
+}
+
 function buildSearchResults(ctx: ScreenContext): HomeSearchResult[] {
   if (ctx.state.homeSearch.hydrated || ctx.state.homeSearch.results.length > 0) {
-    return ctx.state.homeSearch.results.map((result) => ({
-      ...(() => {
-        const target = result.target
-        return {
-          action: target
-            ? () => {
-                if (target.nlQuery) {
-                  ctx.state.hunt.query.mode = "nl"
-                  ctx.state.hunt.query.nlInput = target.nlQuery
-                }
-                ctx.app.setScreen(target.screen as never)
-              }
-            : undefined,
-        }
-      })(),
-      id: result.id,
-      kind:
-        result.kind === "event"
-          ? "finding"
-          : result.kind,
-      title: result.title,
-      subtitle: result.subtitle,
-      preview: result.preview,
-      copyText: result.copyText,
-    }))
+    return ctx.state.homeSearch.results.map((result) => toHomeSearchResult(result, ctx))
   }
 
-  const query = ctx.state.promptBuffer
-  const queryTokens = tokenizeQuery(query)
-  if (queryTokens.length === 0) {
+  if (!ctx.state.promptBuffer.trim()) {
     return []
   }
 
-  const results: Array<{ score: number; result: HomeSearchResult }> = []
-  const push = (result: HomeSearchResult, ...parts: string[]) => {
-    const score = scoreText(queryTokens, ...parts)
-    if (score >= 0) {
-      results.push({ score, result })
-    }
-  }
+  const ranked = rankSearchResults(
+    ctx.state.promptBuffer,
+    buildSearchCatalog({
+      historyEntries: ctx.state.hunt.reportHistory.entries,
+      investigation: ctx.state.hunt.investigation,
+      phases: ctx.state.thruntPhases.analysis,
+      packs: ctx.state.thruntPacks.packs,
+      connectors: ctx.state.thruntConnectors.connectors,
+      suggestions: SEARCH_SUGGESTIONS,
+    }),
+    SEARCH_RESULT_LIMIT,
+  )
 
-  for (const action of HOME_ACTIONS) {
-    push(
-      {
-        id: `action:${action.key}`,
-        kind: "action",
-        title: action.label,
-        subtitle: action.description,
-        preview: `Open the ${action.label.toLowerCase()} surface.`,
-        action: action.action,
-      },
-      action.label,
-      action.description,
-    )
-  }
-
-  for (const suggestion of SEARCH_SUGGESTIONS) {
-    push(
-      {
-        id: suggestion.id,
-        kind: "suggestion",
-        title: suggestion.title,
-        subtitle: suggestion.subtitle,
-        preview: suggestion.preview,
-        copyText: suggestion.copyText,
-      },
-      suggestion.title,
-      suggestion.subtitle,
-      suggestion.preview,
-      suggestion.copyText,
-    )
-  }
-
-  const phase = ctx.state.thruntContext?.phase
-  if (phase?.name || phase?.number) {
-    const title = `Phase ${phase.number ?? "?"}`
-    const subtitle = phase.name ?? "Current phase"
-    push(
-      {
-        id: "phase:current",
-        kind: "phase",
-        title,
-        subtitle,
-        preview: ctx.state.thruntContext?.status ?? "Current hunt phase status.",
-        copyText: `${title}: ${subtitle}`,
-        action: () => ctx.app.setScreen("hunt-phases"),
-      },
-      title,
-      subtitle,
-      ctx.state.thruntContext?.status ?? "",
-    )
-  }
-
-  for (const finding of ctx.state.hunt.investigation.findings.slice(0, SEARCH_RESULT_LIMIT)) {
-    push(
-      {
-        id: `finding:${finding}`,
-        kind: "finding",
-        title: finding,
-        subtitle: "current investigation finding",
-        preview: `Copy this finding into another agent tab or jump into the evidence/report surfaces for more detail.`,
-        copyText: finding,
-        action: () => ctx.app.setScreen("hunt-evidence"),
-      },
-      finding,
-      "investigation finding",
-    )
-  }
-
-  for (const entry of ctx.state.hunt.reportHistory.entries.slice(0, SEARCH_RESULT_LIMIT)) {
-    push(
-      {
-        id: `report:${entry.reportId}`,
-        kind: "report",
-        title: entry.title,
-        subtitle: `${entry.severity} severity exported report`,
-        preview: entry.summary,
-        copyText: `${entry.title}\n\n${entry.summary}`,
-        action: () => ctx.app.setScreen("hunt-report-history"),
-      },
-      entry.title,
-      entry.summary,
-      entry.severity,
-      entry.investigationOrigin ?? "",
-    )
-  }
-
-  for (const connector of ctx.state.thruntConnectors.connectors.slice(0, SEARCH_RESULT_LIMIT)) {
-    push(
-      {
-        id: `connector:${connector.id}`,
-        kind: "connector",
-        title: connector.name,
-        subtitle: connector.id,
-        preview: `Auth: ${connector.auth_types.join(", ") || "none"}  Datasets: ${connector.supported_datasets.join(", ") || "unknown"}`,
-        copyText: connector.id,
-        action: () => ctx.app.setScreen("hunt-connectors"),
-      },
-      connector.name,
-      connector.id,
-      connector.auth_types.join(" "),
-      connector.supported_datasets.join(" "),
-      connector.supported_languages.join(" "),
-    )
-  }
-
-  for (const pack of ctx.state.thruntPacks.packs.slice(0, SEARCH_RESULT_LIMIT)) {
-    push(
-      {
-        id: `pack:${pack.id}`,
-        kind: "pack",
-        title: pack.title,
-        subtitle: `${pack.kind} pack`,
-        preview: `Pack ${pack.id} • connectors: ${pack.required_connectors.join(", ") || "none"} • datasets: ${pack.supported_datasets.join(", ") || "none"}`,
-        copyText: pack.id,
-        action: () => ctx.app.setScreen("hunt-packs"),
-      },
-      pack.title,
-      pack.id,
-      pack.kind,
-      pack.required_connectors.join(" "),
-      pack.supported_datasets.join(" "),
-    )
-  }
-
-  for (const event of ctx.state.agentActivity.events.slice(0, SEARCH_RESULT_LIMIT)) {
-    push(
-      {
-        id: `activity:${event.id}`,
-        kind: "activity",
-        title: event.title,
-        subtitle: `${event.kind} • ${event.actor ?? "agent"}`,
-        preview: event.body ?? "Recent agent activity from the external watch bridge.",
-        copyText: [event.title, event.body].filter(Boolean).join("\n\n"),
-        action: () => ctx.app.setScreen("hunt-watch"),
-      },
-      event.title,
-      event.body ?? "",
-      event.kind,
-      event.actor ?? "",
-    )
-  }
-
-  results.sort((left, right) => {
-    if (right.score !== left.score) {
-      return right.score - left.score
-    }
-    return left.result.title.localeCompare(right.result.title)
-  })
-
-  return results.slice(0, SEARCH_RESULT_LIMIT).map((entry) => entry.result)
+  return ranked.map(({ score: _score, ...result }) => toHomeSearchResult(result, ctx))
 }
 
 function searchSelection(results: HomeSearchResult[], selected: number): HomeSearchResult | null {
@@ -908,6 +735,7 @@ function handleMainInput(key: string, ctx: ScreenContext): boolean {
   if ((key === "\x7f" || key === "\b") && state.homeFocus === "prompt") {
     state.promptBuffer = state.promptBuffer.slice(0, -1)
     state.homeActionIndex = 0
+    ctx.app.refreshHomeSearch?.()
     app.render()
     return true
   }
@@ -915,6 +743,7 @@ function handleMainInput(key: string, ctx: ScreenContext): boolean {
   if (key === "\x15" && state.homeFocus === "prompt") {
     state.promptBuffer = ""
     state.homeActionIndex = 0
+    ctx.app.refreshHomeSearch?.()
     app.render()
     return true
   }
@@ -923,6 +752,7 @@ function handleMainInput(key: string, ctx: ScreenContext): boolean {
     if (state.promptBuffer.trim().length > 0 && state.homeFocus === "prompt") {
       state.promptBuffer = ""
       state.homeActionIndex = 0
+      ctx.app.refreshHomeSearch?.()
     } else if (state.homeFocus === "actions") {
       setHomeFocus(state, "prompt")
     } else {
@@ -936,6 +766,7 @@ function handleMainInput(key: string, ctx: ScreenContext): boolean {
   if (printableChunk) {
     state.promptBuffer += printableChunk
     state.homeActionIndex = 0
+    ctx.app.refreshHomeSearch?.()
     app.render()
     return true
   }

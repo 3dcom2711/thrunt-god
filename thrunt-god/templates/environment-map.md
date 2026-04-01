@@ -22,6 +22,15 @@ Template for `.planning/environment/ENVIRONMENT.md`.
 | Cloud | [AWS/Azure/GCP] | [days] | [how to query] | [blind spots / caveats] |
 | Email | [provider] | [days] | [how to query] | [blind spots / caveats] |
 
+## Tooling And Access
+
+| Workflow | Tool | Auth / Access Path | Notes |
+|----------|------|--------------------|-------|
+| Primary query console | [tool] | [SSO / API key / role] | [owner, caveats] |
+| Secondary / fallback path | [tool] | [method] | [when to use it] |
+| Case / ticketing system | [tool] | [method] | [handoff expectations] |
+| Reporting / publish path | [tool] | [method] | [where final output lands] |
+
 ## Key Entities And Pivots
 
 - **User identifiers:** [UPN, SID, email, employee ID]

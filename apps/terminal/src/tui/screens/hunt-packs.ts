@@ -149,7 +149,7 @@ async function loadPacks(ctx: ScreenContext) {
   ctx.app.render()
 
   try {
-    const packs = await listPacks()
+    const packs = await listPacks({ cwd: ctx.app.getCwd() })
     ps.packs = packs
     ps.tree = { offset: 0, selected: 0, expandedKeys: new Set() }
     ps.loading = false

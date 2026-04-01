@@ -22,6 +22,7 @@ import { stripAnsi } from "../src/tui/components/types"
 class TestApp implements AppController {
   public screen: InputMode | null = null
   public copied: { text: string; label?: string } | null = null
+  public refreshHomeSearchCount = 0
 
   setScreen(mode: InputMode): void {
     this.screen = mode
@@ -52,6 +53,9 @@ class TestApp implements AppController {
   async copyText(text: string, label?: string): Promise<boolean> {
     this.copied = { text, label }
     return true
+  }
+  refreshHomeSearch(): void {
+    this.refreshHomeSearchCount += 1
   }
 }
 
@@ -180,5 +184,50 @@ describe("search-first main screen", () => {
     await Bun.sleep(0)
 
     expect(app.copied).toEqual({ text: "Copy me", label: "Suspicious OAuth grants" })
+  })
+
+  test("refreshes shared home search state as the prompt changes", () => {
+    const app = new TestApp()
+    const state = createState()
+    const screen = createMainScreen([])
+    const ctx = createContext(state, app)
+
+    expect(screen.handleInput("o", ctx)).toBe(true)
+    expect(state.promptBuffer).toBe("o")
+    expect(app.refreshHomeSearchCount).toBe(1)
+
+    expect(screen.handleInput("\x7f", ctx)).toBe(true)
+    expect(state.promptBuffer).toBe("")
+    expect(app.refreshHomeSearchCount).toBe(2)
+  })
+
+  test("uses shared search ranking for fallback results before hydration", () => {
+    const app = new TestApp()
+    const state = createState()
+    state.promptBuffer = "oauth-consent"
+    state.hunt.reportHistory.entries = [
+      {
+        version: 1,
+        reportId: "report-1",
+        title: "Suspicious OAuth consent grants",
+        severity: "high",
+        summary: "Broad delegated scopes were granted to a new app.",
+        exportedAt: "2026-03-31T10:00:00Z",
+        reportCreatedAt: "2026-03-31T09:45:00Z",
+        investigationOrigin: "query",
+        markdownPath: "/tmp/oauth.md",
+        jsonPath: "/tmp/oauth.json",
+        merkleRoot: "abc123",
+        evidenceCount: 3,
+        trace: { receiptIds: [], auditEventIds: [], sessionIds: [], eventSources: ["receipt"] },
+        traceability: {
+          auditStatus: "degraded",
+          exportAuditEventId: "evt-1",
+        },
+      },
+    ]
+
+    const output = stripAnsi(createMainScreen([]).render(createContext(state, app)))
+    expect(output).toContain("Suspicious OAuth consent grants")
   })
 })
