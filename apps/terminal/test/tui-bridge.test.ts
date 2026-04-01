@@ -100,6 +100,23 @@ describe("tui bridge", () => {
     expect(events[1]?.kind).toBe("log")
   })
 
+  test("fills event defaults even when id and timestamp are explicitly undefined", async () => {
+    fixtureDir = await mkdtemp(join(tmpdir(), "thrunt-god-bridge-"))
+
+    await appendUiBridgeEvent(fixtureDir, {
+      kind: "status",
+      source: "claude",
+      message: "ready",
+      id: undefined,
+      timestamp: undefined,
+    } as any)
+
+    const events = await readUiBridgeEvents(fixtureDir)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.id).toBeTruthy()
+    expect(events[0]?.timestamp).toBeTruthy()
+  })
+
   test("ignores malformed lines and reduces the latest snapshot", () => {
     const status = parseUiBridgeEventLine(
       JSON.stringify({

@@ -231,7 +231,32 @@ async function dispatchMultiTenant(baseSpec, targets, registry, config, options 
   const errors = [];
   const pending = [...targets];
   const active = new Map(); // promise -> target
+  const finalizedTargets = new Set();
   let globalTimedOut = false;
+
+  function getTargetKey(target) {
+    return `${target.tenant_id}\u0000${target.connector_id}\u0000${target.profile_name}`;
+  }
+
+  function pushTenantResultOnce(target, result) {
+    const key = getTargetKey(target);
+    if (finalizedTargets.has(key)) return false;
+    finalizedTargets.add(key);
+    tenantResults.push(result);
+    return true;
+  }
+
+  function createTimeoutResult(target) {
+    return {
+      tenant_id: target.tenant_id,
+      display_name: target.display_name,
+      status: 'timeout',
+      envelope: null,
+      artifacts: null,
+      error: { code: 'GLOBAL_TIMEOUT', message: `Global dispatch timeout (${globalTimeoutMs}ms) exceeded` },
+      timing: { started_at: null, completed_at: nowIso(), duration_ms: 0 },
+    };
+  }
 
   // Create an abort mechanism for global timeout
   let globalTimer;
@@ -255,10 +280,10 @@ async function dispatchMultiTenant(baseSpec, targets, registry, config, options 
         // Wrap execution: result goes into tenantResults, wrapper signals completion
         const wrapper = executeTenantQuery(tenantSpec, target, registry, config, options)
           .then(result => {
-            tenantResults.push(result);
+            pushTenantResultOnce(target, result);
           })
           .catch(err => {
-            tenantResults.push({
+            pushTenantResultOnce(target, {
               tenant_id: target.tenant_id,
               display_name: target.display_name,
               status: 'error',
@@ -289,26 +314,10 @@ async function dispatchMultiTenant(baseSpec, targets, registry, config, options 
     // If global timeout fired, mark remaining pending and active as timeout
     if (globalTimedOut) {
       for (const target of pending) {
-        tenantResults.push({
-          tenant_id: target.tenant_id,
-          display_name: target.display_name,
-          status: 'timeout',
-          envelope: null,
-          artifacts: null,
-          error: { code: 'GLOBAL_TIMEOUT', message: `Global dispatch timeout (${globalTimeoutMs}ms) exceeded` },
-          timing: { started_at: null, completed_at: nowIso(), duration_ms: 0 },
-        });
+        pushTenantResultOnce(target, createTimeoutResult(target));
       }
       for (const [, target] of active) {
-        tenantResults.push({
-          tenant_id: target.tenant_id,
-          display_name: target.display_name,
-          status: 'timeout',
-          envelope: null,
-          artifacts: null,
-          error: { code: 'GLOBAL_TIMEOUT', message: `Global dispatch timeout (${globalTimeoutMs}ms) exceeded` },
-          timing: { started_at: null, completed_at: nowIso(), duration_ms: 0 },
-        });
+        pushTenantResultOnce(target, createTimeoutResult(target));
       }
     }
   } finally {

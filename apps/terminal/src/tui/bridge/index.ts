@@ -80,9 +80,9 @@ export function resolveUiBridgePaths(cwd: string): { directory: string; eventsPa
 
 function ensureEventDefaults(event: UiBridgeEventInput & Partial<Pick<UiBridgeEvent, "id" | "timestamp">>): UiBridgeEvent {
   return UiBridgeEventSchema.parse({
+    ...event,
     id: event.id ?? crypto.randomUUID(),
     timestamp: event.timestamp ?? new Date().toISOString(),
-    ...event,
   })
 }
 

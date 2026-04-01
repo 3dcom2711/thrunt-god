@@ -757,9 +757,10 @@ export class TUIApp implements AppController {
     const query = this.state.inputMode === "main" ? this.state.promptBuffer : ""
     const ranked = rankSearchResults(query, catalog, 8)
     this.state.homeSearch.results = ranked.map(({ score: _score, ...result }) => result)
-    if (this.state.homeSearch.selectedIndex >= this.state.homeSearch.results.length) {
-      this.state.homeSearch.selectedIndex = Math.max(0, this.state.homeSearch.results.length - 1)
-    }
+    const maxIndex = Math.max(0, this.state.homeSearch.results.length - 1)
+    const clampedIndex = Math.min(Math.max(this.state.homeActionIndex, 0), maxIndex)
+    this.state.homeActionIndex = clampedIndex
+    this.state.homeSearch.selectedIndex = clampedIndex
   }
 
   refreshHomeSearch(force = false): void {

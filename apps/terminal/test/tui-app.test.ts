@@ -153,6 +153,26 @@ describe("TUIApp", () => {
     expect(app.state.homeSearch.results[0]?.title).not.toContain("OAuth")
   })
 
+  test("refreshHomeSearch clamps the live home cursor when results shrink", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
+    await writeFakeThruntTools(tempDir)
+
+    const app = new TUIApp(tempDir) as any
+    await app.refreshHomeData(true)
+
+    app.state.inputMode = "main"
+    app.state.promptBuffer = "oauth"
+    app.state.homeActionIndex = 99
+    app.state.homeSearch.selectedIndex = 99
+
+    app.refreshHomeSearch()
+
+    expect(app.state.homeSearch.results.length).toBeGreaterThan(0)
+    const lastIndex = app.state.homeSearch.results.length - 1
+    expect(app.state.homeActionIndex).toBe(lastIndex)
+    expect(app.state.homeSearch.selectedIndex).toBe(lastIndex)
+  })
+
   test("copyText skips failing clipboard probes and uses the resolved backend path", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
 
