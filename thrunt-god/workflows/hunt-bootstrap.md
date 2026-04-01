@@ -33,10 +33,10 @@ Collect:
 
 If `--auto` is present, use the supplied brief as the primary source of truth and ask only where ambiguity would materially change the hunt.
 
-If `--skeleton` is present, or the user says they want to populate the hunt docs manually:
+Bootstrap should default to honest scaffolding:
 
 - Ask only for the minimum naming/context needed to label the artifacts
-- If the name and high-level goal are already supplied, do not ask additional follow-up questions
+- If the name and high-level goal are already supplied, do not ask additional follow-up questions before writing the bootstrap docs
 - Scaffold the hunt docs without filling in unknown environment facts
 - Use `TBD` or `Unknown` for missing tenants, tools, query paths, retention windows, entities, owners, and constraints
 - Do not simulate example telemetry, example detections, example query logs, or example receipts
@@ -87,7 +87,7 @@ Program mode defaults:
 - Create `.planning/QUERIES/` and `.planning/RECEIPTS/` as empty directories only during bootstrap
 - Do not invent sample query logs, sample receipts, or mark any phase/plan complete during bootstrap
 - Do not invent or simulate environment details. Unknown values must remain `TBD` until the operator confirms them.
-- Even in skeleton mode, write the full bootstrap artifact set, including `STATE.md` and `environment/ENVIRONMENT.md`, before any optional wrap-up work
+- Write the full bootstrap artifact set, including `STATE.md` and `environment/ENVIRONMENT.md`, before any optional wrap-up work
 
 Case mode defaults:
 
@@ -123,7 +123,7 @@ Also include hunt-specific sections for:
 - Current confidence
 - Open blockers
 
-When facts are still unknown, keep the skeleton honest:
+When facts are still unknown, keep the scaffold honest:
 
 - `MISSION.md`, `HYPOTHESES.md`, `SUCCESS_CRITERIA.md`, and `STATE.md` may contain `TBD` placeholders
 - `ENVIRONMENT.md` should stay scaffold-only rather than being populated with guessed products or invented retention windows

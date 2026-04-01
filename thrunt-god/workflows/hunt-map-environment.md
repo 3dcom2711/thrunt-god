@@ -31,12 +31,11 @@ Capture:
 - Known blind spots
 - Escalation and containment owners
 
-If critical data is missing, ask for it directly.
+Ask direct follow-up questions only when the user is clearly mapping the environment live and the missing fact would materially change the current map.
+If confirmed facts are sparse or absent:
 
-If `--skeleton` is present, or the user says they want to populate the environment file themselves:
-
-- If no confirmed facts are available yet, do not ask placeholder follow-up questions
-- Do not ask the agent to infer the environment from generic threat-hunting patterns
+- Do not ask placeholder follow-up questions
+- Do not infer the environment from generic threat-hunting patterns
 - Create or refresh `.planning/environment/ENVIRONMENT.md` as a blank scaffold using `TBD` markers
 - Preserve any confirmed facts already present
 - Stop after listing the open questions the operator still needs to answer
@@ -44,7 +43,7 @@ If `--skeleton` is present, or the user says they want to populate the environme
 ## 2. Write `.planning/environment/ENVIRONMENT.md`
 
 Use the template. Favor analyst-useful detail over prose.
-In skeleton/manual mode, keep the structure and `TBD` markers intact rather than filling them with guessed values.
+Keep the structure and `TBD` markers intact whenever facts are unconfirmed.
 
 ## 3. Sync Hunt Artifacts
 

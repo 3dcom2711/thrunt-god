@@ -7,7 +7,7 @@ Template for `.planning/environment/ENVIRONMENT.md`.
 ```markdown
 # Environment Map
 
-> Replace `TBD` only with confirmed operator-provided facts. Do not fill unknown fields with guessed products, retention windows, or simulated telemetry.
+> Replace `TBD` only with confirmed facts from workspace evidence or operator input. Do not fill unknown fields with guessed products, retention windows, or simulated telemetry.
 
 ## Scope
 
