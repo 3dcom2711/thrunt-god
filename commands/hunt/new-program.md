@@ -43,14 +43,13 @@ Unknown environment facts, tools, retention windows, and owners must remain `TBD
 @~/.claude/thrunt-god/templates/hunt-program-huntmap.md
 @~/.claude/thrunt-god/templates/hunt-state.md
 @~/.claude/thrunt-god/templates/environment-map.md
-@~/.claude/thrunt-god/templates/query-log.md
-@~/.claude/thrunt-god/templates/receipt.md
 </execution_context>
 
 <process>
 Execute the bootstrap workflow from @~/.claude/thrunt-god/workflows/hunt-bootstrap.md in program mode.
 Drive the conversation through `.planning/environment/ENVIRONMENT.md` and the operator toolchain before defining later hunt phases.
 Create `.planning/QUERIES/` and `.planning/RECEIPTS/` as empty directories only.
+Do not load query-log or receipt templates during bootstrap; those belong to `/hunt:run` after real execution begins.
 Default behavior is scaffold-first: write confirmed facts only and leave unknown values as `TBD` instead of inventing sample content.
 Write the hunt artifacts directly.
 Preserve any existing user-authored content unless the user explicitly wants a reset.

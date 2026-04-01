@@ -38,8 +38,9 @@ Bootstrap should default to honest scaffolding:
 - Ask only for the minimum naming/context needed to label the artifacts
 - If the name and high-level goal are already supplied, do not ask additional follow-up questions before writing the bootstrap docs
 - Scaffold the hunt docs without filling in unknown environment facts
-- Use `TBD` or `Unknown` for missing tenants, tools, query paths, retention windows, entities, owners, and constraints
+- Use `TBD` for missing tenants, tools, query paths, retention windows, entities, owners, and constraints
 - Do not simulate example telemetry, example detections, example query logs, or example receipts
+- Do not leave bracketed template placeholders in the generated files; replace every unknown with `TBD`
 - Keep the environment-mapping phase present but not started
 
 If `--pack <id>` is present:
@@ -85,6 +86,7 @@ Program mode defaults:
   4. Pilot Hunts
   5. Publish Cadence
 - Create `.planning/QUERIES/` and `.planning/RECEIPTS/` as empty directories only during bootstrap
+- Do not create query-log or receipt files during bootstrap
 - Do not invent sample query logs, sample receipts, or mark any phase/plan complete during bootstrap
 - Do not invent or simulate environment details. Unknown values must remain `TBD` until the operator confirms them.
 - Write the full bootstrap artifact set, including `STATE.md` and `environment/ENVIRONMENT.md`, before any optional wrap-up work

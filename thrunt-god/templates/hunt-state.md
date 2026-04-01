@@ -9,17 +9,17 @@ Template for `.planning/STATE.md`.
 
 ## Mission Reference
 
-See: .planning/MISSION.md (updated [date])
+See: .planning/MISSION.md (updated TBD)
 
-**Active signal:** [one line]
-**Current focus:** [current phase]
+**Active signal:** TBD
+**Current focus:** TBD
 
 ## Current Position
 
-Phase: [X] of [Y] ([Phase name])
-Plan: [A] of [B] in current phase
-Status: [Ready to plan | Planning | Ready to execute | In progress | Awaiting validation | Ready to publish]
-Last activity: [YYYY-MM-DD] - [what happened]
+Phase: TBD
+Plan: TBD
+Status: TBD
+Last activity: TBD
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -27,29 +27,25 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Current Scope
 
-- [time window]
-- [entities]
-- [tenants]
+- TBD
 
 ### Data Sources In Play
 
-- [EDR]
-- [SIEM]
-- [identity]
+- TBD
 
 ### Confidence
 
-[Current confidence with one-sentence reason]
+TBD
 
 ### Blockers
 
-- [active blocker]
+- TBD
 
 ## Session Continuity
 
-Last session: [YYYY-MM-DD HH:MM]
-Stopped at: [last completed action]
-Resume file: [path or None]
+Last session: TBD
+Stopped at: TBD
+Resume file: TBD
 ```
 
 </template>

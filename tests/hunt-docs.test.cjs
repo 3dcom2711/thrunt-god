@@ -29,7 +29,10 @@ describe('hunt docs', () => {
     assert.match(workflow, /Do not invent sample query logs, sample receipts, or mark any phase\/plan complete during bootstrap/);
     assert.match(workflow, /Bootstrap should default to honest scaffolding/);
     assert.match(workflow, /do not ask additional follow-up questions/);
+    assert.match(workflow, /Use `TBD` for missing tenants, tools, query paths, retention windows, entities, owners, and constraints/);
     assert.match(workflow, /Do not simulate example telemetry, example detections, example query logs, or example receipts/);
+    assert.match(workflow, /Do not leave bracketed template placeholders in the generated files; replace every unknown with `TBD`/);
+    assert.match(workflow, /Do not create query-log or receipt files during bootstrap/);
     assert.match(workflow, /Write the full bootstrap artifact set, including `STATE\.md` and `environment\/ENVIRONMENT\.md`/);
     assert.match(workflow, /Do not generate or update `CLAUDE\.md` during hunt bootstrap/);
     assert.doesNotMatch(workflow, /generate-claude-md/);
@@ -43,7 +46,10 @@ describe('hunt docs', () => {
     assert.match(command, /hunt-program-huntmap\.md/);
     assert.match(command, /Drive the conversation through `\.planning\/environment\/ENVIRONMENT\.md` and the operator toolchain/);
     assert.match(command, /Create `\.planning\/QUERIES\/` and `\.planning\/RECEIPTS\/` as empty directories only/);
+    assert.match(command, /Do not load query-log or receipt templates during bootstrap/);
     assert.match(command, /Default behavior is scaffold-first/);
+    assert.doesNotMatch(command, /query-log\.md/);
+    assert.doesNotMatch(command, /receipt\.md/);
     assert.doesNotMatch(command, /--skeleton/);
   });
 
@@ -52,8 +58,28 @@ describe('hunt docs', () => {
 
     assert.match(template, /Phase 1: Environment Mapping/);
     assert.match(template, /Phase 2: Tool & Access Validation/);
+    assert.match(template, /# Huntmap: TBD/);
+    assert.doesNotMatch(template, /\[Program Name\]/);
     assert.match(template, /Do not write sample query logs or sample receipts during bootstrap/);
     assert.match(template, /\| 1\. Environment Mapping \| 0\/1 \| Not started \| - \|/);
+  });
+
+  test('hunt:new-case also stays scaffold-first and avoids runtime query template bias', () => {
+    const command = readRepoFile('commands', 'hunt', 'new-case.md');
+    const template = readRepoFile('thrunt-god', 'templates', 'huntmap.md');
+
+    assert.match(command, /Bootstrap should only scaffold the case/);
+    assert.match(command, /Create `\.planning\/QUERIES\/` and `\.planning\/RECEIPTS\/` as empty directories only/);
+    assert.match(command, /Do not load query-log or receipt templates during bootstrap/);
+    assert.match(command, /Default behavior is scaffold-first/);
+    assert.doesNotMatch(command, /query-log\.md/);
+    assert.doesNotMatch(command, /receipt\.md/);
+
+    assert.match(template, /# Huntmap: TBD/);
+    assert.match(template, /Clarify the incoming signal, scope boundaries, and known constraints/);
+    assert.match(template, /Execute the first evidence collection wave/);
+    assert.doesNotMatch(template, /\[Observable condition\]/);
+    assert.doesNotMatch(template, /\[Brief description\]/);
   });
 
   test('environment map template captures tooling and access inventory', () => {
@@ -92,6 +118,15 @@ describe('hunt docs', () => {
     assert.match(hypothesesTemplate, /Unknown facts should remain `TBD`/);
     assert.match(successTemplate, /Unknown gates should remain `TBD`/);
     assert.match(stateTemplate, /Unknown state details should remain `TBD`/);
+    assert.match(missionTemplate, /# Mission: TBD/);
+    assert.match(hypothesesTemplate, /# Hypotheses: TBD/);
+    assert.match(successTemplate, /# Success Criteria: TBD/);
+    assert.match(stateTemplate, /Phase: TBD/);
+    assert.doesNotMatch(missionTemplate, /\[Program or Case Name\]/);
+    assert.doesNotMatch(missionTemplate, /Example:/);
+    assert.doesNotMatch(hypothesesTemplate, /### HYP-01:/);
+    assert.doesNotMatch(successTemplate, /\[Observable condition\]/);
+    assert.doesNotMatch(stateTemplate, /\[time window\]/);
     assert.match(helpWorkflow, /\/hunt:new-program \[--auto\]/);
     assert.match(helpWorkflow, /\/hunt:map-environment/);
     assert.doesNotMatch(helpWorkflow, /--skeleton/);

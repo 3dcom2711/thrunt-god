@@ -5,11 +5,11 @@ Template for `.planning/HUNTMAP.md` when bootstrapping `/hunt:new-program`.
 <template>
 
 ```markdown
-# Huntmap: [Program Name]
+# Huntmap: TBD
 
 ## Overview
 
-[One paragraph describing the reusable environment knowledge, telemetry coverage, and repeatable hunt loops this program will build.]
+TBD
 
 ## Phases
 

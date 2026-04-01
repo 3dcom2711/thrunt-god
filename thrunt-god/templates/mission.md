@@ -5,51 +5,51 @@ Template for `.planning/MISSION.md` - the source-of-truth description of the hun
 <template>
 
 ```markdown
-# Mission: [Program or Case Name]
+# Mission: TBD
 
-**Mode:** [program | case]
-**Opened:** [date]
-**Owner:** [team or analyst]
-**Status:** [Active | Parked | Closed]
+**Mode:** TBD
+**Opened:** TBD
+**Owner:** TBD
+**Status:** Active
 
 ## Signal
 
-[What triggered this effort: detection, telemetry anomaly, intel lead, leadership request, analyst suspicion]
+TBD
 
 ## Desired Outcome
 
-[What useful end-state looks like. Example: confirm or disprove compromised identities tied to impossible-travel alerts.]
+TBD
 
 ## Scope
 
-- **Time window:** [start - end]
-- **Entities:** [users, hosts, apps, mailboxes, tenants, subscriptions]
-- **Environment:** [production, corp, cloud accounts, business unit]
-- **Priority surfaces:** [EDR, SIEM, identity, cloud, email, network]
+- **Time window:** TBD
+- **Entities:** TBD
+- **Environment:** TBD
+- **Priority surfaces:** TBD
 
 ## Operating Constraints
 
-- **Access:** [what can and cannot be queried]
-- **Retention:** [known retention limits]
-- **Legal / privacy:** [constraints that shape collection]
-- **Operational:** [business impact, timing, staffing]
+- **Access:** TBD
+- **Retention:** TBD
+- **Legal / privacy:** TBD
+- **Operational:** TBD
 
 ## Working Theory
 
-[Current framing of the threat or operational question. Short and explicit.]
+TBD
 
 ## Success Definition
 
-[What counts as a useful answer even if the result is benign or inconclusive.]
+TBD
 
 ## Key Decisions
 
 | Decision | Reason | Date |
 |----------|--------|------|
-| [Choice] | [Why] | [YYYY-MM-DD] |
+| TBD | TBD | TBD |
 
 ---
-*Last updated: [date] after [trigger]*
+*Last updated: TBD*
 ```
 
 </template>

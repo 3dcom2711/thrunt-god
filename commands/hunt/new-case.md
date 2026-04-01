@@ -29,6 +29,9 @@ These hunt-native artifacts are the source of truth for the case.
 - `.planning/QUERIES/`
 - `.planning/RECEIPTS/`
 
+Bootstrap should only scaffold the case. Do not seed sample queries, sample receipts, or completed phases.
+Unknown scope details, data sources, operators, and constraints must remain `TBD` unless the operator confirms them.
+
 **After this command:** Run `/hunt:shape-hypothesis` or `/hunt:plan 1`.
 </objective>
 
@@ -39,13 +42,14 @@ These hunt-native artifacts are the source of truth for the case.
 @~/.claude/thrunt-god/templates/success-criteria.md
 @~/.claude/thrunt-god/templates/huntmap.md
 @~/.claude/thrunt-god/templates/hunt-state.md
-@~/.claude/thrunt-god/templates/query-log.md
-@~/.claude/thrunt-god/templates/receipt.md
 </execution_context>
 
 <process>
 Execute the bootstrap workflow from @~/.claude/thrunt-god/workflows/hunt-bootstrap.md in case mode.
 Focus on turning the input signal into a scoped case with explicit hypotheses, data sources, and evidence requirements.
 When `--pack <id>` is present, use the pack bootstrap output as the default case skeleton and ask only for the missing pack parameters or signal-specific overrides.
+Create `.planning/QUERIES/` and `.planning/RECEIPTS/` as empty directories only.
+Do not load query-log or receipt templates during bootstrap; those belong to `/hunt:run` after real execution begins.
+Default behavior is scaffold-first: write confirmed facts only and leave unknown values as `TBD` instead of inventing sample content.
 Write the hunt artifacts directly.
 </process>
