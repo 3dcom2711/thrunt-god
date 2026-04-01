@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { ThruntPlanningWatcher } from "../src/thrunt-bridge/watcher"
 import { TUIApp } from "../src/tui/app"
 
 let tempDir: string | null = null
@@ -89,5 +90,29 @@ describe("TUIApp", () => {
     }
 
     expect(recomputeCount).toBe(0)
+  })
+
+  test("startBackgroundServices wires the planning watcher to the app cwd", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
+    await mkdir(join(tempDir, ".planning"), { recursive: true })
+
+    const app = new TUIApp(tempDir) as any
+    app.startMcpServer = async () => {}
+    app.runHealthcheck = () => {}
+    app.refreshHomeData = async () => {}
+    app.refreshAgentActivity = async () => {}
+
+    const originalStart = ThruntPlanningWatcher.prototype.start
+    ThruntPlanningWatcher.prototype.start = () => {}
+    try {
+      app.startBackgroundServices()
+      expect(app.thruntWatcher?.opts).toEqual({ cwd: tempDir })
+    } finally {
+      ThruntPlanningWatcher.prototype.start = originalStart
+      if (app.refreshTimer) {
+        clearInterval(app.refreshTimer)
+        app.refreshTimer = null
+      }
+    }
   })
 })

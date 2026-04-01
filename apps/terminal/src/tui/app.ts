@@ -372,6 +372,7 @@ export class TUIApp implements AppController {
         this.state.thruntContext = ctx
         this.render()
       },
+      { cwd: this.cwd },
     )
     this.thruntWatcher.start()
   }
