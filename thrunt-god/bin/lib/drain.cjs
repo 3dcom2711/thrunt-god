@@ -689,6 +689,107 @@ function createDrainParser(options = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Reduce: batch event clustering
+// ---------------------------------------------------------------------------
+
+/**
+ * Reduce an array of normalized events into template clusters using Drain.
+ *
+ * Each event is expected to have at minimum { id, title?, summary? }.
+ * Content is extracted as `[title, summary].filter(Boolean).join(' ')`.
+ * Events with no title and no summary are skipped.
+ *
+ * @param {Array<{ id: string, title?: string, summary?: string }>} events
+ * @param {object} [options] -- passed through to createDrainParser
+ * @param {number} [options.similarity_threshold] -- maps to DrainParser simTh
+ * @param {number} [options.depth]
+ * @param {number} [options.maxClusters]
+ * @returns {{ algorithm: string, config: object, cluster_count: number, clusters: Array, reduced_at: string }}
+ */
+function reduceEvents(events, options = {}) {
+  const emptyResult = {
+    algorithm: 'drain',
+    config: {},
+    cluster_count: 0,
+    clusters: [],
+    reduced_at: new Date().toISOString(),
+  };
+
+  if (!Array.isArray(events) || events.length === 0) {
+    return emptyResult;
+  }
+
+  // Map similarity_threshold to simTh for DrainParser
+  const parserOptions = { ...options };
+  if (parserOptions.similarity_threshold != null && parserOptions.simTh == null) {
+    parserOptions.simTh = parserOptions.similarity_threshold;
+  }
+
+  const parser = createDrainParser(parserOptions);
+
+  // Phase 1: Feed all events to the parser to build clusters.
+  // Track event content for phase 2 matching (template merges change cluster IDs).
+  /** @type {Array<{ eventId: string, content: string }>} */
+  const eventContents = [];
+
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    const content = [event.title, event.summary].filter(Boolean).join(' ');
+    if (content === '') continue;
+
+    const result = parser.addMessage(content);
+    if (!result) continue;
+
+    eventContents.push({ eventId: event.id, content });
+  }
+
+  // Phase 2: Use match() to assign each event to its final cluster ID.
+  // This is necessary because template merges can change cluster IDs after
+  // initial addMessage calls.
+  /** @type {Map<string, string[]>} */
+  const eventIdsMap = new Map();
+
+  for (let i = 0; i < eventContents.length; i++) {
+    const { eventId, content } = eventContents[i];
+    const matched = parser.match(content);
+    if (!matched) continue;
+
+    const cid = matched.clusterId;
+    if (!eventIdsMap.has(cid)) {
+      eventIdsMap.set(cid, []);
+    }
+    eventIdsMap.get(cid).push(eventId);
+  }
+
+  // Build output clusters from parser state
+  const parserClusters = parser.getClusters();
+  const clusters = [];
+
+  for (const [id, info] of parserClusters) {
+    const ids = eventIdsMap.get(id) || [];
+    clusters.push({
+      template_id: id,
+      template: info.template,
+      count: info.size,
+      sample_event_id: ids[0] || null,
+      event_ids: ids.slice(0, 100),
+    });
+  }
+
+  return {
+    algorithm: 'drain',
+    config: {
+      depth: parser.depth,
+      similarity_threshold: parser.simTh,
+      max_clusters: parser.maxClusters,
+    },
+    cluster_count: clusters.length,
+    clusters,
+    reduced_at: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -696,4 +797,5 @@ module.exports = {
   createDrainParser,
   DrainParser,
   DEFAULT_SECURITY_MASKS,
+  reduceEvents,
 };
