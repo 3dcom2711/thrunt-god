@@ -139,6 +139,53 @@ describe("TUIApp", () => {
     expect(app.state.agentActivity.error).toBeNull()
   })
 
+  test("copyText skips failing clipboard probes and uses the resolved backend path", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
+
+    const app = new TUIApp(tempDir) as any
+    app.render = () => {}
+
+    const whichCalls: string[] = []
+    const spawnCalls: string[][] = []
+    const originalWhich = Bun.which
+    const originalSpawn = Bun.spawn
+
+    ;(Bun as any).which = (command: string) => {
+      whichCalls.push(command)
+      if (command === "pbcopy") {
+        throw new Error("missing")
+      }
+      if (command === "wl-copy") {
+        return null
+      }
+      if (command === "xclip") {
+        return "/usr/bin/xclip"
+      }
+      return null
+    }
+    ;(Bun as any).spawn = (command: string[]) => {
+      spawnCalls.push(command)
+      return {
+        stdin: {
+          write() {},
+          end() {},
+        },
+        exited: Promise.resolve(0),
+      }
+    }
+
+    try {
+      const copied = await app.copyText("hunt report", "report")
+      expect(copied).toBe(true)
+      expect(whichCalls).toEqual(["pbcopy", "wl-copy", "xclip"])
+      expect(spawnCalls).toEqual([["/usr/bin/xclip", "-selection", "clipboard"]])
+      expect(app.state.statusMessage).toContain("Copied")
+    } finally {
+      ;(Bun as any).which = originalWhich
+      ;(Bun as any).spawn = originalSpawn
+    }
+  })
+
   test("startBackgroundServices wires the planning watcher to the app cwd", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "thrunt-god-tui-app-"))
     await mkdir(join(tempDir, ".planning"), { recursive: true })

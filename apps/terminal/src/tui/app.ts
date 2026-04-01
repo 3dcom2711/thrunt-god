@@ -159,6 +159,15 @@ function createInitialExternalState() {
   }
 }
 
+function resolveClipboardCommand(command: string, args: string[] = []): string[] | null {
+  try {
+    const resolved = Bun.which(command)
+    return resolved ? [resolved, ...args] : null
+  } catch {
+    return null
+  }
+}
+
 // =============================================================================
 // TUI APP
 // =============================================================================
@@ -1216,12 +1225,16 @@ export class TUIApp implements AppController {
 
   async copyText(text: string, label = "selection"): Promise<boolean> {
     const candidates = [
-      Bun.which("pbcopy") ? ["pbcopy"] : null,
-      Bun.which("wl-copy") ? ["wl-copy"] : null,
-      Bun.which("xclip") ? ["xclip", "-selection", "clipboard"] : null,
-    ].filter((value): value is string[] => Array.isArray(value))
+      () => resolveClipboardCommand("pbcopy"),
+      () => resolveClipboardCommand("wl-copy"),
+      () => resolveClipboardCommand("xclip", ["-selection", "clipboard"]),
+    ]
 
-    for (const command of candidates) {
+    for (const candidate of candidates) {
+      const command = candidate()
+      if (!command) {
+        continue
+      }
       try {
         const proc = Bun.spawn(command, {
           stdin: "pipe",
