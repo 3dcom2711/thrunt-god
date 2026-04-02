@@ -49,12 +49,12 @@ Plans:
   3. User sees an activity feed showing chronological artifact changes with diff badges indicating what was added, modified, or removed
   4. On extension activation after a previous session, user receives a "what changed since last session" notification summarizing artifact modifications
   5. User sees evidence integrity health indicator that bridges v2.0 diagnostics (warning/error counts) into the dashboard without opening the Problems panel
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
-- [ ] 13-03: TBD
+- [x] 13-01-PLAN.md -- Extension-host layer: ViewModel, store derivation, panel provider, session diff, toast notification
+- [ ] 13-02-PLAN.md -- Dashboard webview: all card sections, phase rail, activity feed, health card CSS and JSX
+- [ ] 13-03-PLAN.md -- Unit tests for store derivation and session diff logic
 
 ### Phase 14: Evidence Board
 **Goal**: Users can visualize the entire evidence structure of their hunt -- hypothesis-to-receipt-to-query lineage as an interactive graph, and hypothesis-vs-receipt coverage as a color-coded matrix -- to identify gaps, trace chains, and spot weak evidence
@@ -110,8 +110,8 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 12/12 | Complete | 2026-04-01 |
 | 7-11 | v2.0 | 12/12 | Complete | 2026-04-02 |
-| 12. Design System & Webview Infrastructure | 3/3 | Complete   | 2026-04-02 | - |
-| 13. Hunt Overview Dashboard | v3.0 | 0/3 | Not started | - |
+| 12. Design System & Webview Infrastructure | 3/3 | Complete    | 2026-04-02 | - |
+| 13. Hunt Overview Dashboard | v3.0 | 1/3 | In progress | - |
 | 14. Evidence Board | v3.0 | 0/3 | Not started | - |
 | 15. Query Analysis Upgrades | v3.0 | 0/2 | Not started | - |
 | 16. Cross-Surface Navigation | v3.0 | 0/2 | Not started | - |

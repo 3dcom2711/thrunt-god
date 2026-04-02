@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Investigative Surfaces
-status: completed
-stopped_at: Completed 12-03-PLAN.md -- Phase 12 complete
-last_updated: "2026-04-02T21:40:14.487Z"
-last_activity: 2026-04-02 -- Completed 12-03 webview entry points and multi-entry build
+status: in-progress
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-04-02T22:22:01.000Z"
+last_activity: 2026-04-02 -- Completed 13-01 extension-host layer for Hunt Overview
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 3
-  completed_plans: 3
-  percent: 100
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Surface hidden structure in security telemetry so interesting events become obvious without requiring hunters to write perfect queries
-**Current focus:** v3.0 Investigative Surfaces -- Phase 12 complete
+**Current focus:** v3.0 Investigative Surfaces -- Phase 13 in progress
 
 ## Current Position
 
-Phase: 12 of 16 (Shared Design System & Webview Infrastructure)
-Plan: 3 of 3 complete
-Status: Phase Complete
-Last activity: 2026-04-02 -- Completed 12-03 webview entry points and multi-entry build
+Phase: 13 of 16 (Hunt Overview Dashboard)
+Plan: 1 of 3 complete
+Status: In Progress
+Last activity: 2026-04-02 -- Completed 13-01 extension-host layer for Hunt Overview
 
-Progress: [██████████] 100%
+Progress: [███-------] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27 (v1.0: 12, v2.0: 12, v3.0: 3)
+- Total plans completed: 28 (v1.0: 12, v2.0: 12, v3.0: 4)
 
 **By Phase:**
 
@@ -45,6 +45,7 @@ Progress: [██████████] 100%
 | 7-11 (v2.0) | 12 | -- | -- |
 | 12 (v3.0) | 3 | 11min | 3.7min |
 | Phase 12 P03 | 4min | 2 tasks | 7 files |
+| Phase 13 P01 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,9 @@ Recent decisions affecting current work:
 - [v3.0-12-03]: webview:ready postMessage on mount in every stub to match drain-template-viewer handshake pattern
 - [Phase 12]: createWebviewConfig helper pattern for DRY multi-entry esbuild (one line to add a new webview)
 - [Phase 12]: webview:ready postMessage on mount in every stub to match drain-template-viewer handshake pattern
+- [Phase 13]: context parameter not stored on HuntOverviewPanel (only needed in constructor for extensionUri)
+- [Phase 13]: retainContextWhenHidden omitted; webview uses setState/getState pattern
+- [Phase 13]: Session hashes stored via dispose() handler on context.subscriptions
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ No blocking issues.
 
 ## Session Continuity
 
-Last session: 2026-04-02T21:40:09.191Z
-Stopped at: Completed 12-03-PLAN.md -- Phase 12 complete
+Last session: 2026-04-02T22:22:01Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None
