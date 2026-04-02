@@ -1,3 +1,19 @@
+// --- Session diff types (DASH-07, DASH-08) ---
+
+export type DiffKind = 'added' | 'modified' | 'removed';
+
+export interface ActivityFeedEntry {
+  artifactType: string;   // 'query' | 'receipt' | 'hypothesis' | 'mission' | etc.
+  artifactId: string;     // e.g. "QRY-20260329-001"
+  diffKind: DiffKind;
+  timestamp: string;      // ISO date string (from file mtime or store event)
+}
+
+export interface SessionDiff {
+  entries: ActivityFeedEntry[];
+  summary: string;         // e.g. "2 added, 1 modified since last session"
+}
+
 // View model: data the host sends to the Hunt Overview webview
 export interface HuntOverviewViewModel {
   // Mission identity
@@ -35,14 +51,20 @@ export interface HuntOverviewViewModel {
   // Confidence
   confidence: string;
 
-  // Blockers
-  blockers: string[];
+  // Blockers (structured with timestamps per locked decision)
+  blockers: Array<{ text: string; timestamp: string }>;
 
   // Diagnostics health bridge
   diagnosticsHealth: {
     warnings: number;
     errors: number;
   };
+
+  // Activity feed (DASH-08)
+  activityFeed: ActivityFeedEntry[];
+
+  // Session diff (DASH-07)
+  sessionDiff: SessionDiff | null;
 }
 
 export interface HuntOverviewBootData {

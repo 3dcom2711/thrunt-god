@@ -10,6 +10,7 @@ import type {
   HuntMap,
   HuntState,
 } from './types';
+import type { HuntOverviewViewModel, SessionDiff } from '../shared/hunt-overview';
 import { parseArtifact } from './parsers/index';
 import { extractFrontmatter } from './parsers/base';
 import { resolveArtifactType } from './watcher';
@@ -167,6 +168,13 @@ export class HuntDataStore implements vscode.Disposable {
   }
 
   /**
+   * Resolve the absolute path for a parsed artifact by ID.
+   */
+  getArtifactPath(id: string): string | undefined {
+    return this.artifactPaths.get(id)?.filePath;
+  }
+
+  /**
    * Get all receipts linked to a specific query.
    * Uses the receiptToQueries cross-index.
    */
@@ -229,6 +237,127 @@ export class HuntDataStore implements vscode.Disposable {
    */
   frontmatterCacheSize(): number {
     return this._frontmatterCache.size;
+  }
+
+  // ---------------------------------------------------------------------------
+  // ViewModel derivation
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Derive a complete HuntOverviewViewModel from current store state.
+   * The panel host calls this on init, store change, and diagnostics change.
+   */
+  deriveHuntOverview(
+    diagnosticsHealth: { warnings: number; errors: number },
+    sessionDiff: SessionDiff | null
+  ): HuntOverviewViewModel {
+    const hunt = this.getHunt();
+
+    if (!hunt) {
+      return {
+        mission: null,
+        phases: [],
+        currentPhase: 0,
+        verdicts: { supported: 0, disproved: 0, inconclusive: 0, open: 0 },
+        evidence: { receipts: 0, queries: 0, templates: 0 },
+        confidence: 'Unknown',
+        blockers: [],
+        diagnosticsHealth,
+        activityFeed: sessionDiff ? sessionDiff.entries : [],
+        sessionDiff,
+      };
+    }
+
+    // Mission
+    const mission =
+      hunt.mission.status === 'loaded'
+        ? {
+            signal: hunt.mission.data.signal,
+            owner: hunt.mission.data.owner,
+            opened: hunt.mission.data.opened,
+            mode: hunt.mission.data.mode,
+            focus: hunt.mission.data.scope,
+          }
+        : null;
+
+    // Phases
+    const phases =
+      hunt.huntMap.status === 'loaded'
+        ? hunt.huntMap.data.phases.map((p) => ({
+            number: p.number,
+            name: p.name,
+            status: p.status,
+          }))
+        : [];
+
+    // Current phase
+    const currentPhase =
+      hunt.state.status === 'loaded' ? hunt.state.data.phase : 0;
+
+    // Verdicts
+    const verdicts = { supported: 0, disproved: 0, inconclusive: 0, open: 0 };
+    if (hunt.hypotheses.status === 'loaded') {
+      const allHypotheses = [
+        ...hunt.hypotheses.data.active,
+        ...hunt.hypotheses.data.parked,
+        ...hunt.hypotheses.data.disproved,
+      ];
+      for (const h of allHypotheses) {
+        const s = h.status.toLowerCase();
+        if (s === 'supported') {
+          verdicts.supported += 1;
+        } else if (s === 'disproved') {
+          verdicts.disproved += 1;
+        } else if (s === 'inconclusive') {
+          verdicts.inconclusive += 1;
+        } else {
+          verdicts.open += 1;
+        }
+      }
+    }
+
+    // Evidence counts
+    const queries = this.getQueries();
+    const receipts = this.getReceipts();
+    let totalTemplates = 0;
+    for (const [, result] of queries) {
+      if (result.status === 'loaded') {
+        totalTemplates += result.data.templateCount;
+      }
+    }
+    const evidence = {
+      receipts: receipts.size,
+      queries: queries.size,
+      templates: totalTemplates,
+    };
+
+    // Confidence
+    const confidence =
+      hunt.state.status === 'loaded' ? hunt.state.data.confidence : 'Unknown';
+
+    // Blockers
+    let blockers: Array<{ text: string; timestamp: string }> = [];
+    if (hunt.state.status === 'loaded' && hunt.state.data.blockers) {
+      const lastActivity = hunt.state.data.lastActivity;
+      blockers = hunt.state.data.blockers
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((text) => ({ text, timestamp: lastActivity }));
+    }
+
+    return {
+      mission,
+      phases,
+      currentPhase,
+      verdicts,
+      evidence,
+      confidence,
+      blockers,
+      diagnosticsHealth,
+      activityFeed: sessionDiff ? sessionDiff.entries : [],
+      sessionDiff,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -538,10 +667,10 @@ export class HuntDataStore implements vscode.Disposable {
     for (const [id, info] of this.artifactPaths) {
       if (info.type !== 'receipt') continue;
 
-      const cached = this._bodyCache.get(info.filePath);
-      if (!cached || cached.result.status !== 'loaded') continue;
+      const parsed = this.getCachedOrParse(id, info.filePath, info.type);
+      if (!parsed || parsed.status !== 'loaded') continue;
 
-      const receipt = cached.result.data as Receipt;
+      const receipt = parsed.data as Receipt;
       if (receipt.relatedQueries && receipt.relatedQueries.length > 0) {
         this.receiptToQueries.set(id, [...receipt.relatedQueries]);
       }
@@ -565,13 +694,8 @@ export class HuntDataStore implements vscode.Disposable {
    * receipts linking to that query.
    */
   private buildQueryToPhaseIndex(): void {
-    const huntMapInfo = this.artifactPaths.get('HUNTMAP');
-    if (!huntMapInfo) return;
-
-    const cached = this._bodyCache.get(huntMapInfo.filePath);
-    if (!cached || cached.result.status !== 'loaded') return;
-
-    const huntMap = cached.result.data as HuntMap;
+    const huntMap = this.getArtifactByType<HuntMap>('huntmap', 'HUNTMAP');
+    if (!huntMap || huntMap.status !== 'loaded') return;
 
     // For each phase, find all queries that link through receipts
     // Phase N: look at receipts whose content links to that phase's scope
@@ -597,7 +721,7 @@ export class HuntDataStore implements vscode.Disposable {
       // Try to determine phase from the receipt hypotheses
       // Hypotheses are numbered HYP-01, HYP-02, etc.
       // Phase assignments can be inferred from the huntmap phases order
-      if (huntMap.phases.length > 0 && linkedReceipts.length > 0) {
+      if (huntMap.data.phases.length > 0 && linkedReceipts.length > 0) {
         // Use the first linked receipt's hypothesis to infer phase
         for (const receiptId of linkedReceipts) {
           const hypIds = this.receiptToHypotheses.get(receiptId);
@@ -605,7 +729,7 @@ export class HuntDataStore implements vscode.Disposable {
             // Map hypothesis ID to phase number
             // HYP-01 -> phase 1, HYP-02 -> phase 2, etc.
             const hypNum = parseInt(hypIds[0].replace(/\D/g, ''), 10);
-            if (!isNaN(hypNum) && hypNum >= 1 && hypNum <= huntMap.phases.length) {
+            if (!isNaN(hypNum) && hypNum >= 1 && hypNum <= huntMap.data.phases.length) {
               this.queryToPhase.set(queryId, hypNum);
               break;
             }
