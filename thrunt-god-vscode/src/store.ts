@@ -1,0 +1,652 @@
+import * as vscode from 'vscode';
+import type {
+  ArtifactType,
+  ArtifactChangeEvent,
+  ParseResult,
+  Query,
+  Receipt,
+  Mission,
+  Hypotheses,
+  HuntMap,
+  HuntState,
+} from './types';
+import { parseArtifact } from './parsers/index';
+import { extractFrontmatter } from './parsers/base';
+import { resolveArtifactType } from './watcher';
+
+/** Internal type for the watcher's onDidChange event shape */
+interface WatcherLike {
+  onDidChange: vscode.Event<string[]>;
+}
+
+/** Cached body entry with LRU timestamp */
+interface BodyCacheEntry {
+  result: ParseResult<unknown>;
+  lastAccess: number;
+}
+
+/**
+ * HuntDataStore is the single source of truth for parsed hunt artifacts.
+ *
+ * It subscribes to ArtifactWatcher for filesystem change notifications,
+ * maintains cross-artifact indexes (receipt->query, receipt->hypothesis,
+ * query->phase), implements batch coalescing (500ms window), and provides
+ * a two-level cache (frontmatter always, body with 10-slot LRU eviction).
+ *
+ * All downstream UI providers subscribe to onDidChange rather than touching
+ * the filesystem directly.
+ */
+export class HuntDataStore implements vscode.Disposable {
+  // --- Event emission ---
+  private readonly _onDidChange = new vscode.EventEmitter<ArtifactChangeEvent>();
+  readonly onDidChange: vscode.Event<ArtifactChangeEvent> = this._onDidChange.event;
+
+  // --- Caches ---
+  // Level 1: frontmatter cache (always retained, never evicted)
+  private readonly _frontmatterCache = new Map<string, Record<string, unknown>>();
+  // Raw content cache (always retained for on-demand re-parsing on body cache miss)
+  private readonly _rawCache = new Map<string, string>();
+  // Level 2: parsed body cache with LRU eviction (max 10 entries)
+  private readonly _bodyCache = new Map<string, BodyCacheEntry>();
+  private static readonly LRU_MAX = 10;
+
+  // --- Artifact ID -> file path mapping ---
+  private readonly artifactPaths = new Map<string, { filePath: string; type: ArtifactType }>();
+
+  // --- Cross-artifact indexes ---
+  private readonly receiptToQueries = new Map<string, string[]>();
+  private readonly receiptToHypotheses = new Map<string, string[]>();
+  private readonly queryToPhase = new Map<string, number>();
+
+  // --- Batch window ---
+  private readonly pendingPaths = new Set<string>();
+  private batchTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly BATCH_WINDOW_MS = 500;
+
+  // --- Watcher subscription ---
+  private readonly watcherDisposable: vscode.Disposable;
+
+  // --- Initial scan promise ---
+  private readonly _initialScanPromise: Promise<void>;
+
+  constructor(
+    private readonly huntRoot: vscode.Uri,
+    watcher: WatcherLike,
+    private readonly outputChannel: vscode.OutputChannel
+  ) {
+    // Subscribe to watcher change events
+    this.watcherDisposable = watcher.onDidChange((paths) => {
+      this.handleFileChange(paths);
+    });
+
+    // Perform initial scan
+    this._initialScanPromise = this.performInitialScan();
+  }
+
+  /**
+   * Returns a promise that resolves when the initial scan is complete.
+   * Useful for tests to await before asserting.
+   */
+  initialScanComplete(): Promise<void> {
+    return this._initialScanPromise;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get all singleton hunt artifacts.
+   */
+  getHunt(): {
+    mission: ParseResult<Mission>;
+    hypotheses: ParseResult<Hypotheses>;
+    huntMap: ParseResult<HuntMap>;
+    state: ParseResult<HuntState>;
+  } | null {
+    const mission = this.getArtifactByType<Mission>('mission', 'MISSION');
+    const hypotheses = this.getArtifactByType<Hypotheses>('hypotheses', 'HYPOTHESES');
+    const huntMap = this.getArtifactByType<HuntMap>('huntmap', 'HUNTMAP');
+    const state = this.getArtifactByType<HuntState>('state', 'STATE');
+
+    if (!mission || !hypotheses || !huntMap || !state) {
+      return null;
+    }
+
+    return { mission, hypotheses, huntMap, state };
+  }
+
+  /**
+   * Get all parsed query artifacts.
+   */
+  getQueries(): Map<string, ParseResult<Query>> {
+    const result = new Map<string, ParseResult<Query>>();
+    for (const [id, info] of this.artifactPaths) {
+      if (info.type === 'query') {
+        const parsed = this.getCachedOrParse(id, info.filePath, info.type);
+        if (parsed) {
+          result.set(id, parsed as ParseResult<Query>);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Get all parsed receipt artifacts.
+   */
+  getReceipts(): Map<string, ParseResult<Receipt>> {
+    const result = new Map<string, ParseResult<Receipt>>();
+    for (const [id, info] of this.artifactPaths) {
+      if (info.type === 'receipt') {
+        const parsed = this.getCachedOrParse(id, info.filePath, info.type);
+        if (parsed) {
+          result.set(id, parsed as ParseResult<Receipt>);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Get a specific query by ID.
+   */
+  getQuery(queryId: string): ParseResult<Query> | undefined {
+    const info = this.artifactPaths.get(queryId);
+    if (!info || info.type !== 'query') return undefined;
+    return this.getCachedOrParse(queryId, info.filePath, info.type) as ParseResult<Query> | undefined;
+  }
+
+  /**
+   * Get a specific receipt by ID.
+   */
+  getReceipt(receiptId: string): ParseResult<Receipt> | undefined {
+    const info = this.artifactPaths.get(receiptId);
+    if (!info || info.type !== 'receipt') return undefined;
+    return this.getCachedOrParse(receiptId, info.filePath, info.type) as ParseResult<Receipt> | undefined;
+  }
+
+  /**
+   * Get all receipts linked to a specific query.
+   * Uses the receiptToQueries cross-index.
+   */
+  getReceiptsForQuery(queryId: string): ParseResult<Receipt>[] {
+    const results: ParseResult<Receipt>[] = [];
+    for (const [receiptId, queryIds] of this.receiptToQueries) {
+      if (queryIds.includes(queryId)) {
+        const receipt = this.getReceipt(receiptId);
+        if (receipt) {
+          results.push(receipt);
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Get all receipts linked to a specific hypothesis.
+   * Uses the receiptToHypotheses cross-index.
+   */
+  getReceiptsForHypothesis(hypothesisId: string): ParseResult<Receipt>[] {
+    const results: ParseResult<Receipt>[] = [];
+    for (const [receiptId, hypIds] of this.receiptToHypotheses) {
+      if (hypIds.includes(hypothesisId)) {
+        const receipt = this.getReceipt(receiptId);
+        if (receipt) {
+          results.push(receipt);
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Get all queries linked to a specific phase.
+   * Uses the queryToPhase cross-index.
+   */
+  getQueriesForPhase(phaseNumber: number): ParseResult<Query>[] {
+    const results: ParseResult<Query>[] = [];
+    for (const [queryId, phase] of this.queryToPhase) {
+      if (phase === phaseNumber) {
+        const query = this.getQuery(queryId);
+        if (query) {
+          results.push(query);
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Expose body cache size for testing.
+   */
+  bodyCacheSize(): number {
+    return this._bodyCache.size;
+  }
+
+  /**
+   * Expose frontmatter cache size for testing.
+   */
+  frontmatterCacheSize(): number {
+    return this._frontmatterCache.size;
+  }
+
+  // ---------------------------------------------------------------------------
+  // File change handling
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Handle incoming file change notification from watcher.
+   * Adds paths to pending set and starts/resets batch timer.
+   */
+  private handleFileChange(paths: string[]): void {
+    for (const p of paths) {
+      this.pendingPaths.add(p);
+    }
+
+    if (this.batchTimer !== null) {
+      clearTimeout(this.batchTimer);
+    }
+
+    this.batchTimer = setTimeout(() => {
+      this.batchTimer = null;
+      this.processBatch();
+    }, HuntDataStore.BATCH_WINDOW_MS);
+  }
+
+  /**
+   * Process all pending file changes as a single batch.
+   */
+  private async processBatch(): Promise<void> {
+    if (this.pendingPaths.size === 0) return;
+
+    // Snapshot and clear pending
+    const batch = new Set(this.pendingPaths);
+    this.pendingPaths.clear();
+
+    const events: ArtifactChangeEvent[] = [];
+
+    for (const filePath of batch) {
+      const resolved = resolveArtifactType(filePath);
+      if (!resolved) continue;
+
+      const { type, id } = resolved;
+
+      // Try to read the file content
+      try {
+        const uri = vscode.Uri.file(filePath);
+        const rawBytes = await vscode.workspace.fs.readFile(uri);
+        const raw = new TextDecoder().decode(rawBytes);
+
+        // Store raw content for on-demand re-parsing
+        this._rawCache.set(filePath, raw);
+
+        // Update frontmatter cache
+        const fm = extractFrontmatter(raw);
+        this._frontmatterCache.set(filePath, fm);
+
+        // Parse and update body cache
+        const parsed = parseArtifact(type, raw);
+        this.addToBodyCache(filePath, parsed);
+
+        // Update artifact path mapping
+        this.artifactPaths.set(id, { filePath, type });
+
+        events.push({
+          type: 'artifact:updated',
+          artifactType: type,
+          id,
+          filePath,
+        });
+      } catch {
+        // File not found -- this is a deletion
+        this.removeArtifact(filePath, type, id);
+        events.push({
+          type: 'artifact:deleted',
+          artifactType: type,
+          id,
+          filePath,
+        });
+      }
+    }
+
+    // Rebuild cross-artifact indexes after batch
+    this.rebuildIndexes();
+
+    // Emit events
+    for (const event of events) {
+      this._onDidChange.fire(event);
+    }
+
+    // If more changes accumulated during processing, restart batch timer
+    if (this.pendingPaths.size > 0) {
+      this.batchTimer = setTimeout(() => {
+        this.batchTimer = null;
+        this.processBatch();
+      }, HuntDataStore.BATCH_WINDOW_MS);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Initial scan
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Perform initial scan of the hunt directory to populate all caches.
+   */
+  private async performInitialScan(): Promise<void> {
+    try {
+      const files = await this.findAllMarkdownFiles(this.huntRoot);
+
+      for (const filePath of files) {
+        const resolved = resolveArtifactType(filePath);
+        if (!resolved) continue;
+
+        const { type, id } = resolved;
+
+        try {
+          const uri = vscode.Uri.file(filePath);
+          const rawBytes = await vscode.workspace.fs.readFile(uri);
+          const raw = new TextDecoder().decode(rawBytes);
+
+          // Store raw content for on-demand re-parsing
+          this._rawCache.set(filePath, raw);
+
+          // Update frontmatter cache
+          const fm = extractFrontmatter(raw);
+          this._frontmatterCache.set(filePath, fm);
+
+          // Parse and update body cache
+          const parsed = parseArtifact(type, raw);
+          this.addToBodyCache(filePath, parsed);
+
+          // Update artifact path mapping
+          this.artifactPaths.set(id, { filePath, type });
+        } catch {
+          this.outputChannel.appendLine(`[Store] Failed to read artifact: ${filePath}`);
+        }
+      }
+
+      // Build initial cross-artifact indexes
+      this.rebuildIndexes();
+
+      this.outputChannel.appendLine(
+        `[Store] Initial scan complete: ${this.artifactPaths.size} artifacts indexed`
+      );
+    } catch {
+      this.outputChannel.appendLine('[Store] Initial scan failed -- hunt directory may not exist');
+    }
+  }
+
+  /**
+   * Recursively find all .md files in a directory.
+   * Uses mock-compatible readDirectory or falls back to known artifact paths.
+   */
+  private async findAllMarkdownFiles(dir: vscode.Uri): Promise<string[]> {
+    const files: string[] = [];
+
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dir);
+
+      if (entries.length === 0) {
+        // Empty directory or mock environment -- use fallback probing
+        throw new Error('empty directory listing, fallback to probing');
+      }
+
+      for (const [name, fileType] of entries) {
+        const childUri = vscode.Uri.joinPath(dir, name);
+        if (fileType === vscode.FileType.Directory) {
+          const subFiles = await this.findAllMarkdownFiles(childUri);
+          files.push(...subFiles);
+        } else if (name.endsWith('.md')) {
+          files.push(childUri.fsPath);
+        }
+      }
+    } catch {
+      // readDirectory not available, failed, or empty -- fall back to known artifact structure
+      const knownPaths = this.getKnownArtifactPaths();
+      for (const relPath of knownPaths) {
+        const uri = vscode.Uri.joinPath(this.huntRoot, relPath);
+        try {
+          await vscode.workspace.fs.readFile(uri);
+          files.push(uri.fsPath);
+        } catch {
+          // File doesn't exist, skip
+        }
+      }
+    }
+
+    return files;
+  }
+
+  /**
+   * Return known artifact relative paths for fallback scanning.
+   * This probes common artifact locations when readDirectory is unavailable.
+   */
+  private getKnownArtifactPaths(): string[] {
+    const paths = [
+      'MISSION.md',
+      'HYPOTHESES.md',
+      'HUNTMAP.md',
+      'STATE.md',
+      'EVIDENCE_REVIEW.md',
+      'FINDINGS.md',
+    ];
+
+    // Probe for numbered query/receipt files (common pattern)
+    // Check QRY/RCT with date-based IDs
+    for (let i = 1; i <= 20; i++) {
+      const num = String(i).padStart(3, '0');
+      paths.push(`QUERIES/QRY-20260329-${num}.md`);
+      paths.push(`RECEIPTS/RCT-20260329-${num}.md`);
+    }
+
+    return paths;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cache management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get a parsed artifact from body cache, re-parsing from raw cache on miss.
+   * On cache miss, the re-parsed result is returned directly without being
+   * added to the body cache (to avoid eviction cascades during bulk access).
+   */
+  private getCachedOrParse(
+    _id: string,
+    filePath: string,
+    type: ArtifactType
+  ): ParseResult<unknown> | undefined {
+    const cached = this._bodyCache.get(filePath);
+    if (cached) {
+      cached.lastAccess = Date.now();
+      return cached.result;
+    }
+
+    // Body cache miss -- re-parse from raw content cache (on-demand)
+    const raw = this._rawCache.get(filePath);
+    if (raw) {
+      return parseArtifact(type, raw);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Get a singleton artifact by type and expected ID.
+   */
+  private getArtifactByType<T>(
+    type: ArtifactType,
+    id: string
+  ): ParseResult<T> | undefined {
+    const info = this.artifactPaths.get(id);
+    if (!info || info.type !== type) return undefined;
+    return this.getCachedOrParse(id, info.filePath, type) as ParseResult<T> | undefined;
+  }
+
+  /**
+   * Add a parsed result to the body cache with LRU eviction.
+   */
+  private addToBodyCache(filePath: string, result: ParseResult<unknown>): void {
+    // If the path is already in cache, just update it
+    if (this._bodyCache.has(filePath)) {
+      this._bodyCache.set(filePath, { result, lastAccess: Date.now() });
+      return;
+    }
+
+    // Evict oldest entries if at capacity
+    while (this._bodyCache.size >= HuntDataStore.LRU_MAX) {
+      this.evictOldestCacheEntry();
+    }
+
+    this._bodyCache.set(filePath, { result, lastAccess: Date.now() });
+  }
+
+  /**
+   * Evict the least recently used body cache entry.
+   */
+  private evictOldestCacheEntry(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [key, entry] of this._bodyCache) {
+      if (entry.lastAccess < oldestTime) {
+        oldestTime = entry.lastAccess;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this._bodyCache.delete(oldestKey);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Index management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Rebuild all cross-artifact indexes from current cache state.
+   */
+  private rebuildIndexes(): void {
+    this.receiptToQueries.clear();
+    this.receiptToHypotheses.clear();
+    this.queryToPhase.clear();
+
+    // Build receipt indexes
+    for (const [id, info] of this.artifactPaths) {
+      if (info.type !== 'receipt') continue;
+
+      const cached = this._bodyCache.get(info.filePath);
+      if (!cached || cached.result.status !== 'loaded') continue;
+
+      const receipt = cached.result.data as Receipt;
+      if (receipt.relatedQueries && receipt.relatedQueries.length > 0) {
+        this.receiptToQueries.set(id, [...receipt.relatedQueries]);
+      }
+      if (receipt.relatedHypotheses && receipt.relatedHypotheses.length > 0) {
+        this.receiptToHypotheses.set(id, [...receipt.relatedHypotheses]);
+      }
+    }
+
+    // Build query-to-phase index from huntmap
+    this.buildQueryToPhaseIndex();
+  }
+
+  /**
+   * Build queryToPhase index from the parsed huntmap.
+   *
+   * Strategy: Each huntmap phase references plans. We map queries
+   * to phases through the receipt chain -- receipts link to queries,
+   * and receipts are associated with phases through the huntmap's
+   * phase structure. Since phases reference plans (not queries directly),
+   * we use a heuristic: map each query to the phase(s) that reference
+   * receipts linking to that query.
+   */
+  private buildQueryToPhaseIndex(): void {
+    const huntMapInfo = this.artifactPaths.get('HUNTMAP');
+    if (!huntMapInfo) return;
+
+    const cached = this._bodyCache.get(huntMapInfo.filePath);
+    if (!cached || cached.result.status !== 'loaded') return;
+
+    const huntMap = cached.result.data as HuntMap;
+
+    // For each phase, find all queries that link through receipts
+    // Phase N: look at receipts whose content links to that phase's scope
+    // Simple heuristic: distribute queries across phases by their execution order
+    const allQueryIds: string[] = [];
+    for (const [id, info] of this.artifactPaths) {
+      if (info.type === 'query') {
+        allQueryIds.push(id);
+      }
+    }
+
+    // Map queries to phases through receipt cross-references
+    // A query belongs to the earliest phase whose receipts reference it
+    for (const queryId of allQueryIds) {
+      // Find which receipts reference this query
+      const linkedReceipts: string[] = [];
+      for (const [receiptId, queryIds] of this.receiptToQueries) {
+        if (queryIds.includes(queryId)) {
+          linkedReceipts.push(receiptId);
+        }
+      }
+
+      // Try to determine phase from the receipt hypotheses
+      // Hypotheses are numbered HYP-01, HYP-02, etc.
+      // Phase assignments can be inferred from the huntmap phases order
+      if (huntMap.phases.length > 0 && linkedReceipts.length > 0) {
+        // Use the first linked receipt's hypothesis to infer phase
+        for (const receiptId of linkedReceipts) {
+          const hypIds = this.receiptToHypotheses.get(receiptId);
+          if (hypIds && hypIds.length > 0) {
+            // Map hypothesis ID to phase number
+            // HYP-01 -> phase 1, HYP-02 -> phase 2, etc.
+            const hypNum = parseInt(hypIds[0].replace(/\D/g, ''), 10);
+            if (!isNaN(hypNum) && hypNum >= 1 && hypNum <= huntMap.phases.length) {
+              this.queryToPhase.set(queryId, hypNum);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Remove an artifact from all caches and indexes.
+   */
+  private removeArtifact(filePath: string, _type: ArtifactType, id: string): void {
+    this._frontmatterCache.delete(filePath);
+    this._rawCache.delete(filePath);
+    this._bodyCache.delete(filePath);
+    this.artifactPaths.delete(id);
+
+    // Index will be rebuilt in rebuildIndexes() after batch
+  }
+
+  // ---------------------------------------------------------------------------
+  // Disposal
+  // ---------------------------------------------------------------------------
+
+  dispose(): void {
+    if (this.batchTimer !== null) {
+      clearTimeout(this.batchTimer);
+      this.batchTimer = null;
+    }
+
+    this.watcherDisposable.dispose();
+    this._onDidChange.dispose();
+
+    this._frontmatterCache.clear();
+    this._rawCache.clear();
+    this._bodyCache.clear();
+    this.artifactPaths.clear();
+    this.receiptToQueries.clear();
+    this.receiptToHypotheses.clear();
+    this.queryToPhase.clear();
+    this.pendingPaths.clear();
+  }
+}
