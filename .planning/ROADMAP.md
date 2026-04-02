@@ -62,12 +62,12 @@ Plans:
   3. Query parser extracts Drain template metadata (template_id, template text, count, event_ids) and Receipt parser extracts anomaly framing fields (deviation score 0-6, baseline, prediction, observation)
   4. When a `.planning/` file changes on disk, the store updates within 800ms (300ms debounce + 500ms batch window) and emits a typed change event -- without triggering N+1 re-parses during rapid multi-file writes
   5. Cross-artifact indexes resolve receipt-to-query, receipt-to-hypothesis, and query-to-phase relationships so downstream UI providers can traverse the investigation graph
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
-- [ ] 08-03: TBD
+- [ ] 08-01-PLAN.md -- Types, base parser, 6 simple artifact parsers (Mission, Hypotheses, HuntMap, State, EvidenceReview, PhaseSummary) with unit tests
+- [ ] 08-02-PLAN.md -- Query parser (Drain template extraction) and Receipt parser (anomaly framing extraction) with parser barrel index
+- [ ] 08-03-PLAN.md -- ArtifactWatcher, HuntDataStore with cross-artifact indexes and batch coalescing, extension activation wiring
 
 ### Phase 9: Hunt Sidebar, Status Bar, and CodeLens
 **Goal**: Hunters navigate the investigation through a semantic sidebar tree, see hunt progress in the status bar, and read inline deviation scores and template counts via CodeLens -- all powered by store subscriptions
@@ -132,7 +132,7 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10 -> 11
 | 5. Anomaly Framing and Pack Progressions | v1.0 | 2/2 | Complete | 2026-04-01 |
 | 6. Validator Enhancement and Test Suite | v1.0 | 3/3 | Complete | 2026-04-01 |
 | 7. Extension Scaffold and Build Infrastructure | v2.0 | 0/2 | In Progress | - |
-| 8. Artifact Parsers, File Watcher, and Data Store | v2.0 | 0/0 | Not started | - |
+| 8. Artifact Parsers, File Watcher, and Data Store | v2.0 | 0/3 | Not started | - |
 | 9. Hunt Sidebar, Status Bar, and CodeLens | v2.0 | 0/0 | Not started | - |
 | 10. Evidence Integrity Diagnostics | v2.0 | 0/0 | Not started | - |
 | 11. Webview Bridge and Drain Template Viewer | v2.0 | 0/0 | Not started | - |

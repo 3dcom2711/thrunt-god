@@ -17,10 +17,10 @@ Requirements for the VS Code extension. Each maps to roadmap phases.
 
 ### Artifact Parsers
 
-- [ ] **PARSE-01**: Parser extracts YAML frontmatter and markdown body from all `.planning/` artifact types
-- [ ] **PARSE-02**: Parser produces typed `ParseResult<T>` with `loaded | error | loading | missing` states
-- [ ] **PARSE-03**: Parser handles malformed/half-written artifacts gracefully (partial parse, warning, no crash)
-- [ ] **PARSE-04**: 8 artifact-type parsers: Mission, Hypotheses, HuntMap, State, Query, Receipt, EvidenceReview, PhaseSummary
+- [x] **PARSE-01**: Parser extracts YAML frontmatter and markdown body from all `.planning/` artifact types
+- [x] **PARSE-02**: Parser produces typed `ParseResult<T>` with `loaded | error | loading | missing` states
+- [x] **PARSE-03**: Parser handles malformed/half-written artifacts gracefully (partial parse, warning, no crash)
+- [x] **PARSE-04**: 8 artifact-type parsers: Mission, Hypotheses, HuntMap, State, Query, Receipt, EvidenceReview, PhaseSummary
 - [ ] **PARSE-05**: Query parser extracts Drain template metadata (template_id, template text, count, event_ids) from embedded JSON/tables
 - [ ] **PARSE-06**: Receipt parser extracts anomaly framing (baseline, prediction, observation, deviation score 0-6, pack progression match)
 
@@ -128,10 +128,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUILD-03 | Phase 7 | Complete |
 | BUILD-04 | Phase 7 | Complete |
 | BUILD-05 | Phase 7 | Complete |
-| PARSE-01 | Phase 8 | Pending |
-| PARSE-02 | Phase 8 | Pending |
-| PARSE-03 | Phase 8 | Pending |
-| PARSE-04 | Phase 8 | Pending |
+| PARSE-01 | Phase 8 | Complete |
+| PARSE-02 | Phase 8 | Complete |
+| PARSE-03 | Phase 8 | Complete |
+| PARSE-04 | Phase 8 | Complete |
 | PARSE-05 | Phase 8 | Pending |
 | PARSE-06 | Phase 8 | Pending |
 | STORE-01 | Phase 8 | Pending |

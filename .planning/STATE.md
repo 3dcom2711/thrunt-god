@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: THRUNT God VS Code Extension
-status: Active
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-04-02T14:36:32Z"
-last_activity: 2026-04-02 -- Completed 07-02 test harness
+status: in-progress
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-02T15:12:17Z"
+last_activity: 2026-04-02 -- Completed 08-01 artifact parsers
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_plans: 11
+  completed_plans: 3
+  percent: 27
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Surface hidden structure in security telemetry so interesting events become obvious without requiring hunters to write perfect queries
-**Current focus:** v2.0 VS Code Extension -- Phase 7: Extension Scaffold and Build Infrastructure
+**Current focus:** v2.0 VS Code Extension -- Phase 8: Artifact Parsers, File Watcher, and Data Store
 
 ## Current Position
 
-Phase: 7 of 11 (Extension Scaffold and Build Infrastructure)
-Plan: 2 of 2 complete
-Status: Phase Complete
-Last activity: 2026-04-02 -- Completed 07-02 test harness
+Phase: 8 of 11 (Artifact Parsers, File Watcher, and Data Store)
+Plan: 1 of 3 complete
+Status: In Progress
+Last activity: 2026-04-02 -- Completed 08-01 artifact parsers
 
-Progress: [██████████] 100%
+Progress: [██░░░░░░░░] 27%
 
 ## Performance Metrics
 
@@ -44,7 +44,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1-6 (v1.0) | 12 | -- | -- |
-| 7-11 (v2.0) | 2 | 5min | 2.5min |
+| 7-11 (v2.0) | 3 | 12min | 4min |
 
 **Recent Trend:**
 - Last 5 plans: --
@@ -71,6 +71,10 @@ Recent decisions affecting current work:
 - [Phase 07]: Unit tests use .cjs files testing built CJS bundle via require() -- matches CLI test pattern
 - [Phase 07]: Lightweight vscode mock injected via Module._resolveFilename for Node.js test execution
 - [Phase 07]: Three-tier test pattern: unit (node:test + CJS), integration (@vscode/test-cli + Mocha), smoke (require check)
+- [Phase 08]: MdastLike interface for recursive text extraction avoids mdast-util internal type complexity
+- [Phase 08]: extractTableRows parses via mdast GFM table AST nodes, not regex -- more robust for complex cells
+- [Phase 08]: ParseResult<T> discriminated union (loaded/error/loading/missing) for all parser return types
+- [Phase 08]: Bold-field extraction uses regex since metadata lines like **Mode:** are not markdown headings
 
 ### Pending Todos
 
@@ -82,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T14:36:32Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-04-02T15:12:17Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
