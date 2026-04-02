@@ -18,7 +18,14 @@
   ],
   "activationEvents": [
     "workspaceContains:.hunt/MISSION.md",
-    "workspaceContains:.planning/MISSION.md"
+    "workspaceContains:.planning/MISSION.md",
+    "onCommand:thrunt-god.openTemplateViewer",
+    "onCommand:thrunt-god.runThruntCli",
+    "onCommand:thrunt-god.showStateJson",
+    "onCommand:thrunt-god.showProgressReport",
+    "onCommand:thrunt-god.analyzeHuntmap",
+    "onCommand:thrunt-god.showRuntimeDoctor",
+    "onCommand:thrunt-god.openHuntOverview"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -57,6 +64,35 @@
         "title": "THRUNT: Open Artifact"
       },
       {
+        "command": "thrunt-god.openTemplateViewer",
+        "title": "THRUNT: Open Template Viewer"
+      },
+      {
+        "command": "thrunt-god.runThruntCli",
+        "title": "THRUNT: Run CLI Command",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "thrunt-god.showStateJson",
+        "title": "THRUNT: Show State JSON",
+        "icon": "$(output)"
+      },
+      {
+        "command": "thrunt-god.showProgressReport",
+        "title": "THRUNT: Show Progress Report",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "thrunt-god.analyzeHuntmap",
+        "title": "THRUNT: Analyze Huntmap",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "thrunt-god.showRuntimeDoctor",
+        "title": "THRUNT: Show Runtime Doctor",
+        "icon": "$(tools)"
+      },
+      {
         "command": "thrunt-god.revealInExplorer",
         "title": "THRUNT: Reveal in Explorer"
       },
@@ -72,10 +108,20 @@
       {
         "command": "thrunt-god.scrollToSection",
         "title": "THRUNT: Scroll to Section"
+      },
+      {
+        "command": "thrunt-god.openHuntOverview",
+        "title": "THRUNT: Open Hunt Overview",
+        "icon": "$(dashboard)"
       }
     ],
     "menus": {
       "view/item/context": [
+        {
+          "command": "thrunt-god.openTemplateViewer",
+          "when": "view == thruntGod.huntTree && viewItem == query",
+          "group": "navigation@1"
+        },
         {
           "command": "thrunt-god.openArtifact",
           "when": "view == thruntGod.huntTree",
@@ -90,11 +136,46 @@
           "command": "thrunt-god.copyPath",
           "when": "view == thruntGod.huntTree",
           "group": "navigation"
+        },
+        {
+          "command": "thrunt-god.showStateJson",
+          "when": "view == thruntGod.huntTree && viewItem == mission",
+          "group": "navigation@2"
+        },
+        {
+          "command": "thrunt-god.analyzeHuntmap",
+          "when": "view == thruntGod.huntTree && viewItem == phases-group",
+          "group": "navigation@2"
+        },
+        {
+          "command": "thrunt-god.openHuntOverview",
+          "when": "view == thruntGod.huntTree && viewItem == mission",
+          "group": "navigation@3"
         }
       ],
       "view/title": [
         {
           "command": "thrunt-god.refreshSidebar",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation"
+        },
+        {
+          "command": "thrunt-god.showStateJson",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "thrunt-god.analyzeHuntmap",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "thrunt-god.runThruntCli",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "thrunt-god.openHuntOverview",
           "when": "view == thruntGod.huntTree",
           "group": "navigation"
         }
@@ -112,10 +193,14 @@
     "test:unit": "node --require ./test/_setup/vscode-mock.cjs --test test/unit/**/*.test.cjs",
     "test:smoke": "node test/smoke.cjs",
     "test:integration": "vscode-test",
+    "test:dogfood": "node ./test/integration/run-dogfood.cjs",
     "pretest:unit": "npm run build",
-    "pretest:smoke": "npm run build"
+    "pretest:smoke": "npm run build",
+    "pretest:integration": "npm run build",
+    "pretest:dogfood": "npm run build"
   },
   "devDependencies": {
+    "@types/node": "^24.10.1",
     "@types/js-yaml": "^4.0.9",
     "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.12",
@@ -126,11 +211,13 @@
     "typescript": "^5.5.0"
   },
   "dependencies": {
+    "@observablehq/plot": "^0.6.17",
     "js-yaml": "^4.1.1",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-frontmatter": "^2.0.1",
     "mdast-util-gfm-table": "^2.0.0",
     "micromark-extension-frontmatter": "^2.0.0",
-    "micromark-extension-gfm-table": "^2.1.1"
+    "micromark-extension-gfm-table": "^2.1.1",
+    "preact": "^10.26.9"
   }
 }
