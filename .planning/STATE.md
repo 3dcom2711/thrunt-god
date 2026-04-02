@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Investigative Surfaces
 status: in-progress
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-04-02T23:10:43.000Z"
-last_activity: 2026-04-02 -- Completed 14-01 Evidence Board data pipeline
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-04-02T23:20:07.000Z"
+last_activity: 2026-04-02 -- Completed 14-02 Evidence Board graph mode
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Current Position
 
 Phase: 14 of 16 (Evidence Board)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: In Progress
-Last activity: 2026-04-02 -- Completed 14-01 Evidence Board data pipeline
+Last activity: 2026-04-02 -- Completed 14-02 Evidence Board graph mode
 
-Progress: [███████░░░] 78%
+Progress: [████████░░] 89%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [███████░░░] 78%
 | Phase 13 P03 | 3min | 1 task | 2 files |
 | Phase 13 P02 | 3min | 2 tasks | 2 files |
 | Phase 14 P01 | 6min | 2 tasks | 5 files |
+| Phase 14 P02 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 13-02]: currentPhase prop preserved in PhaseRail interface for future use but segment status derived from phase.status field
 - [Phase 14-01]: deriveEvidenceBoard builds edge lookup map for O(1) matrix cell resolution
 - [Phase 14-01]: EvidenceBoardPanel omits diagnostics listener since evidence board ViewModel is not diagnostics-dependent
+- [Phase 14-02]: d3-force computes positions only; Preact owns all SVG DOM rendering (no d3 selection/append/attr)
+- [Phase 14-02]: 120 synchronous ticks for instant layout; right-click for hypothesis focus, shift+click for trace chain
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ No blocking issues.
 
 ## Session Continuity
 
-Last session: 2026-04-02T23:10:43.000Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-04-02T23:20:07.000Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None

@@ -530,3 +530,169 @@ button {
   user-select: none;
   pointer-events: none;
 }
+
+/* ==========================================================================
+   Component Styles -- Evidence Board Matrix
+   ========================================================================== */
+
+.hunt-eb-matrix {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.hunt-eb-matrix table {
+  border-collapse: separate;
+  border-spacing: 2px;
+  width: 100%;
+  min-width: 400px;
+}
+
+.hunt-eb-matrix th {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hunt-text-muted);
+  padding: 8px 6px;
+  text-align: center;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hunt-eb-matrix th.hunt-eb-matrix__row-header {
+  text-align: left;
+  font-weight: 600;
+  color: var(--hunt-text);
+  max-width: 140px;
+}
+
+.hunt-eb-matrix td {
+  text-align: center;
+  padding: 0;
+}
+
+/* ==========================================================================
+   Component Styles -- Evidence Board Matrix Cells
+   ========================================================================== */
+
+.hunt-eb-matrix__cell {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: default;
+  transition: transform 120ms ease;
+  position: relative;
+}
+
+.hunt-eb-matrix__cell:hover {
+  transform: scale(1.15);
+  z-index: 10;
+}
+
+.hunt-eb-matrix__cell--supports {
+  background: color-mix(in srgb, var(--hunt-success) 50%, var(--hunt-surface));
+  color: var(--hunt-text);
+}
+
+.hunt-eb-matrix__cell--contradicts {
+  background: color-mix(in srgb, var(--hunt-danger) 50%, var(--hunt-surface));
+  color: var(--hunt-text);
+}
+
+.hunt-eb-matrix__cell--context {
+  background: color-mix(in srgb, var(--hunt-accent) 35%, var(--hunt-surface));
+  color: var(--hunt-text);
+}
+
+.hunt-eb-matrix__cell--absent {
+  background: color-mix(in srgb, var(--hunt-text-muted) 10%, var(--hunt-surface));
+  color: var(--hunt-text-muted);
+}
+
+/* ==========================================================================
+   Component Styles -- Evidence Board Gap Highlighting
+   ========================================================================== */
+
+.hunt-eb-matrix__gap-row td,
+.hunt-eb-matrix__gap-row th {
+  position: relative;
+}
+
+.hunt-eb-matrix__gap-row::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 2px solid var(--hunt-warning);
+  border-radius: 8px;
+  pointer-events: none;
+  animation: hunt-eb-gap-pulse 2s ease-in-out infinite;
+}
+
+.hunt-eb-matrix__gap-col-header {
+  position: relative;
+}
+
+.hunt-eb-matrix__gap-col-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hunt-warning);
+  animation: hunt-eb-gap-pulse 2s ease-in-out infinite;
+}
+
+.hunt-eb-matrix__no-coverage {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hunt-warning);
+}
+
+@keyframes hunt-eb-gap-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ==========================================================================
+   Component Styles -- Evidence Board Blind Spot Callout Row
+   ========================================================================== */
+
+.hunt-eb-matrix__blind-spots {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 2px solid color-mix(in srgb, var(--hunt-warning) 40%, var(--hunt-panel-border));
+  background: color-mix(in srgb, var(--hunt-warning) 6%, var(--hunt-surface));
+}
+
+.hunt-eb-matrix__blind-spots-heading {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hunt-warning);
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.hunt-eb-matrix__blind-spot-item {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hunt-text);
+  padding: 4px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--hunt-panel-border) 50%, transparent);
+}
+
+.hunt-eb-matrix__blind-spot-item:last-child {
+  border-bottom: none;
+}
