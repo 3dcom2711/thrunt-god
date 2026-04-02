@@ -35,13 +35,13 @@ Requirements for the Investigative Surfaces milestone. Each maps to roadmap phas
 - [x] **EVBD-03**: Graph nodes encode verdict/score with semantic colors
 - [x] **EVBD-04**: Graph edges encode relationship type (supports/contradicts/context) with line style
 - [x] **EVBD-05**: User can hover graph nodes to see artifact summary tooltips
-- [ ] **EVBD-06**: User can view coverage matrix (hypothesis columns x receipt rows) with color-coded cells
-- [ ] **EVBD-07**: Coverage matrix highlights gaps (rows/columns with no coverage)
-- [ ] **EVBD-08**: User can toggle between graph and matrix modes within the same panel
+- [x] **EVBD-06**: User can view coverage matrix (hypothesis columns x receipt rows) with color-coded cells
+- [x] **EVBD-07**: Coverage matrix highlights gaps (rows/columns with no coverage)
+- [x] **EVBD-08**: User can toggle between graph and matrix modes within the same panel
 - [x] **EVBD-09**: User can trace evidence chains with flow animation highlighting
 - [x] **EVBD-10**: User can focus on a single hypothesis to dim unconnected nodes
 - [x] **EVBD-11**: Deviation scores encoded as node size for pre-attentive visual cues
-- [ ] **EVBD-12**: Coverage matrix includes blind spot callout row from Evidence Review artifact
+- [x] **EVBD-12**: Coverage matrix includes blind spot callout row from Evidence Review artifact
 
 ### Query Analysis
 
@@ -108,13 +108,13 @@ Deferred to v3.1+:
 | EVBD-03 | Phase 14 | Complete |
 | EVBD-04 | Phase 14 | Complete |
 | EVBD-05 | Phase 14 | Complete |
-| EVBD-06 | Phase 14 | In Progress |
-| EVBD-07 | Phase 14 | In Progress |
-| EVBD-08 | Phase 14 | In Progress |
+| EVBD-06 | Phase 14 | Complete |
+| EVBD-07 | Phase 14 | Complete |
+| EVBD-08 | Phase 14 | Complete |
 | EVBD-09 | Phase 14 | Complete |
 | EVBD-10 | Phase 14 | Complete |
 | EVBD-11 | Phase 14 | Complete |
-| EVBD-12 | Phase 14 | In Progress |
+| EVBD-12 | Phase 14 | Complete |
 | QANL-01 | Phase 15 | Pending |
 | QANL-02 | Phase 15 | Pending |
 | QANL-03 | Phase 15 | Pending |
