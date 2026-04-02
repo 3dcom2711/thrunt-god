@@ -28,11 +28,23 @@ describe('extension exports', () => {
     assert.doesNotThrow(() => ext.deactivate());
   });
 
-  it('does not export unexpected top-level keys', () => {
+  it('exports expected top-level keys', () => {
     const ext = require(BUNDLE_PATH);
     const exportedKeys = Object.keys(ext).filter(
       (k) => k !== '__esModule'
     );
-    assert.deepEqual(exportedKeys.sort(), ['activate', 'deactivate']);
+    // Core extension exports
+    assert.ok(exportedKeys.includes('activate'));
+    assert.ok(exportedKeys.includes('deactivate'));
+    // Parser exports (added in Phase 8)
+    assert.ok(exportedKeys.includes('parseMission'));
+    assert.ok(exportedKeys.includes('parseHypotheses'));
+    assert.ok(exportedKeys.includes('parseHuntMap'));
+    assert.ok(exportedKeys.includes('parseState'));
+    assert.ok(exportedKeys.includes('parseEvidenceReview'));
+    assert.ok(exportedKeys.includes('parsePhaseSummary'));
+    assert.ok(exportedKeys.includes('extractFrontmatter'));
+    assert.ok(exportedKeys.includes('extractBody'));
+    assert.ok(exportedKeys.includes('extractMarkdownSections'));
   });
 });

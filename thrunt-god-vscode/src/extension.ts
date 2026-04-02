@@ -66,3 +66,12 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   // Cleanup will be added as subsystems are registered
 }
+
+// Re-export parsers for test access via the built bundle
+export { parseMission } from './parsers/mission';
+export { parseHypotheses } from './parsers/hypotheses';
+export { parseHuntMap } from './parsers/huntmap';
+export { parseState } from './parsers/state';
+export { parseEvidenceReview } from './parsers/evidenceReview';
+export { parsePhaseSummary } from './parsers/phaseSummary';
+export { extractFrontmatter, extractBody, extractMarkdownSections } from './parsers/base';
