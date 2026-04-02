@@ -41,14 +41,14 @@ Requirements for the VS Code extension. Each maps to roadmap phases.
 
 ### Hunt Sidebar
 
-- [ ] **SIDE-01**: Semantic tree structure: Mission (root) → Hypotheses → Phases → Queries/Receipts (not a file tree)
-- [ ] **SIDE-02**: Hypothesis nodes show verdict badges (Supported/Disproved/Inconclusive/Open) with color-coded icons
-- [ ] **SIDE-03**: Receipt nodes show deviation score as color-coded badge (0-2 green, 3-4 yellow, 5-6 red)
-- [ ] **SIDE-04**: Phase nodes show status indicator (planned/running/complete)
-- [ ] **SIDE-05**: Double-click any tree node opens the corresponding artifact in the editor
-- [ ] **SIDE-06**: Context menu on nodes: "Open Artifact", "Reveal in Explorer", "Copy Path"
-- [ ] **SIDE-07**: Empty state shown when no hunt detected in workspace
-- [ ] **SIDE-08**: Sidebar works at narrow widths (240px minimum)
+- [x] **SIDE-01**: Semantic tree structure: Mission (root) → Hypotheses → Phases → Queries/Receipts (not a file tree)
+- [x] **SIDE-02**: Hypothesis nodes show verdict badges (Supported/Disproved/Inconclusive/Open) with color-coded icons
+- [x] **SIDE-03**: Receipt nodes show deviation score as color-coded badge (0-2 green, 3-4 yellow, 5-6 red)
+- [x] **SIDE-04**: Phase nodes show status indicator (planned/running/complete)
+- [x] **SIDE-05**: Double-click any tree node opens the corresponding artifact in the editor
+- [x] **SIDE-06**: Context menu on nodes: "Open Artifact", "Reveal in Explorer", "Copy Path"
+- [x] **SIDE-07**: Empty state shown when no hunt detected in workspace
+- [x] **SIDE-08**: Sidebar works at narrow widths (240px minimum)
 
 ### Evidence Integrity Diagnostics
 
@@ -139,14 +139,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STORE-03 | Phase 8 | Complete |
 | STORE-04 | Phase 8 | Complete |
 | STORE-05 | Phase 8 | Complete |
-| SIDE-01 | Phase 9 | Pending |
-| SIDE-02 | Phase 9 | Pending |
-| SIDE-03 | Phase 9 | Pending |
-| SIDE-04 | Phase 9 | Pending |
-| SIDE-05 | Phase 9 | Pending |
-| SIDE-06 | Phase 9 | Pending |
-| SIDE-07 | Phase 9 | Pending |
-| SIDE-08 | Phase 9 | Pending |
+| SIDE-01 | Phase 9 | Complete |
+| SIDE-02 | Phase 9 | Complete |
+| SIDE-03 | Phase 9 | Complete |
+| SIDE-04 | Phase 9 | Complete |
+| SIDE-05 | Phase 9 | Complete |
+| SIDE-06 | Phase 9 | Complete |
+| SIDE-07 | Phase 9 | Complete |
+| SIDE-08 | Phase 9 | Complete |
 | STATUS-01 | Phase 9 | Pending |
 | STATUS-02 | Phase 9 | Pending |
 | STATUS-03 | Phase 9 | Pending |

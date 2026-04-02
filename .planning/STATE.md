@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: THRUNT God VS Code Extension
 status: in-progress
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-04-02T15:40:45.687Z"
-last_activity: 2026-04-02 -- Completed 08-03 file watcher and data store
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-04-02T16:06:42Z"
+last_activity: 2026-04-02 -- Completed 09-01 sidebar TreeDataProvider
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 45
+  total_plans: 7
+  completed_plans: 6
+  percent: 55
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Surface hidden structure in security telemetry so interesting events become obvious without requiring hunters to write perfect queries
-**Current focus:** v2.0 VS Code Extension -- Phase 8 complete, ready for Phase 9: Native UI Providers
+**Current focus:** v2.0 VS Code Extension -- Phase 9 in progress, sidebar TreeDataProvider complete
 
 ## Current Position
 
-Phase: 8 of 11 (Artifact Parsers, File Watcher, and Data Store) -- COMPLETE
-Plan: 3 of 3 complete
-Status: Phase Complete
-Last activity: 2026-04-02 -- Completed 08-03 file watcher and data store
+Phase: 9 of 11 (Hunt Sidebar, Status Bar, and CodeLens) -- IN PROGRESS
+Plan: 1 of 2 complete
+Status: In Progress
+Last activity: 2026-04-02 -- Completed 09-01 sidebar TreeDataProvider
 
-Progress: [████░░░░░░] 45%
+Progress: [█████░░░░░] 55%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [████░░░░░░] 45%
 
 *Updated after each plan completion*
 | Phase 08 P03 | 3min | 3 tasks | 4 files |
+| Phase 09 P01 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,10 @@ Recent decisions affecting current work:
 - [Phase 08]: Raw content cache retained alongside body cache enables on-demand re-parsing on LRU miss
 - [Phase 08]: Query-to-phase index uses hypothesis ID heuristic through receipt chain (HYP-01 -> phase 1)
 - [Phase 08]: Fallback probing of known artifact paths when readDirectory unavailable (mock environments)
+- [Phase 09]: Artifact paths derived from huntRoot convention rather than exposing store.artifactPaths
+- [Phase 09]: NodeType discriminant on HuntTreeItem for dispatch in getChildren
+- [Phase 09]: Deviation scores color-coded: 0-2 green, 3-4 yellow, 5-6 red
+- [Phase 09]: Verdict badges use ThemeIcon with ThemeColor for native VS Code theme integration
 
 ### Pending Todos
 
@@ -94,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T15:40:44.756Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-04-02T16:06:42Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

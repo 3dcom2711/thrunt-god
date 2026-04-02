@@ -82,7 +82,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- Sidebar TreeDataProvider with semantic tree, verdict/deviation badges, commands, context menus, empty state, and unit tests
+- [x] 09-01-PLAN.md -- Sidebar TreeDataProvider with semantic tree, verdict/deviation badges, commands, context menus, empty state, and unit tests
 - [ ] 09-02-PLAN.md -- StatusBarItem with phase progress and critical alerts, CodeLensProvider with deviation scores and template counts, and unit tests
 
 ### Phase 10: Evidence Integrity Diagnostics
@@ -132,6 +132,6 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10 -> 11
 | 6. Validator Enhancement and Test Suite | v1.0 | 3/3 | Complete | 2026-04-01 |
 | 7. Extension Scaffold and Build Infrastructure | v2.0 | 2/2 | Complete | 2026-04-02 |
 | 8. Artifact Parsers, File Watcher, and Data Store | v2.0 | 3/3 | Complete | 2026-04-02 |
-| 9. Hunt Sidebar, Status Bar, and CodeLens | v2.0 | 0/2 | Not started | - |
+| 9. Hunt Sidebar, Status Bar, and CodeLens | v2.0 | 1/2 | In Progress | - |
 | 10. Evidence Integrity Diagnostics | v2.0 | 0/0 | Not started | - |
 | 11. Webview Bridge and Drain Template Viewer | v2.0 | 0/0 | Not started | - |
