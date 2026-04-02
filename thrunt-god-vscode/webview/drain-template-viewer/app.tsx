@@ -5,6 +5,7 @@ import type {
   DrainViewerPinnedTemplate,
   DrainViewerViewModel,
 } from '../../shared/drain-viewer';
+import { useRovingTabindex } from '../shared/hooks';
 
 interface AppProps {
   viewModel: DrainViewerViewModel | null;
@@ -42,6 +43,9 @@ function PinnedTemplates(props: {
   pinnedTemplates: DrainViewerPinnedTemplate[];
   onNavigate: (queryId: string, templateId?: string | null) => void;
 }) {
+  const pinnedListRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(pinnedListRef, '.pinned-chip');
+
   return (
     <details class="pinned-panel">
       <summary>
@@ -51,11 +55,12 @@ function PinnedTemplates(props: {
       {props.pinnedTemplates.length === 0 ? (
         <p class="muted-copy">Pin a template to keep it handy across query switches.</p>
       ) : (
-        <div class="pinned-list" role="list">
+        <div class="pinned-list" role="list" aria-label="Pinned templates" ref={pinnedListRef}>
           {props.pinnedTemplates.map((pin) => (
             <button
               key={`${pin.queryId}:${pin.templateId}`}
               class="pinned-chip"
+              role="listitem"
               onClick={() => props.onNavigate(pin.queryId, pin.templateId)}
               type="button"
             >
@@ -79,8 +84,10 @@ function DrainChart(props: {
   onSelectTemplate: (templateId: string) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const clusterListRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [width, setWidth] = useState(0);
+  useRovingTabindex(clusterListRef, '.cluster-chip');
 
   useEffect(() => {
     const host = hostRef.current;
@@ -258,11 +265,12 @@ function DrainChart(props: {
           {tooltip.text}
         </div>
       ) : null}
-      <div class="cluster-list" role="list">
+      <div class="cluster-list" role="list" aria-label="Template clusters" ref={clusterListRef}>
         {props.clusters.map((cluster) => (
           <button
             key={cluster.templateId}
             class={`cluster-chip ${cluster.templateId === props.selectedTemplateId ? 'is-selected' : ''}`}
+            role="listitem"
             onClick={() => props.onSelectTemplate(cluster.templateId)}
             type="button"
           >
