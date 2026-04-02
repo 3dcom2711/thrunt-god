@@ -1,0 +1,43 @@
+{
+  "name": "thrunt-god",
+  "displayName": "THRUNT God",
+  "description": "Hunt investigation dashboard for THRUNT God threat-hunting framework",
+  "version": "0.1.0",
+  "publisher": "backbay-labs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/backbay-labs/thrunt-god"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Visualization", "Other"],
+  "activationEvents": [
+    "workspaceContains:.hunt/MISSION.md",
+    "workspaceContains:.planning/MISSION.md"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "thrunt-god.showInfo",
+        "title": "THRUNT: Show Extension Info"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:production": "NODE_ENV=production node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "vsce package --no-dependencies",
+    "lint": "tsc --noEmit",
+    "prepackage": "npm run build:production"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}
