@@ -19,6 +19,7 @@ import type {
   EvidenceBoardViewModel,
   EvidenceBoardNode,
   EvidenceBoardEdge,
+  EvidenceBoardMatrixCell,
 } from '../../shared/evidence-board';
 import { Panel } from '../shared/components';
 import { useTheme, useHostMessage, createVsCodeApi } from '../shared/hooks';
@@ -469,6 +470,152 @@ function GraphView({
 }
 
 // ---------------------------------------------------------------------------
+// Component: MatrixView
+// ---------------------------------------------------------------------------
+
+function MatrixView({
+  viewModel,
+  focusedHypothesis,
+  onHypothesisFocus,
+}: {
+  viewModel: EvidenceBoardViewModel;
+  focusedHypothesis: string | null;
+  onHypothesisFocus: (id: string | null) => void;
+}) {
+  // Empty state
+  if (viewModel.hypothesisIds.length === 0 && viewModel.receiptIds.length === 0) {
+    return (
+      <Panel>
+        <p style={{ color: 'var(--hunt-text-muted)', margin: 0 }}>
+          No evidence data to display in matrix.
+        </p>
+      </Panel>
+    );
+  }
+
+  // Build cell lookup map
+  const cellMap = useMemo(() => {
+    const map = new Map<string, EvidenceBoardMatrixCell>();
+    for (const cell of viewModel.matrixCells) {
+      map.set(`${cell.hypothesisId}:${cell.receiptId}`, cell);
+    }
+    return map;
+  }, [viewModel.matrixCells]);
+
+  // Detect gap rows: receiptId where ALL cells are absent
+  const gapRows = useMemo(() => {
+    const gaps = new Set<string>();
+    for (const rId of viewModel.receiptIds) {
+      const allAbsent = viewModel.hypothesisIds.every((hId) => {
+        const cell = cellMap.get(`${hId}:${rId}`);
+        return !cell || cell.relationship === 'absent';
+      });
+      if (allAbsent) gaps.add(rId);
+    }
+    return gaps;
+  }, [viewModel, cellMap]);
+
+  // Detect gap columns: hypothesisId where ALL cells are absent
+  const gapCols = useMemo(() => {
+    const gaps = new Set<string>();
+    for (const hId of viewModel.hypothesisIds) {
+      const allAbsent = viewModel.receiptIds.every((rId) => {
+        const cell = cellMap.get(`${hId}:${rId}`);
+        return !cell || cell.relationship === 'absent';
+      });
+      if (allAbsent) gaps.add(hId);
+    }
+    return gaps;
+  }, [viewModel, cellMap]);
+
+  const handleColumnClick = useCallback(
+    (hId: string) => {
+      onHypothesisFocus(focusedHypothesis === hId ? null : hId);
+    },
+    [focusedHypothesis, onHypothesisFocus],
+  );
+
+  return (
+    <div class="hunt-eb-matrix">
+      <table>
+        <thead>
+          <tr>
+            <th />
+            {viewModel.hypothesisIds.map((hId) => (
+              <th
+                key={hId}
+                class={gapCols.has(hId) ? 'hunt-eb-matrix__gap-col-header' : undefined}
+                title={hId}
+                style={{
+                  cursor: 'pointer',
+                  opacity: focusedHypothesis && hId !== focusedHypothesis ? 0.15 : 1,
+                }}
+                onClick={() => handleColumnClick(hId)}
+              >
+                {hId.length > 8 ? hId.slice(0, 8) + '...' : hId}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {viewModel.receiptIds.map((rId) => {
+            const isGapRow = gapRows.has(rId);
+            return (
+              <tr key={rId} class={isGapRow ? 'hunt-eb-matrix__gap-row' : undefined}>
+                <th class="hunt-eb-matrix__row-header" title={rId}>
+                  {rId.length > 12 ? rId.slice(0, 12) + '...' : rId}
+                  {isGapRow && (
+                    <>
+                      {' '}
+                      <span class="hunt-eb-matrix__no-coverage">No coverage</span>
+                    </>
+                  )}
+                </th>
+                {viewModel.hypothesisIds.map((hId) => {
+                  const cell = cellMap.get(`${hId}:${rId}`);
+                  const relationship = cell?.relationship ?? 'absent';
+                  const score = cell?.deviationScore ?? null;
+                  const intensity =
+                    score != null ? 0.4 + (Math.min(score, 6) / 6) * 0.6 : 1;
+
+                  return (
+                    <td
+                      key={hId}
+                      style={{
+                        opacity:
+                          focusedHypothesis && hId !== focusedHypothesis ? 0.15 : 1,
+                      }}
+                    >
+                      <div
+                        class={`hunt-eb-matrix__cell hunt-eb-matrix__cell--${relationship}`}
+                        style={{ opacity: intensity }}
+                        title={`${hId} / ${rId}: ${relationship}${score != null ? ` (score: ${score})` : ''}`}
+                      >
+                        {relationship === 'absent' ? '' : score != null ? score : ''}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {viewModel.blindSpots.length > 0 && (
+        <div class="hunt-eb-matrix__blind-spots">
+          <p class="hunt-eb-matrix__blind-spots-heading">Blind Spots</p>
+          {viewModel.blindSpots.map((spot, i) => (
+            <div class="hunt-eb-matrix__blind-spot-item" key={i}>
+              {spot}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main App
 // ---------------------------------------------------------------------------
 
@@ -621,11 +768,11 @@ function App() {
               </div>
             </Panel>
           ) : (
-            <Panel>
-              <p style={{ color: 'var(--hunt-text-muted)', margin: 0 }}>
-                Matrix mode -- Phase 14 Plan 03
-              </p>
-            </Panel>
+            <MatrixView
+              viewModel={viewModel}
+              focusedHypothesis={focusedHypothesis}
+              onHypothesisFocus={handleHypothesisFocus}
+            />
           )}
         </div>
       )}
