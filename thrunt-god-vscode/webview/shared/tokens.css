@@ -1,0 +1,145 @@
+/* ==========================================================================
+   Hunt Design System -- Semantic Token Layer
+   Maps --hunt-* custom properties over VS Code's --vscode-* theme variables.
+   Import once per webview entry point.
+   ========================================================================== */
+
+:root {
+  /* --- Surfaces --- */
+  --hunt-bg: var(--vscode-editor-background);
+  --hunt-surface: color-mix(in srgb, var(--vscode-editor-background) 88%, var(--vscode-editor-foreground) 12%);
+  --hunt-surface-strong: color-mix(in srgb, var(--vscode-editor-background) 78%, var(--vscode-editor-foreground) 22%);
+  --hunt-panel-border: color-mix(in srgb, var(--vscode-editor-foreground) 18%, transparent);
+
+  /* --- Text --- */
+  --hunt-text: var(--vscode-editor-foreground);
+  --hunt-text-muted: color-mix(in srgb, var(--vscode-editor-foreground) 68%, transparent);
+
+  /* --- Accent --- */
+  --hunt-accent: var(--vscode-textLink-foreground);
+  --hunt-accent-strong: color-mix(in srgb, var(--vscode-textLink-foreground) 74%, white);
+
+  /* --- Semantic status --- */
+  --hunt-danger: var(--vscode-charts-red, #d16969);
+  --hunt-success: var(--vscode-charts-green, #89d185);
+  --hunt-warning: var(--vscode-charts-yellow, #d7ba7d);
+
+  /* --- Elevation --- */
+  --hunt-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
+/* --- Light theme overrides --- */
+body[data-theme='light'] {
+  --hunt-surface: color-mix(in srgb, var(--vscode-editor-background) 92%, #0f172a 8%);
+  --hunt-surface-strong: color-mix(in srgb, var(--vscode-editor-background) 82%, #0f172a 18%);
+  --hunt-shadow: 0 28px 70px rgba(15, 23, 42, 0.12);
+}
+
+/* --- Dark theme overrides --- */
+body[data-theme='dark'] {
+  --hunt-surface: color-mix(in srgb, var(--vscode-editor-background) 84%, white 16%);
+  --hunt-surface-strong: color-mix(in srgb, var(--vscode-editor-background) 72%, white 28%);
+}
+
+/* ==========================================================================
+   Base Reset
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+}
+
+/* ==========================================================================
+   Component Styles -- StatCard
+   ========================================================================== */
+
+.hunt-stat-card {
+  padding: 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--hunt-bg) 86%, var(--hunt-accent) 14%);
+  border: 1px solid color-mix(in srgb, var(--hunt-panel-border) 80%, var(--hunt-accent) 20%);
+}
+
+.hunt-stat-card__label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hunt-text-muted);
+}
+
+.hunt-stat-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   Component Styles -- Panel
+   ========================================================================== */
+
+.hunt-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--hunt-surface) 92%, white 8%),
+    var(--hunt-surface)
+  );
+  border: 1px solid var(--hunt-panel-border);
+  border-radius: 22px;
+  box-shadow: var(--hunt-shadow);
+  padding: 22px;
+}
+
+/* ==========================================================================
+   Component Styles -- Badge
+   ========================================================================== */
+
+.hunt-badge {
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hunt-badge--default {
+  background: color-mix(in srgb, var(--hunt-accent) 18%, transparent);
+  color: var(--hunt-text);
+}
+
+.hunt-badge--success {
+  background: color-mix(in srgb, var(--hunt-success) 18%, transparent);
+  color: var(--hunt-text);
+}
+
+.hunt-badge--danger {
+  background: color-mix(in srgb, var(--hunt-danger) 18%, transparent);
+  color: var(--hunt-text);
+}
+
+.hunt-badge--warning {
+  background: color-mix(in srgb, var(--hunt-warning) 18%, transparent);
+  color: var(--hunt-text);
+}
+
+/* ==========================================================================
+   Component Styles -- GhostButton
+   ========================================================================== */
+
+.hunt-ghost-button {
+  border-radius: 999px;
+  padding: 10px 14px;
+  border: 1px solid var(--hunt-panel-border);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.hunt-ghost-button:hover {
+  transform: translateY(-1px);
+}
