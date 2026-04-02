@@ -14,7 +14,7 @@
 
 ### v3.0 Investigative Surfaces
 
-- [ ] **Phase 12: Shared Design System & Webview Infrastructure** - CSS tokens, shared Preact primitives, hooks library, esbuild multi-entry, Drain Viewer token migration
+- [x] **Phase 12: Shared Design System & Webview Infrastructure** - CSS tokens, shared Preact primitives, hooks library, esbuild multi-entry, Drain Viewer token migration (completed 2026-04-02)
 - [ ] **Phase 13: Hunt Overview Dashboard** - Mission cockpit, phase rail, confidence meter, blocker stack, activity feed, "what changed?" notification
 - [ ] **Phase 14: Evidence Board** - Force-directed lineage graph with tier constraints, coverage matrix with gap detection, mode toggle in single panel
 - [ ] **Phase 15: Query Analysis Upgrades** - Template comparison, presence matrix heatmap, sort controls, receipt QA inspector with anomaly framing
@@ -36,7 +36,7 @@
 
 Plans:
 - [ ] 12-01-PLAN.md -- Shared tokens, components, and hooks library
-- [ ] 12-02-PLAN.md -- Drain Template Viewer token migration and keyboard navigation
+- [x] 12-02-PLAN.md -- Drain Template Viewer token migration and keyboard navigation
 - [ ] 12-03-PLAN.md -- esbuild multi-entry and stub webview surfaces
 
 ### Phase 13: Hunt Overview Dashboard
@@ -110,7 +110,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 12/12 | Complete | 2026-04-01 |
 | 7-11 | v2.0 | 12/12 | Complete | 2026-04-02 |
-| 12. Design System & Webview Infrastructure | 1/3 | In Progress|  | - |
+| 12. Design System & Webview Infrastructure | 3/3 | Complete   | 2026-04-02 | - |
 | 13. Hunt Overview Dashboard | v3.0 | 0/3 | Not started | - |
 | 14. Evidence Board | v3.0 | 0/3 | Not started | - |
 | 15. Query Analysis Upgrades | v3.0 | 0/2 | Not started | - |
