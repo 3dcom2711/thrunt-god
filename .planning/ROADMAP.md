@@ -101,11 +101,12 @@ Plans:
   3. User selects an artifact in any surface (sidebar, dashboard, evidence board, template viewer) and it highlights in all other open surfaces
   4. User can right-click any artifact and invoke "Show in Evidence Board" or "Open Template Viewer" to jump to the relevant surface with that artifact focused
   5. User can view a session continuity summary driven from STATE.md plus recent file changes, showing where they left off and what to do next
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 16-01: TBD
-- [ ] 16-02: TBD
+- [ ] 16-01-PLAN.md -- Cross-surface selection API, context menu commands, highlight wiring
+- [ ] 16-02-PLAN.md -- WebviewPanelSerializer registration and workspaceState persistence
+- [ ] 16-03-PLAN.md -- Session continuity Resume card in Hunt Overview
 
 ### v4.0 Active Incident Workflow
 
@@ -261,8 +262,8 @@ Plans:
 | 12. Design System & Webview Infrastructure | 3/3 | Complete    | 2026-04-02 | - |
 | 13. Hunt Overview Dashboard | 3/3 | Complete    | 2026-04-02 | 2026-04-02 |
 | 14. Evidence Board | v3.0 | 3/3 | Complete | 2026-04-02 |
-| 15. Query Analysis Upgrades | v3.0 | 3/3 | Complete | 2026-04-03 |
-| 16. Cross-Surface Navigation | v3.0 | 0/2 | Not started | - |
+| 15. Query Analysis Upgrades | v3.0 | Complete    | 2026-04-03 | 2026-04-03 |
+| 16. Cross-Surface Navigation | v3.0 | 0/3 | Not started | - |
 | 17. War Room Copy | v4.0 | 0/1 | Not started | - |
 | 18. SLA Countdown Timer | v4.0 | 0/1 | Not started | - |
 | 19. IOC Quick-Entry | v4.0 | 0/1 | Not started | - |
