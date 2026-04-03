@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Investigative Surfaces
-status: in-progress
-stopped_at: Completed 16.1-01-PLAN.md
-last_updated: "2026-04-03T03:04:19.000Z"
-last_activity: 2026-04-03 -- Completed 16.1-01 Cross-Surface Selection Highlighting
+status: executing
+stopped_at: Completed 16.1-02-PLAN.md
+last_updated: "2026-04-03T03:18:38.752Z"
+last_activity: 2026-04-03 -- Completed 16.1-02 Keyboard Navigation
 progress:
   total_phases: 14
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 17
-  completed_plans: 16
-  percent: 94
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Surface hidden structure in security telemetry so interesting events become obvious without requiring hunters to write perfect queries
-**Current focus:** v3.0 Investigative Surfaces -- Phase 16 complete
+**Current focus:** v3.0 Investigative Surfaces -- Phase 16.1 complete
 
 ## Current Position
 
 Phase: 16.1 of 16.1 (Cross-Surface Selection Rendering & Keyboard Navigation)
-Plan: 1 of 2 complete
-Status: In Progress
-Last activity: 2026-04-03 -- Completed 16.1-01 Cross-Surface Selection Highlighting
+Plan: 2 of 2 complete
+Status: Complete
+Last activity: 2026-04-03 -- Completed 16.1-02 Keyboard Navigation
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████████░] 94%
 | Phase 16 P02 | 4min | 2 tasks | 7 files |
 | Phase 16 P03 | 3min | 2 tasks | 4 files |
 | Phase 16.1 P01 | 6min | 2 tasks | 9 files |
+| Phase 16.1 P02 | 9min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,9 @@ Recent decisions affecting current work:
 - [Phase 16-03]: ResumeCard renders conditionally via sessionContinuity truthiness check for forward-compatibility
 - [Phase 16.1-01]: pulseTimerRef pattern: useRef + setTimeout(200ms) to toggle isPulsing state, avoiding CSS class removal race conditions
 - [Phase 16.1-01]: Drain viewer cluster chips highlight when templateId OR parent queryId matches highlightedArtifactId
+- [Phase 16.1]: SVG <g> elements get tabindex={isDimmed ? -1 : 0} for conditional keyboard reachability
+- [Phase 16.1]: Matrix column headers get tabIndex={0} + role=button + Enter keydown handler for keyboard activation
+- [Phase 16.1]: Heatmap table relies on native table semantics for screen reader navigation (no roving tabindex)
 
 ### Pending Todos
 
@@ -127,6 +131,6 @@ No blocking issues.
 
 ## Session Continuity
 
-Last session: 2026-04-03T03:04:19Z
-Stopped at: Completed 16.1-01-PLAN.md
+Last session: 2026-04-03T03:18:38.749Z
+Stopped at: Completed 16.1-02-PLAN.md
 Resume file: None

@@ -21,7 +21,7 @@
 - [x] **Phase 14: Evidence Board** - Force-directed lineage graph with tier constraints, coverage matrix with gap detection, mode toggle in single panel (completed 2026-04-02)
 - [x] **Phase 15: Query Analysis Upgrades** - Template comparison, presence matrix heatmap, sort controls, receipt QA inspector with anomaly framing (completed 2026-04-03)
 - [x] **Phase 16: Cross-Surface Navigation & Session Continuity** - WebviewPanelSerializer, cross-surface artifact highlighting, contextual actions, session continuity summary (completed 2026-04-03)
-- [ ] **Phase 16.1: Cross-Surface Selection Rendering & Keyboard Navigation** - INSERTED gap closure: webview selection:highlight handlers, EB/QA selection emission, useRovingTabindex across all surfaces, ARIA attributes, tech debt fixes
+- [x] **Phase 16.1: Cross-Surface Selection Rendering & Keyboard Navigation** - INSERTED gap closure: webview selection:highlight handlers, EB/QA selection emission, useRovingTabindex across all surfaces, ARIA attributes, tech debt fixes (completed 2026-04-03)
 
 ## Phase Details
 
@@ -282,7 +282,7 @@ Plans:
 | 14. Evidence Board | v3.0 | 3/3 | Complete | 2026-04-02 |
 | 15. Query Analysis Upgrades | v3.0 | Complete    | 2026-04-03 | 2026-04-03 |
 | 16. Cross-Surface Navigation | 3/3 | Complete    | 2026-04-03 | - |
-| 16.1. Selection Rendering & Keyboard Nav | v3.0 | 1/2 | In progress | - |
+| 16.1. Selection Rendering & Keyboard Nav | 2/2 | Complete   | 2026-04-03 | - |
 | 17. War Room Copy | v4.0 | 0/1 | Not started | - |
 | 18. SLA Countdown Timer | v4.0 | 0/1 | Not started | - |
 | 19. IOC Quick-Entry | v4.0 | 0/1 | Not started | - |
