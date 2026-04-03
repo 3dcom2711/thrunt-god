@@ -352,8 +352,9 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
   // --- Queries for phase ---
 
   private getQueriesForPhase(phaseNumber: string): HuntTreeItem[] {
-    const queries = this.store.getQueriesForPhase(parseInt(phaseNumber, 10));
-    return queries
+    const phase = parseInt(phaseNumber, 10);
+    const queries = this.store.getQueriesForPhase(phase);
+    const queryNodes = queries
       .filter((q) => q.status === 'loaded')
       .map((q) => {
         const query = q.data as Query;
@@ -373,6 +374,29 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
           artifactType: 'query',
         });
       });
+
+    const hunt = this.store.getHunt();
+    const lastPhaseNumber =
+      hunt?.huntMap.status === 'loaded'
+        ? Math.max(...hunt.huntMap.data.phases.map((item) => item.number))
+        : null;
+
+    if (lastPhaseNumber === phase) {
+      const findingsPath = this.store.getArtifactPath('FINDINGS');
+      if (findingsPath) {
+        queryNodes.push(
+          new HuntTreeItem('FINDINGS', vscode.TreeItemCollapsibleState.None, {
+            description: 'published',
+            iconPath: new vscode.ThemeIcon('note'),
+            artifactPath: findingsPath,
+            artifactType: 'phaseSummary',
+            dataId: 'FINDINGS',
+          })
+        );
+      }
+    }
+
+    return queryNodes;
   }
 
   // --- Receipts for query ---

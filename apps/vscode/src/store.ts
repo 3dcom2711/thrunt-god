@@ -8,6 +8,7 @@ import type {
   Mission,
   Hypotheses,
   HuntMap,
+  HuntPhase,
   HuntState,
   EvidenceReview,
 } from './types';
@@ -37,6 +38,74 @@ import {
   checkReceiptStructured,
   summarizeIntegrityCounts,
 } from './receiptIntegrity';
+
+const PHASE_MATCH_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  'into',
+  'that',
+  'this',
+  'these',
+  'those',
+  'all',
+  'are',
+  'was',
+  'were',
+  'has',
+  'have',
+  'had',
+  'not',
+  'but',
+  'can',
+  'use',
+  'using',
+  'each',
+  'per',
+  'via',
+  'out',
+  'its',
+  'their',
+  'them',
+  'against',
+  'after',
+  'before',
+  'through',
+  'across',
+  'within',
+  'during',
+  'until',
+  'then',
+  'than',
+  'into',
+  'onto',
+  'also',
+  'only',
+  'just',
+  'will',
+  'would',
+  'should',
+  'could',
+  'must',
+  'phase',
+  'query',
+  'queries',
+  'proc',
+]);
+
+function normalizeMatchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function tokenizeMatchText(value: string): string[] {
+  return normalizeMatchText(value)
+    .split(/\s+/)
+    .filter(
+      (token) => token.length >= 3 && !PHASE_MATCH_STOP_WORDS.has(token)
+    );
+}
 
 /** Internal type for the watcher's onDidChange event shape */
 interface WatcherLike {
@@ -1229,6 +1298,7 @@ export class HuntDataStore implements vscode.Disposable {
       'STATE.md',
       'EVIDENCE_REVIEW.md',
       'FINDINGS.md',
+      'published/FINDINGS.md',
     ];
   }
 
@@ -1356,46 +1426,114 @@ export class HuntDataStore implements vscode.Disposable {
     const huntMap = this.getArtifactByType<HuntMap>('huntmap', 'HUNTMAP');
     if (!huntMap || huntMap.status !== 'loaded') return;
 
-    // For each phase, find all queries that link through receipts
-    // Phase N: look at receipts whose content links to that phase's scope
-    // Simple heuristic: distribute queries across phases by their execution order
-    const allQueryIds: string[] = [];
-    for (const [id, info] of this.artifactPaths) {
-      if (info.type === 'query') {
-        allQueryIds.push(id);
+    const phases = huntMap.data.phases;
+    const allQueries = this.getQueries();
+    for (const [queryId, parsed] of allQueries) {
+      if (parsed.status !== 'loaded') {
+        continue;
+      }
+
+      const phaseNumber = this.mapQueryToPhase(parsed.data, phases);
+      if (phaseNumber !== undefined) {
+        this.queryToPhase.set(queryId, phaseNumber);
+      }
+    }
+  }
+
+  private mapQueryToPhase(query: Query, phases: HuntPhase[]): number | undefined {
+    let bestPhase: HuntPhase | undefined;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (const phase of phases) {
+      const score = this.scorePhaseForQuery(phase, query);
+      if (
+        score > bestScore ||
+        (score === bestScore && bestPhase && phase.number > bestPhase.number)
+      ) {
+        bestScore = score;
+        bestPhase = phase;
       }
     }
 
-    // Map queries to phases through receipt cross-references
-    // A query belongs to the earliest phase whose receipts reference it
-    for (const queryId of allQueryIds) {
-      // Find which receipts reference this query
-      const linkedReceipts: string[] = [];
-      for (const [receiptId, queryIds] of this.receiptToQueries) {
-        if (queryIds.includes(queryId)) {
-          linkedReceipts.push(receiptId);
-        }
-      }
+    if (bestPhase && bestScore > 0) {
+      return bestPhase.number;
+    }
 
-      // Try to determine phase from the receipt hypotheses
-      // Hypotheses are numbered HYP-01, HYP-02, etc.
-      // Phase assignments can be inferred from the huntmap phases order
-      if (huntMap.data.phases.length > 0 && linkedReceipts.length > 0) {
-        // Use the first linked receipt's hypothesis to infer phase
-        for (const receiptId of linkedReceipts) {
-          const hypIds = this.receiptToHypotheses.get(receiptId);
-          if (hypIds && hypIds.length > 0) {
-            // Map hypothesis ID to phase number
-            // HYP-01 -> phase 1, HYP-02 -> phase 2, etc.
-            const hypNum = parseInt(hypIds[0].replace(/\D/g, ''), 10);
-            if (!isNaN(hypNum) && hypNum >= 1 && hypNum <= huntMap.data.phases.length) {
-              this.queryToPhase.set(queryId, hypNum);
-              break;
-            }
-          }
-        }
+    return this.inferPhaseFromLinkedReceipts(query, phases.length);
+  }
+
+  private scorePhaseForQuery(phase: HuntPhase, query: Query): number {
+    const queryText = [query.title, query.intent].join(' ');
+    const phaseText = [
+      phase.name,
+      phase.goal,
+      phase.dependsOn,
+      ...phase.plans,
+    ].join(' ');
+
+    const queryTokens = new Set(tokenizeMatchText(queryText));
+    const phaseTokens = new Set(tokenizeMatchText(phaseText));
+    let score = 0;
+
+    for (const token of queryTokens) {
+      if (phaseTokens.has(token)) {
+        score += token.length >= 8 ? 3 : 2;
       }
     }
+
+    const normalizedQuery = normalizeMatchText(queryText);
+    const normalizedPhase = normalizeMatchText(phaseText);
+    const phraseBonuses: Array<[string, string, number]> = [
+      ['environment', 'environment', 5],
+      ['query path validation', 'validation', 8],
+      ['evidence collection', 'evidence collection', 10],
+      ['pilot hunt', 'pilot hunt', 8],
+      ['publish', 'publish', 8],
+      ['findings', 'findings', 6],
+      ['correlation', 'correlation', 4],
+    ];
+
+    for (const [queryPhrase, phasePhrase, bonus] of phraseBonuses) {
+      if (
+        normalizedQuery.includes(queryPhrase) &&
+        normalizedPhase.includes(phasePhrase)
+      ) {
+        score += bonus;
+      }
+    }
+
+    return score;
+  }
+
+  private inferPhaseFromLinkedReceipts(
+    query: Query,
+    phaseCount: number
+  ): number | undefined {
+    const linkedReceiptIds = new Set<string>(query.relatedReceipts ?? []);
+
+    for (const [receiptId, queryIds] of this.receiptToQueries) {
+      if (queryIds.includes(query.queryId)) {
+        linkedReceiptIds.add(receiptId);
+      }
+    }
+
+    for (const receiptId of linkedReceiptIds) {
+      const hypIds = this.receiptToHypotheses.get(receiptId);
+      if (!hypIds || hypIds.length === 0) {
+        continue;
+      }
+
+      const hypothesisNumber = parseInt(hypIds[0].replace(/\D/g, ''), 10);
+      if (
+        !Number.isNaN(hypothesisNumber) &&
+        hypothesisNumber >= 1 &&
+        hypothesisNumber <= phaseCount
+      ) {
+        return hypothesisNumber;
+      }
+    }
+
+    return undefined;
   }
 
   /**

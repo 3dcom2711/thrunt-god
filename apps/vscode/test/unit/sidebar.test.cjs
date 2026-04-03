@@ -266,6 +266,12 @@ function createMockStore(options = {}) {
     getReceipts: () => defaultReceipts,
     getQuery: (id) => defaultQueries.get(id),
     getReceipt: (id) => defaultReceipts.get(id),
+    getArtifactPath: (id) => {
+      if (id === 'FINDINGS') {
+        return path.join(HUNT_ROOT, 'published', 'FINDINGS.md');
+      }
+      return undefined;
+    },
     getReceiptsForQuery: (queryId) => {
       const results = [];
       for (const [, receipt] of defaultReceipts) {
@@ -387,6 +393,26 @@ describe('HuntTreeDataProvider', () => {
       assert.ok(phases[2].label.includes('Persistence'));
       assert.equal(phases[2].description, 'planned');
       assert.equal(phases[2].iconPath.id, 'circle-outline');
+    });
+
+    it('shows published findings under the final phase when available', () => {
+      const publishStore = createMockStore({
+        phases: [
+          { number: 1, name: 'Initial Access', goal: 'Identify entry', status: 'complete', dependsOn: '', plans: [] },
+          { number: 2, name: 'Pilot Hunts', goal: 'Execute evidence collection', status: 'complete', dependsOn: 'Phase 1', plans: [] },
+          { number: 3, name: 'Publish', goal: 'Publish findings', status: 'complete', dependsOn: 'Phase 2', plans: [] },
+        ],
+      });
+      const publishProvider = new ext.HuntTreeDataProvider(publishStore, huntRootUri);
+      const roots = publishProvider.getChildren(undefined);
+      const phases = publishProvider.getChildren(roots[2]);
+      const publishChildren = publishProvider.getChildren(phases[2]);
+
+      const findingsNode = publishChildren.find((child) => child.label === 'FINDINGS');
+      assert.ok(findingsNode, 'Expected published findings leaf under final phase');
+      assert.equal(findingsNode.artifactType, 'phaseSummary');
+      assert.equal(findingsNode.description, 'published');
+      assert.ok(findingsNode.artifactPath.endsWith('/published/FINDINGS.md'));
     });
   });
 

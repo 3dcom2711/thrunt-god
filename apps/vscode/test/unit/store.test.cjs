@@ -114,6 +114,11 @@ describe('resolveArtifactType', () => {
     assert.deepEqual(result, { type: 'phaseSummary', id: 'FINDINGS' });
   });
 
+  it('resolves published/FINDINGS.md to phaseSummary type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/published/FINDINGS.md');
+    assert.deepEqual(result, { type: 'phaseSummary', id: 'FINDINGS' });
+  });
+
   it('resolves QUERIES/QRY-*.md to query type with filename as id', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/QUERIES/QRY-20260329-001.md');
     assert.deepEqual(result, { type: 'query', id: 'QRY-20260329-001' });
@@ -295,6 +300,243 @@ describe('HuntDataStore', () => {
       assert.ok(fallbackStore.getReceipt('RCT-alpha-7f9c'));
 
       fallbackStore.dispose();
+      customWatcher.dispose();
+    });
+
+    it('maps validation and evidence-collection queries into the matching later phases and indexes published findings', async () => {
+      const customRoot = '/mock-hunt-root-phase-map';
+      const customWatcher = createMockWatcher();
+      const customOutput = createMockOutputChannel();
+      const customFiles = vscode.workspace._mockFiles;
+      customFiles.clear();
+
+      const mission = fixture('MISSION.md');
+      const hypotheses = fixture('HYPOTHESES.md');
+      const state = fixture('STATE.md');
+      const huntMap = `# Huntmap: Test\n
+## Overview
+
+Test hunt for query-to-phase mapping.
+
+## Phases
+
+- [x] **Phase 1: Environment Mapping** - capture baseline telemetry
+- [x] **Phase 2: Tool & Access Validation** - validate query paths
+- [x] **Phase 3: Hypothesis Library** - document procedures
+- [x] **Phase 4: Pilot Hunts** - execute evidence collection
+- [x] **Phase 5: Publish** - publish findings
+
+## Phase Details
+
+### Phase 1: Environment Mapping
+**Goal**: Document the environment map and telemetry coverage
+**Depends on**: Nothing
+**Plans**: 1
+
+Plans:
+- [x] 01-01: Build environment map
+
+### Phase 2: Tool & Access Validation
+**Goal**: Validate query path execution against the environment
+**Depends on**: Phase 1
+**Plans**: 1
+
+Plans:
+- [x] 02-01: Validate query path access
+
+### Phase 3: Hypothesis Library
+**Goal**: Build procedures for each hypothesis
+**Depends on**: Phase 2
+**Plans**: 1
+
+Plans:
+- [x] 03-01: Build procedures
+
+### Phase 4: Pilot Hunts
+**Goal**: Execute evidence collection for pilot hunts
+**Depends on**: Phase 3
+**Plans**: 1
+
+Plans:
+- [x] 04-01: Execute evidence collection
+
+### Phase 5: Publish
+**Goal**: Publish findings and recommendations
+**Depends on**: Phase 4
+**Plans**: 1
+
+Plans:
+- [x] 05-01: Publish findings
+`;
+      const validationQuery = `---
+query_id: QRY-VAL-001
+query_spec_version: "1.0"
+source: SIEM
+connector_id: elastic
+dataset: endpoint
+executed_at: 2026-04-01T00:00:00Z
+author: test
+related_hypotheses:
+  - HYP-01
+related_receipts:
+  - RCT-VAL-001
+---
+
+# Query Log: Query Path Validation
+
+## Intent
+
+Validate the credential-dumping query path against the live environment.
+
+## Query Or Procedure
+
+~~~text
+SELECT 1
+~~~
+
+## Result Summary
+
+1 hit.
+`;
+      const pilotQuery = `---
+query_id: QRY-PILOT-001
+query_spec_version: "1.0"
+source: SIEM
+connector_id: elastic
+dataset: endpoint
+executed_at: 2026-04-01T00:00:00Z
+author: test
+related_hypotheses:
+  - HYP-01
+related_receipts:
+  - RCT-PILOT-001
+---
+
+# Query Log: Evidence Collection
+
+## Intent
+
+Execute evidence collection for the pilot hunt and gather final receipt data.
+
+## Query Or Procedure
+
+~~~text
+SELECT 2
+~~~
+
+## Result Summary
+
+2 hits.
+`;
+      const validationReceipt = `---
+receipt_id: RCT-VAL-001
+query_spec_version: "1.0"
+created_at: 2026-04-01T00:00:00Z
+source: Test
+connector_id: elastic
+dataset: endpoint
+result_status: ok
+claim_status: context
+related_hypotheses:
+  - HYP-01
+related_queries:
+  - QRY-VAL-001
+---
+
+# Receipt: Validation
+
+## Claim
+
+Validation complete.
+
+## Evidence
+
+- Query path works.
+
+## Confidence
+
+Medium
+`;
+      const pilotReceipt = `---
+receipt_id: RCT-PILOT-001
+query_spec_version: "1.0"
+created_at: 2026-04-01T00:00:00Z
+source: Test
+connector_id: elastic
+dataset: endpoint
+result_status: ok
+claim_status: supports
+related_hypotheses:
+  - HYP-01
+related_queries:
+  - QRY-PILOT-001
+---
+
+# Receipt: Pilot
+
+## Claim
+
+Pilot evidence collected.
+
+## Evidence
+
+- Evidence collected.
+
+## Confidence
+
+High
+`;
+      const findings = fixture('FINDINGS.md');
+
+      const entries = new Map([
+        ['MISSION.md', mission],
+        ['HYPOTHESES.md', hypotheses],
+        ['HUNTMAP.md', huntMap],
+        ['STATE.md', state],
+        ['QUERIES/QRY-VAL-001.md', validationQuery],
+        ['QUERIES/QRY-PILOT-001.md', pilotQuery],
+        ['RECEIPTS/RCT-VAL-001.md', validationReceipt],
+        ['RECEIPTS/RCT-PILOT-001.md', pilotReceipt],
+        ['published/FINDINGS.md', findings],
+      ]);
+
+      for (const [relativePath, content] of entries) {
+        const absolutePath = path.join(customRoot, relativePath);
+        customFiles.set(absolutePath, {
+          content,
+          mtime: Date.now(),
+          size: Buffer.byteLength(content),
+        });
+      }
+
+      const phaseStore = new ext.HuntDataStore(
+        vscode.Uri.file(customRoot),
+        customWatcher,
+        customOutput
+      );
+
+      await phaseStore.initialScanComplete();
+
+      assert.deepEqual(
+        phaseStore
+          .getQueriesForPhase(2)
+          .filter((query) => query.status === 'loaded')
+          .map((query) => query.data.queryId),
+        ['QRY-VAL-001']
+      );
+      assert.deepEqual(
+        phaseStore
+          .getQueriesForPhase(4)
+          .filter((query) => query.status === 'loaded')
+          .map((query) => query.data.queryId),
+        ['QRY-PILOT-001']
+      );
+      assert.equal(
+        phaseStore.getArtifactPath('FINDINGS'),
+        path.join(customRoot, 'published', 'FINDINGS.md')
+      );
+
+      phaseStore.dispose();
       customWatcher.dispose();
     });
   });

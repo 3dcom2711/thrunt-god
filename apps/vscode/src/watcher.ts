@@ -66,6 +66,7 @@ export function resolveArtifactType(filePath: string): { type: ArtifactType; id:
     case 'EVIDENCE_REVIEW.md':
       return { type: 'evidenceReview', id: 'EVIDENCE_REVIEW' };
     case 'FINDINGS.md':
+    case 'published/FINDINGS.md':
       return { type: 'phaseSummary', id: 'FINDINGS' };
   }
 
