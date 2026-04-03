@@ -157,6 +157,14 @@ describe('convertClaudeToAntigravityContent', () => {
       assert.ok(result.includes('/hunt-plan'), result);
       assert.ok(result.includes('/hunt-run'), result);
     });
+
+    test('does not corrupt object keys or plain text labels', () => {
+      const input = "const prefixMap = { hunt: 'HE-' }; use /hunt:new-program and hunt:shape-hypothesis";
+      const result = convertClaudeToAntigravityContent(input, false);
+      assert.ok(result.includes("{ hunt: 'HE-' }"), result);
+      assert.ok(result.includes('/hunt-new-program'), result);
+      assert.ok(result.includes('hunt:shape-hypothesis'), result);
+    });
   });
 
   test('does not modify unrelated content', () => {

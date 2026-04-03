@@ -445,6 +445,10 @@ Execution completed.
     assert.strictEqual(results[0].original_spec.query.statement, 'search index=firewall action=blocked');
     assert.strictEqual(results[0].original_spec.time_window.start, '2026-03-01T00:00:00Z');
     assert.strictEqual(results[0].original_spec.time_window.end, '2026-03-02T00:00:00Z');
+    assert.ok(results[0].original_envelope);
+    assert.strictEqual(results[0].original_envelope.counts.events, 10);
+    assert.strictEqual(results[0].original_envelope.status, 'complete');
+    assert.strictEqual(results[0].baseline_detail_level, 'summary');
   });
 
   test('resolves receipt source by cross-referencing to QUERIES/', () => {
@@ -467,6 +471,8 @@ Execution completed.
     assert.strictEqual(results[0].original_spec.query.statement, 'index=main source=syslog');
     assert.strictEqual(results[0].original_spec.receipt.receipt_id, 'RCT-20260330000000-BBBBBBBB');
     assert.strictEqual(results[0].original_spec.receipt.result_status, 'complete');
+    assert.ok(results[0].original_envelope);
+    assert.strictEqual(results[0].original_envelope.counts.events, 10);
   });
 
   test('returns empty spec with warning for non-existent query ID', () => {
@@ -515,6 +521,8 @@ Execution completed.
     assert.ok(results[0].original_spec);
     assert.strictEqual(results[0].original_spec.query.statement, 'index=dns query_type=A');
     assert.strictEqual(results[0].source_path, path.join(tmpDir, '.planning', 'METRICS', 'HE-20260330000000-DDDDDDDD.json'));
+    assert.ok(results[0].original_envelope);
+    assert.strictEqual(results[0].original_envelope.counts.events, 10);
   });
 
   test('resolves multiple IDs with one entry per resolved ID', () => {
@@ -1277,6 +1285,16 @@ describe('injectIoc', () => {
   test('OpenSearch SQL append ip: produces IN clause with single quotes', () => {
     const result = injectIoc('sql', "SELECT * FROM logs WHERE source_ip = '10.0.0.1'", 'ip', '203.0.113.50', 'append', 'opensearch');
     assert.ok(result.injected.includes("source_ip IN ('10.0.0.1', '203.0.113.50')"));
+  });
+
+  test('OpenSearch SQL fallback injects WHERE when the statement has no WHERE clause', () => {
+    const result = injectIoc('sql', 'SELECT * FROM logs', 'ip', '203.0.113.50', 'append', 'opensearch');
+    assert.strictEqual(result.injected, "SELECT * FROM logs WHERE source.ip = '203.0.113.50'");
+  });
+
+  test('OpenSearch SQL fallback appends with AND when a WHERE clause already exists', () => {
+    const result = injectIoc('sql', "SELECT * FROM logs WHERE status = 'ok';", 'ip', '203.0.113.50', 'append', 'opensearch');
+    assert.strictEqual(result.injected, "SELECT * FROM logs WHERE status = 'ok' AND source.ip = '203.0.113.50';");
   });
 
   test('IOC_FIELD_UNKNOWN warning when ioc type has no field mapping', () => {
@@ -2043,9 +2061,7 @@ describe('cmdReplayDiff', () => {
 });
 
 describe('cmdRuntimeReplay', () => {
-  const { execFileSync } = require('child_process');
   const os = require('os');
-  const toolsPath = path.resolve(__dirname, '..', 'thrunt-god', 'bin', 'thrunt-tools.cjs');
   let tmpDir;
 
   beforeEach(() => {
@@ -2076,6 +2092,19 @@ index=main | head 10
 ## Parameters
 
 - **Time window:** 2026-03-01T00:00:00Z -> 2026-03-02T00:00:00Z
+
+## Runtime Metadata
+
+- **Profile:** default
+- **Pagination:** auto (limit=100, pages=1)
+- **Execution hints:** timeout=30000ms, consistency=best_effort, dry_run=false
+- **Result status:** complete
+- **Warnings:** none
+- **Errors:** none
+
+## Result Summary
+
+events=10, entities=0, evidence=0, status=complete
 `
     );
   });
@@ -2084,15 +2113,48 @@ index=main | head 10
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('fails --diff when the source has no original result envelope', () => {
+  test('falls back to counts_only diff when the source only preserves aggregate query-log metadata', async () => {
+    const commands = require('../thrunt-god/bin/lib/commands.cjs');
+    const runtime = require('../thrunt-god/bin/lib/runtime.cjs');
+    const originalCreateRegistry = runtime.createBuiltInConnectorRegistry;
+    const originalExecuteQuerySpec = runtime.executeQuerySpec;
+    const originalWriteSync = fs.writeSync;
+    const stdout = [];
+
+    runtime.createBuiltInConnectorRegistry = () => ({});
+    runtime.executeQuerySpec = async (spec) => ({
+      envelope: {
+        query_id: 'QRY-REPLAY-01',
+        connector: { id: spec.connector.id },
+        time_window: spec.time_window,
+        counts: { events: 12, entities: 4, evidence: 0, warnings: 0, errors: 0 },
+        entities: [{ kind: 'ip', value: '203.0.113.50' }],
+        evidence: [],
+        status: 'complete',
+      },
+      artifacts: null,
+      pagination: null,
+    });
+    fs.writeSync = (fd, data) => {
+      if (fd === 1) {
+        stdout.push(String(data));
+      }
+      return Buffer.byteLength(String(data));
+    };
+
     try {
-      execFileSync('node', [toolsPath, 'runtime', 'replay', '--source', 'QRY-123', '--diff', '--raw'], {
-        cwd: tmpDir,
-        encoding: 'utf-8',
-      });
-      assert.fail('Should have exited with error');
-    } catch (e) {
-      assert.ok(e.stderr.includes('runtime replay --diff requires a source with an original result envelope'));
+      await commands.cmdRuntimeReplay(tmpDir, ['--source', 'QRY-123', '--diff'], false);
+    } finally {
+      runtime.createBuiltInConnectorRegistry = originalCreateRegistry;
+      runtime.executeQuerySpec = originalExecuteQuerySpec;
+      fs.writeSync = originalWriteSync;
     }
+
+    const parsed = JSON.parse(stdout.join(''));
+    assert.ok(parsed.diff);
+    assert.strictEqual(parsed.diff.mode, 'counts_only');
+    assert.strictEqual(parsed.diff.requested_mode, 'full');
+    assert.match(parsed.diff.note, /aggregate result summary/i);
+    assert.strictEqual(parsed.diff.delta.events.added, 2);
   });
 });

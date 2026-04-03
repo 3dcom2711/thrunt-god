@@ -2886,7 +2886,7 @@ async function cmdRuntimeReplay(cwd, args, raw) {
     error(`Could not resolve source: ${options.source}${warnings.length ? ' (' + warnings.join('; ') + ')' : ''}`);
   }
   if (diffConfig.enabled && validResolved.some(r => !r.original_envelope)) {
-    error('runtime replay --diff requires a source with an original result envelope; replay-only query logs cannot produce a trustworthy baseline');
+    error('runtime replay --diff requires source artifacts that include an original result summary');
   }
 
   // Apply mutations to each resolved spec
@@ -2930,6 +2930,16 @@ async function cmdRuntimeReplay(cwd, args, raw) {
   if (diffConfig.enabled && results.length > 0) {
     const originalResolved = validResolved[0];
     const originalEnvelope = originalResolved.original_envelope;
+    let effectiveDiffMode = diffConfig.mode;
+    let diffNote = null;
+
+    if (originalResolved.baseline_detail_level === 'summary' && diffConfig.mode !== 'counts_only') {
+      if (diffConfig.mode === 'entities_only') {
+        error('runtime replay --diff-mode entities_only requires a source with original entity details');
+      }
+      effectiveDiffMode = 'counts_only';
+      diffNote = 'Original source recorded only aggregate result summary; computed counts_only diff.';
+    }
 
     const replayEnvelope = results[0].envelope || {
       query_id: mutatedSpecs[0].query_id,
@@ -2941,7 +2951,11 @@ async function cmdRuntimeReplay(cwd, args, raw) {
     };
 
     try {
-      diffResult = replay.buildDiff(originalEnvelope, replayEnvelope, diffConfig.mode);
+      diffResult = replay.buildDiff(originalEnvelope, replayEnvelope, effectiveDiffMode);
+      if (diffNote) {
+        diffResult.requested_mode = diffConfig.mode;
+        diffResult.note = diffNote;
+      }
     } catch (e) {
       diffResult = { error: e.message, fallback: 'counts_only' };
     }

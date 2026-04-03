@@ -434,6 +434,35 @@ describe('dispatchMultiTenant', () => {
     assert.ok(timeoutResults.length > 0, 'At least one tenant should have timed out');
   });
 
+  test('late tenant completions do not append duplicate results after global timeout', async () => {
+    const base = createQuerySpec(baseSpecInput({
+      execution: { timeout_ms: 60000 },
+    }));
+    const targets = [
+      { tenant_id: 'tenant-slow', connector_id: 'sentinel', profile_name: 'acme-sentinel', parameters: {}, display_name: 'Slow', tags: [] },
+      { tenant_id: 'tenant-pending', connector_id: 'sentinel', profile_name: 'acme-sentinel', parameters: {}, display_name: 'Pending', tags: [] },
+    ];
+
+    const registry = createConnectorRegistry([makeSentinelAdapter({
+      executeRequest: async () => {
+        await new Promise(r => setTimeout(r, 120));
+        return { status: 200, body: {} };
+      },
+      normalizeResponse: () => ({ events: [], has_more: false }),
+    })]);
+
+    const result = await dispatchMultiTenant(base, targets, registry, MOCK_CONFIG, {
+      concurrency: 1,
+      global_timeout_ms: 20,
+    });
+
+    assert.strictEqual(result.tenant_results.length, 2, 'Timeout should finalize exactly one result per target');
+    await new Promise(r => setTimeout(r, 180));
+    assert.strictEqual(result.tenant_results.length, 2, 'Late completions must not mutate finalized results');
+    assert.strictEqual(result.tenant_results.filter(r => r.tenant_id === 'tenant-slow').length, 1);
+    assert.strictEqual(result.tenant_results.filter(r => r.tenant_id === 'tenant-pending').length, 1);
+  });
+
   test('dispatch_id format is MTD-timestamp-random', async () => {
     const base = createQuerySpec(baseSpecInput());
     const registry = makeMockRegistry();

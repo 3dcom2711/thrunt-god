@@ -59,6 +59,29 @@ async function waitForHealthy(
 }
 
 /**
+ * Wait for the Splunk management API to become reachable with admin auth.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.timeout=120000] - Max wait in ms
+ * @param {number} [opts.interval=3000] - Delay between attempts in ms
+ * @returns {Promise<void>}
+ */
+async function ensureSplunkHostAccess({ timeout = 120000, interval = 3000 } = {}) {
+  const auth = 'Basic ' + Buffer.from(`${SPLUNK_USER}:${SPLUNK_PASSWORD}`).toString('base64');
+  await waitForHealthy(`${SPLUNK_URL}/services/server/info/server-info?output_mode=json`, {
+    timeout,
+    interval,
+    requestInit: {
+      headers: {
+        Authorization: auth,
+        Accept: 'application/json',
+      },
+    },
+    isHealthy: response => response.status === 200,
+  });
+}
+
+/**
  * Bootstrap a bearer token from Splunk REST API for integration test auth.
  * Uses the /services/authorization/tokens endpoint to create a fresh token.
  *
@@ -100,6 +123,7 @@ async function createSplunkBearerToken(baseUrl, { user, password }) {
 module.exports = {
   skipIfNoDocker,
   waitForHealthy,
+  ensureSplunkHostAccess,
   createSplunkBearerToken,
   SPLUNK_URL,
   SPLUNK_HEC_URL,

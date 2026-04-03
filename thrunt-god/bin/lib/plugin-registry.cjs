@@ -1,14 +1,3 @@
-/**
- * Plugin Registry — Manifest validation, loading, and cross-check for third-party connectors.
- *
- * Provides validatePluginManifest(), loadPluginManifest(), and loadPlugin() for the
- * plugin discovery pipeline (Phase 46). All manifest parsing and validation logic lives
- * here so that discoverPlugins() (Plan 02) can validate discovered packages.
- *
- * Depends on connector-sdk.cjs for AUTH_TYPES, DATASET_KINDS, PAGINATION_MODES constants
- * and validateConnectorAdapter() for adapter validation.
- */
-
 'use strict';
 
 const fs = require('fs');
@@ -22,11 +11,6 @@ const {
   isPlainObject,
 } = require('./connector-sdk.cjs');
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Built-in connector IDs from createBuiltInConnectorRegistry in runtime.cjs */
 const BUILT_IN_CONNECTOR_IDS = Object.freeze([
   'splunk',
   'elastic',
@@ -40,10 +24,7 @@ const BUILT_IN_CONNECTOR_IDS = Object.freeze([
   'gcp',
 ]);
 
-/** connector_id must start with a lowercase letter, followed by 1-63 lowercase alphanumeric, underscore, or hyphen chars */
 const CONNECTOR_ID_REGEX = /^[a-z][a-z0-9_-]{1,63}$/;
-
-/** Required top-level fields in thrunt-connector.json */
 const REQUIRED_MANIFEST_FIELDS = [
   'name',
   'version',
@@ -58,48 +39,63 @@ const REQUIRED_MANIFEST_FIELDS = [
   'permissions',
 ];
 
-// ---------------------------------------------------------------------------
-// Minimal semver range checker (no external dependency)
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a version string into [major, minor, patch] or null.
- */
-function parseSemver(version) {
-  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
-  if (!m) return null;
-  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+function realpathOrNull(targetPath) {
+  try {
+    if (typeof fs.realpathSync.native === 'function') {
+      return fs.realpathSync.native(targetPath);
+    }
+    return fs.realpathSync(targetPath);
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Check if a semver range string is a recognizable, satisfiable pattern.
- * Supports: exact "X.Y.Z", "^X.Y.Z", "~X.Y.Z", ">=X.Y.Z", ">=X.Y.Z <A.B.C".
- * Returns true if the range is parseable and satisfiable.
- */
+function isWithinPath(rootPath, targetPath) {
+  return targetPath === rootPath || targetPath.startsWith(rootPath + path.sep);
+}
+
+function resolveWithinRoot(rootPath, relativePath) {
+  const resolvedRoot = path.resolve(rootPath);
+  const resolvedPath = path.resolve(rootPath, relativePath);
+  const realRoot = realpathOrNull(resolvedRoot) || resolvedRoot;
+  const realPath = realpathOrNull(resolvedPath);
+
+  if (!isWithinPath(resolvedRoot, resolvedPath)) {
+    return null;
+  }
+
+  if (!realPath) {
+    return resolvedPath;
+  }
+
+  return isWithinPath(realRoot, realPath) ? realPath : null;
+}
+
+function parseSemver(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) return null;
+  return [parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10)];
+}
+
 function isSatisfiableSemverRange(range) {
   if (typeof range !== 'string') return false;
   const trimmed = range.trim();
   if (!trimmed) return false;
 
-  // Exact version: "1.2.3"
   if (parseSemver(trimmed)) return true;
 
-  // Caret range: "^1.2.3"
   if (trimmed.startsWith('^')) {
     return parseSemver(trimmed.slice(1)) !== null;
   }
 
-  // Tilde range: "~1.2.3"
   if (trimmed.startsWith('~')) {
     return parseSemver(trimmed.slice(1)) !== null;
   }
 
-  // Greater-than-or-equal: ">=1.2.3" or ">=1.2.3 <2.0.0"
   if (trimmed.startsWith('>=')) {
     const parts = trimmed.slice(2).trim().split(/\s+/);
     if (!parseSemver(parts[0])) return false;
     if (parts.length === 1) return true;
-    // Handle ">=X.Y.Z <A.B.C"
     if (parts.length === 2 && parts[1].startsWith('<')) {
       return parseSemver(parts[1].slice(1)) !== null;
     }
@@ -109,19 +105,6 @@ function isSatisfiableSemverRange(range) {
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// validatePluginManifest
-// ---------------------------------------------------------------------------
-
-/**
- * Validate a parsed plugin manifest object.
- *
- * @param {object} manifest - Parsed thrunt-connector.json contents
- * @param {object} [options] - Validation options
- * @param {string} [options.packageRoot] - Directory where entry file is resolved (enables file existence check)
- * @param {boolean} [options.allowOverride] - If true, suppress built-in collision warning
- * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
- */
 function validatePluginManifest(manifest, options = {}) {
   const errors = [];
   const warnings = [];
@@ -130,14 +113,12 @@ function validatePluginManifest(manifest, options = {}) {
     return { valid: false, errors: ['manifest must be a plain object'], warnings };
   }
 
-  // -- Rule 0: Required fields --
   for (const field of REQUIRED_MANIFEST_FIELDS) {
     if (manifest[field] === undefined || manifest[field] === null) {
       errors.push(`Required field '${field}' is missing`);
     }
   }
 
-  // -- Rule 1: connector_id format --
   if (typeof manifest.connector_id === 'string') {
     if (!CONNECTOR_ID_REGEX.test(manifest.connector_id)) {
       errors.push(
@@ -146,26 +127,21 @@ function validatePluginManifest(manifest, options = {}) {
     }
   }
 
-  // -- Rule 2: sdk_version is a satisfiable semver range --
   if (typeof manifest.sdk_version === 'string') {
     if (!isSatisfiableSemverRange(manifest.sdk_version)) {
       errors.push(`sdk_version '${manifest.sdk_version}' is not a valid semver range`);
     }
   }
 
-  // -- Rule 3: entry points to existing file (only if packageRoot provided) --
   if (typeof manifest.entry === 'string' && options.packageRoot) {
-    const entryPath = path.resolve(options.packageRoot, manifest.entry);
-    // Guard against path traversal — entry must resolve within packageRoot
-    const resolvedRoot = path.resolve(options.packageRoot) + path.sep;
-    if (!entryPath.startsWith(resolvedRoot) && entryPath !== path.resolve(options.packageRoot)) {
+    const entryPath = resolveWithinRoot(options.packageRoot, manifest.entry);
+    if (!entryPath) {
       errors.push(`entry '${manifest.entry}' resolves outside packageRoot (path traversal blocked)`);
     } else if (!fs.existsSync(entryPath)) {
       errors.push(`entry '${manifest.entry}' does not exist at ${entryPath}`);
     }
   }
 
-  // -- Rule 4: auth_types validation --
   if (Array.isArray(manifest.auth_types)) {
     for (const at of manifest.auth_types) {
       if (!AUTH_TYPES.includes(at)) {
@@ -174,7 +150,6 @@ function validatePluginManifest(manifest, options = {}) {
     }
   }
 
-  // -- Rule 5: dataset_kinds validation --
   if (Array.isArray(manifest.dataset_kinds)) {
     for (const dk of manifest.dataset_kinds) {
       if (!DATASET_KINDS.includes(dk)) {
@@ -183,7 +158,6 @@ function validatePluginManifest(manifest, options = {}) {
     }
   }
 
-  // -- Rule 6: pagination_modes validation --
   if (Array.isArray(manifest.pagination_modes)) {
     for (const pm of manifest.pagination_modes) {
       if (!PAGINATION_MODES.includes(pm)) {
@@ -192,7 +166,6 @@ function validatePluginManifest(manifest, options = {}) {
     }
   }
 
-  // -- Rule 7: connector_id collision with built-in --
   if (typeof manifest.connector_id === 'string' && !options.allowOverride) {
     if (BUILT_IN_CONNECTOR_IDS.includes(manifest.connector_id)) {
       warnings.push(
@@ -201,13 +174,11 @@ function validatePluginManifest(manifest, options = {}) {
     }
   }
 
-  // -- Rule 8: permissions required as plain object --
   if (manifest.permissions !== undefined && manifest.permissions !== null) {
     if (!isPlainObject(manifest.permissions)) {
       errors.push('permissions must be a plain object');
     }
   } else {
-    // Remove the generic required-field error and replace with specific message
     const idx = errors.findIndex(e => e.includes("'permissions'"));
     if (idx !== -1) errors.splice(idx, 1);
     errors.push('permissions object is required');
@@ -216,16 +187,6 @@ function validatePluginManifest(manifest, options = {}) {
   return { valid: errors.length === 0, errors, warnings };
 }
 
-// ---------------------------------------------------------------------------
-// loadPluginManifest
-// ---------------------------------------------------------------------------
-
-/**
- * Read thrunt-connector.json from a package root directory and validate it.
- *
- * @param {string} packageRoot - Absolute path to the plugin package directory
- * @returns {{ valid: boolean, manifest: object|null, errors: string[], warnings: string[] }}
- */
 function loadPluginManifest(packageRoot) {
   const manifestPath = path.join(packageRoot, 'thrunt-connector.json');
   let raw;
@@ -262,17 +223,6 @@ function loadPluginManifest(packageRoot) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// loadPlugin
-// ---------------------------------------------------------------------------
-
-/**
- * Load a plugin from a package root: read manifest, require entry module,
- * call createAdapter(), validate adapter, and cross-check capabilities.
- *
- * @param {string} packageRoot - Absolute path to the plugin package directory
- * @returns {{ valid: boolean, adapter: object|null, manifest: object|null, errors: string[], warnings: string[] }}
- */
 function loadPlugin(packageRoot) {
   const manifestResult = loadPluginManifest(packageRoot);
   if (!manifestResult.valid) {
@@ -286,11 +236,9 @@ function loadPlugin(packageRoot) {
   }
 
   const manifest = manifestResult.manifest;
-  const entryPath = path.resolve(packageRoot, manifest.entry);
+  const entryPath = resolveWithinRoot(packageRoot, manifest.entry);
 
-  // Guard against path traversal — entry must resolve within packageRoot
-  const resolvedRoot = path.resolve(packageRoot) + path.sep;
-  if (!entryPath.startsWith(resolvedRoot) && entryPath !== path.resolve(packageRoot)) {
+  if (!entryPath) {
     return {
       valid: false,
       adapter: null,
@@ -300,7 +248,6 @@ function loadPlugin(packageRoot) {
     };
   }
 
-  // Load entry module
   let entryModule;
   try {
     entryModule = require(entryPath);
@@ -314,7 +261,6 @@ function loadPlugin(packageRoot) {
     };
   }
 
-  // Call createAdapter
   if (typeof entryModule.createAdapter !== 'function') {
     return {
       valid: false,
@@ -338,7 +284,6 @@ function loadPlugin(packageRoot) {
     };
   }
 
-  // Validate adapter structure
   const adapterValidation = validateConnectorAdapter(adapter);
   const errors = [...manifestResult.errors];
   const warnings = [...manifestResult.warnings, ...(adapterValidation.warnings || [])];
@@ -353,10 +298,8 @@ function loadPlugin(packageRoot) {
     };
   }
 
-  // Cross-check: adapter capabilities must be a superset of manifest declarations
   const caps = adapter.capabilities || {};
 
-  // Check auth_types
   if (Array.isArray(manifest.auth_types)) {
     for (const at of manifest.auth_types) {
       if (!Array.isArray(caps.auth_types) || !caps.auth_types.includes(at)) {
@@ -365,7 +308,6 @@ function loadPlugin(packageRoot) {
     }
   }
 
-  // Check dataset_kinds
   if (Array.isArray(manifest.dataset_kinds)) {
     for (const dk of manifest.dataset_kinds) {
       if (!Array.isArray(caps.dataset_kinds) || !caps.dataset_kinds.includes(dk)) {
@@ -374,7 +316,6 @@ function loadPlugin(packageRoot) {
     }
   }
 
-  // Check pagination_modes
   if (Array.isArray(manifest.pagination_modes)) {
     for (const pm of manifest.pagination_modes) {
       if (!Array.isArray(caps.pagination_modes) || !caps.pagination_modes.includes(pm)) {
@@ -392,30 +333,17 @@ function loadPlugin(packageRoot) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// createPluginRegistry
-// ---------------------------------------------------------------------------
-
-/**
- * Factory that creates a PluginRegistry object — a superset of ConnectorRegistry
- * with provenance tracking (source, version, permissions) for each connector.
- *
- * @param {object} [options]
- * @param {object[]} [options.builtInAdapters] - Array of built-in adapter objects
- * @param {Array<{adapter, manifest, source, packageRoot}>} [options.pluginEntries] - Plugin entries
- * @returns {PluginRegistry}
- */
 function createPluginRegistry(options = {}) {
   const { builtInAdapters = [], pluginEntries = [] } = options;
 
-  /** @type {Map<string, object>} connector_id -> adapter */
   const adapterMap = new Map();
-  /** @type {Map<string, object>} connector_id -> PluginInfo */
   const pluginInfoMap = new Map();
-  /** @type {Set<string>} connector_ids where a plugin replaced a built-in */
   const overriddenSet = new Set();
 
-  // 1. Register built-in adapters first
+  function canOverrideBuiltIn(id, source) {
+    return BUILT_IN_CONNECTOR_IDS.includes(id) && source === 'config-override';
+  }
+
   for (const adapter of builtInAdapters) {
     if (!adapter || !adapter.capabilities) continue;
     const id = adapter.capabilities.id;
@@ -432,14 +360,15 @@ function createPluginRegistry(options = {}) {
     });
   }
 
-  // 2. Register plugin entries (plugins take precedence over built-ins)
   for (const entry of pluginEntries) {
     const { adapter, manifest, source, packageRoot } = entry;
     if (!adapter || !adapter.capabilities) continue;
     const id = adapter.capabilities.id;
 
-    // If this connector_id matches a built-in, record the override
     if (pluginInfoMap.has(id) && pluginInfoMap.get(id).source === 'built-in') {
+      if (!canOverrideBuiltIn(id, source)) {
+        continue;
+      }
       overriddenSet.add(id);
     }
 
@@ -456,7 +385,6 @@ function createPluginRegistry(options = {}) {
     });
   }
 
-  // Helper to clone capabilities (consistent with ConnectorRegistry.list())
   function cloneCapabilities(adapter) {
     return JSON.parse(JSON.stringify(adapter.capabilities));
   }
@@ -475,6 +403,9 @@ function createPluginRegistry(options = {}) {
       if (!adapter || !adapter.capabilities) return;
       const id = adapter.capabilities.id;
       if (pluginInfoMap.has(id) && pluginInfoMap.get(id).source === 'built-in') {
+        if (!canOverrideBuiltIn(id, pluginInfo ? pluginInfo.source : null)) {
+          return;
+        }
         overriddenSet.add(id);
       }
       adapterMap.set(id, adapter);
@@ -497,35 +428,42 @@ function createPluginRegistry(options = {}) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// _scanNodeModules (exported for testing)
-// ---------------------------------------------------------------------------
-
 /** @type {Map<string, {mtime: number, results: Array}>} */
 const _scanCache = new Map();
 
-/**
- * Scan node_modules for plugin packages.
- * Check patterns: @thrunt/connector-*, thrunt-connector-*, and any package with thrunt-connector.json.
- * Caches results keyed by cwd; invalidated when package-lock.json mtime changes.
- *
- * @param {string} cwd - Directory containing node_modules
- * @returns {Array<{packageRoot: string, manifestPath: string}>}
- */
-function _scanNodeModules(cwd) {
-  const nmDir = path.join(cwd, 'node_modules');
+function isLooseTopLevelDiscoveryEnabled(config = {}) {
+  if (process.env.THRUNT_ENABLE_TOPLEVEL_CONNECTOR_DISCOVERY === '1') {
+    return true;
+  }
 
-  // Check lockfile mtime for cache invalidation
+  if (config && typeof config === 'object') {
+    if (config.allow_top_level_connector_discovery === true) {
+      return true;
+    }
+    if (config.plugins && typeof config.plugins === 'object' && config.plugins.allow_top_level_connector_discovery === true) {
+      return true;
+    }
+    if (config.connectors && typeof config.connectors === 'object' && config.connectors.allow_top_level_connector_discovery === true) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function _scanNodeModules(cwd, options = {}) {
+  const allowTopLevelConnectorDiscovery = Boolean(options.allowTopLevelConnectorDiscovery);
+  const nmDir = path.join(cwd, 'node_modules');
+  const cacheKey = `${cwd}:${allowTopLevelConnectorDiscovery ? 'top-level' : 'namespaced-only'}`;
+
   let lockMtime = 0;
   const lockPath = path.join(cwd, 'package-lock.json');
   try {
     lockMtime = fs.statSync(lockPath).mtimeMs;
   } catch {
-    // No lockfile — that's fine
   }
 
-  // Check cache
-  const cached = _scanCache.get(cwd);
+  const cached = _scanCache.get(cacheKey);
   if (cached && cached.mtime === lockMtime) {
     return cached.results;
   }
@@ -533,7 +471,7 @@ function _scanNodeModules(cwd) {
   // Scan node_modules
   if (!fs.existsSync(nmDir)) {
     const results = [];
-    _scanCache.set(cwd, { mtime: lockMtime, results });
+    _scanCache.set(cacheKey, { mtime: lockMtime, results });
     return results;
   }
 
@@ -542,7 +480,7 @@ function _scanNodeModules(cwd) {
   try {
     entries = fs.readdirSync(nmDir);
   } catch {
-    _scanCache.set(cwd, { mtime: lockMtime, results });
+    _scanCache.set(cacheKey, { mtime: lockMtime, results });
     return results;
   }
 
@@ -580,7 +518,11 @@ function _scanNodeModules(cwd) {
       continue;
     }
 
-    // Check any other top-level package with thrunt-connector.json
+    if (!allowTopLevelConnectorDiscovery) {
+      continue;
+    }
+
+    // Check any other top-level package with thrunt-connector.json only when explicitly enabled.
     try {
       const stat = fs.statSync(entryPath);
       if (stat.isDirectory()) {
@@ -594,27 +536,10 @@ function _scanNodeModules(cwd) {
     }
   }
 
-  _scanCache.set(cwd, { mtime: lockMtime, results });
+  _scanCache.set(cacheKey, { mtime: lockMtime, results });
   return results;
 }
 
-// ---------------------------------------------------------------------------
-// discoverPlugins
-// ---------------------------------------------------------------------------
-
-/**
- * Discover and register plugins using triple-precedence resolution:
- *   1. Built-in fallback (lowest precedence)
- *   2. node_modules scan
- *   3. Explicit config plugins (config-path)
- *   4. Config overrides (config-override, highest precedence for built-in replacement)
- *
- * @param {object} [options]
- * @param {string} [options.cwd] - Working directory (default: process.cwd())
- * @param {object} [options.config] - Config with connectors.plugins and connectors.overrides
- * @param {boolean} [options.includeBuiltIn] - Include built-in connectors (default: true)
- * @returns {PluginRegistry}
- */
 function discoverPlugins(options = {}) {
   const {
     cwd = process.cwd(),
@@ -625,9 +550,7 @@ function discoverPlugins(options = {}) {
   const builtInAdapters = [];
   const pluginEntries = [];
 
-  // 1. Built-in fallback
   if (includeBuiltIn) {
-    // Lazy require to avoid circular dependency at module load time
     const { createBuiltInConnectorRegistry } = require('./runtime.cjs');
     const builtInRegistry = createBuiltInConnectorRegistry();
     for (const id of BUILT_IN_CONNECTOR_IDS) {
@@ -637,7 +560,9 @@ function discoverPlugins(options = {}) {
   }
 
   // 2. node_modules scan
-  const discovered = _scanNodeModules(cwd);
+  const discovered = _scanNodeModules(cwd, {
+    allowTopLevelConnectorDiscovery: isLooseTopLevelDiscoveryEnabled(config),
+  });
   for (const { packageRoot } of discovered) {
     const result = loadPlugin(packageRoot);
     if (result.valid) {
@@ -652,65 +577,67 @@ function discoverPlugins(options = {}) {
     }
   }
 
-  // Path containment helper — validates a resolved path is within allowed roots
   const resolvedCwd = path.resolve(cwd);
-  const nodeModulesRoot = path.join(resolvedCwd, 'node_modules');
+  const canonicalProjectRoot = realpathOrNull(resolvedCwd) || resolvedCwd;
+  const nodeModulesRoot = path.join(canonicalProjectRoot, 'node_modules');
+
+  function canonicalizeForBoundaryCheck(resolvedPath) {
+    return realpathOrNull(resolvedPath) || path.resolve(resolvedPath);
+  }
 
   function isWithinProjectRoot(resolvedPath) {
-    const normalised = path.resolve(resolvedPath);
-    return normalised.startsWith(resolvedCwd + path.sep) || normalised === resolvedCwd;
+    const normalised = canonicalizeForBoundaryCheck(resolvedPath);
+    return isWithinPath(canonicalProjectRoot, normalised);
   }
 
   function isWithinProjectOrNodeModules(resolvedPath) {
-    const normalised = path.resolve(resolvedPath);
+    const normalised = canonicalizeForBoundaryCheck(resolvedPath);
     return (
-      normalised.startsWith(resolvedCwd + path.sep) ||
-      normalised === resolvedCwd ||
-      normalised.startsWith(nodeModulesRoot + path.sep) ||
-      normalised === nodeModulesRoot
+      isWithinPath(canonicalProjectRoot, normalised) ||
+      isWithinPath(nodeModulesRoot, normalised)
     );
   }
 
-  // 3. Explicit config plugins
   const configPlugins = config?.connectors?.plugins;
   if (Array.isArray(configPlugins)) {
     for (const pluginPath of configPlugins) {
       const resolvedPath = path.resolve(cwd, pluginPath);
-      if (!isWithinProjectRoot(resolvedPath)) {
+      const canonicalPath = canonicalizeForBoundaryCheck(resolvedPath);
+      if (!isWithinProjectRoot(canonicalPath)) {
         console.warn(`[thrunt] Plugin path '${pluginPath}' resolves outside project root (path traversal blocked)`);
         continue;
       }
-      const result = loadPlugin(resolvedPath);
+      const result = loadPlugin(canonicalPath);
       if (result.valid) {
         pluginEntries.push({
           adapter: result.adapter,
           manifest: result.manifest,
           source: 'config-path',
-          packageRoot: resolvedPath,
+          packageRoot: canonicalPath,
         });
       } else {
-        console.error(`[thrunt] Invalid plugin at ${resolvedPath}: ${result.errors.join('; ')}`);
+        console.error(`[thrunt] Invalid plugin at ${canonicalPath}: ${result.errors.join('; ')}`);
       }
     }
   }
 
-  // 4. Config overrides (highest precedence for built-in replacement)
   const configOverrides = config?.connectors?.overrides;
   if (configOverrides && typeof configOverrides === 'object') {
     for (const [builtInId, pluginPath] of Object.entries(configOverrides)) {
       const resolvedPath = path.resolve(cwd, pluginPath);
-      if (!isWithinProjectOrNodeModules(resolvedPath)) {
+      const canonicalPath = canonicalizeForBoundaryCheck(resolvedPath);
+      if (!isWithinProjectOrNodeModules(canonicalPath)) {
         console.warn(`[thrunt] Override path '${pluginPath}' resolves outside project root and node_modules (path traversal blocked)`);
         continue;
       }
-      const result = loadPlugin(resolvedPath);
+      const result = loadPlugin(canonicalPath);
       if (result.valid) {
         if (result.adapter.capabilities.id === builtInId) {
           pluginEntries.push({
             adapter: result.adapter,
             manifest: result.manifest,
             source: 'config-override',
-            packageRoot: resolvedPath,
+            packageRoot: canonicalPath,
           });
         } else {
           console.error(
@@ -718,17 +645,13 @@ function discoverPlugins(options = {}) {
           );
         }
       } else {
-        console.error(`[thrunt] Invalid override plugin at ${resolvedPath}: ${result.errors.join('; ')}`);
+        console.error(`[thrunt] Invalid override plugin at ${canonicalPath}: ${result.errors.join('; ')}`);
       }
     }
   }
 
   return createPluginRegistry({ builtInAdapters, pluginEntries });
 }
-
-// ---------------------------------------------------------------------------
-// Exports
-// ---------------------------------------------------------------------------
 
 module.exports = {
   BUILT_IN_CONNECTOR_IDS,

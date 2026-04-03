@@ -53,7 +53,7 @@ thrunt:progress
     // Slash commands: /hunt:run -> /hunt-run
     assert.ok(result.includes('/hunt-run 17'), 'slash command thrunt: -> thrunt-');
     assert.ok(result.includes('/thrunt-help'), '/thrunt-help preserved');
-    assert.ok(result.includes('thrunt-progress'), 'bare thrunt: -> thrunt-');
+    assert.ok(result.includes('thrunt:progress'), 'plain text labels remain intact');
   });
 
   test('includes windsurf_skill_adapter block', () => {

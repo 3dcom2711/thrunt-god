@@ -43,6 +43,10 @@ function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'plugin-reg-'));
 }
 
+function symlinkDir(targetPath, linkPath) {
+  fs.symlinkSync(path.resolve(targetPath), linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+}
+
 // -- BUILT_IN_CONNECTOR_IDS --
 
 describe('BUILT_IN_CONNECTOR_IDS', () => {
@@ -130,6 +134,29 @@ describe('validatePluginManifest', () => {
       assert.strictEqual(entryErrors.length, 0, 'existing entry file should pass');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects entry symlink escaping packageRoot', () => {
+    const tmpDir = makeTempDir();
+    const outsideDir = makeTempDir();
+    try {
+      fs.writeFileSync(path.join(outsideDir, 'index.cjs'), 'module.exports = {}');
+      symlinkDir(outsideDir, path.join(tmpDir, 'linked'));
+
+      const result = validatePluginManifest(
+        validManifest({ entry: './linked/index.cjs' }),
+        { packageRoot: tmpDir }
+      );
+
+      assert.strictEqual(result.valid, false);
+      assert.ok(
+        result.errors.some(error => /resolves outside packageRoot/i.test(error)),
+        `Expected packageRoot boundary error, got: ${result.errors.join('; ')}`
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(outsideDir, { recursive: true, force: true });
     }
   });
 
@@ -364,6 +391,44 @@ module.exports = {
   return tmpDir;
 }
 
+function createMockNodeModulesPlugin(projectRoot, packageSegments, connectorId, overrides = {}) {
+  const segments = Array.isArray(packageSegments) ? packageSegments : [packageSegments];
+  const pkgDir = path.join(projectRoot, 'node_modules', ...segments);
+  fs.mkdirSync(pkgDir, { recursive: true });
+
+  const manifest = validManifest({
+    name: segments.join('/'),
+    connector_id: connectorId,
+    display_name: `Test ${connectorId}`,
+    ...overrides,
+  });
+  fs.writeFileSync(path.join(pkgDir, 'thrunt-connector.json'), JSON.stringify(manifest));
+
+  const adapterCode = `
+'use strict';
+const sdk = require('${sdkPath}');
+module.exports = {
+  createAdapter() {
+    return {
+      capabilities: sdk.createConnectorCapabilities({
+        id: '${connectorId}',
+        display_name: 'Test ${connectorId}',
+        auth_types: ['api_key'],
+        dataset_kinds: ['events'],
+        languages: ['spl'],
+        pagination_modes: ['cursor'],
+      }),
+      prepareQuery(spec) { return spec; },
+      executeRequest(req) { return { status: 200, body: {} }; },
+      normalizeResponse(resp) { return { events: [] }; },
+    };
+  },
+};
+`;
+  fs.writeFileSync(path.join(pkgDir, 'index.cjs'), adapterCode);
+  return pkgDir;
+}
+
 // -- createPluginRegistry --
 
 describe('createPluginRegistry', () => {
@@ -446,6 +511,35 @@ describe('createPluginRegistry', () => {
       const adapter = reg.get('splunk');
       assert.ok(adapter);
       assert.strictEqual(adapter.capabilities.id, 'splunk');
+    } finally {
+      fs.rmSync(pluginDir, { recursive: true, force: true });
+    }
+  });
+
+  test('node_modules plugin with built-in connector_id does not override built-in metadata', () => {
+    const rt = require('../thrunt-god/bin/lib/runtime.cjs');
+    const builtInRegistry = rt.createBuiltInConnectorRegistry();
+    const builtInAdapters = BUILT_IN_CONNECTOR_IDS.map(id => builtInRegistry.get(id));
+
+    const pluginDir = createMockPluginDir('splunk');
+    try {
+      const pluginResult = loadPlugin(pluginDir);
+      assert.strictEqual(pluginResult.valid, true);
+
+      const reg = createPluginRegistry({
+        builtInAdapters,
+        pluginEntries: [{
+          adapter: pluginResult.adapter,
+          manifest: pluginResult.manifest,
+          source: 'node_modules',
+          packageRoot: pluginDir,
+        }],
+      });
+
+      assert.strictEqual(reg.isOverridden('splunk'), false);
+      assert.strictEqual(reg.isBuiltIn('splunk'), true);
+      assert.strictEqual(reg.get('splunk'), builtInRegistry.get('splunk'));
+      assert.strictEqual(reg.getPluginInfo('splunk').source, 'built-in');
     } finally {
       fs.rmSync(pluginDir, { recursive: true, force: true });
     }
@@ -555,6 +649,7 @@ describe('discoverPlugins', () => {
       });
 
       assert.strictEqual(reg.isOverridden('splunk'), true);
+      assert.strictEqual(reg.isBuiltIn('splunk'), false);
       assert.strictEqual(reg.has('splunk'), true);
       const info = reg.getPluginInfo('splunk');
       assert.strictEqual(info.source, 'config-override');
@@ -623,6 +718,36 @@ describe('discoverPlugins', () => {
     }
   });
 
+  test('config.plugins symlink inside project root pointing outside is blocked', () => {
+    const pluginDir = createMockPluginDir('evil_connector');
+    const projectRoot = makeTempDir();
+    const linkedPath = path.join(projectRoot, 'linked-plugin');
+    try {
+      symlinkDir(pluginDir, linkedPath);
+
+      const origWarn = console.warn;
+      const warnings = [];
+      console.warn = (...args) => warnings.push(args.join(' '));
+      try {
+        const reg = discoverPlugins({
+          includeBuiltIn: false,
+          cwd: projectRoot,
+          config: { connectors: { plugins: ['linked-plugin'] } },
+        });
+        assert.strictEqual(reg.has('evil_connector'), false);
+        assert.ok(
+          warnings.some(w => /path traversal blocked/i.test(w)),
+          `Expected path traversal warning, got: ${warnings.join('; ')}`
+        );
+      } finally {
+        console.warn = origWarn;
+      }
+    } finally {
+      fs.rmSync(pluginDir, { recursive: true, force: true });
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   test('config.overrides path traversal outside project root is blocked', () => {
     const pluginDir = createMockPluginDir('splunk');
     const projectRoot = makeTempDir(); // separate dir as the project root
@@ -639,6 +764,36 @@ describe('discoverPlugins', () => {
         // Splunk should NOT be overridden since override path is outside project root
         assert.strictEqual(reg.isOverridden('splunk'), false);
         // Should have logged a path traversal warning
+        assert.ok(
+          warnings.some(w => /path traversal blocked/i.test(w)),
+          `Expected path traversal warning, got: ${warnings.join('; ')}`
+        );
+      } finally {
+        console.warn = origWarn;
+      }
+    } finally {
+      fs.rmSync(pluginDir, { recursive: true, force: true });
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('config.overrides symlink inside project root pointing outside is blocked', () => {
+    const pluginDir = createMockPluginDir('splunk');
+    const projectRoot = makeTempDir();
+    const linkedPath = path.join(projectRoot, 'linked-override');
+    try {
+      symlinkDir(pluginDir, linkedPath);
+
+      const origWarn = console.warn;
+      const warnings = [];
+      console.warn = (...args) => warnings.push(args.join(' '));
+      try {
+        const reg = discoverPlugins({
+          includeBuiltIn: true,
+          cwd: projectRoot,
+          config: { connectors: { overrides: { splunk: 'linked-override' } } },
+        });
+        assert.strictEqual(reg.isOverridden('splunk'), false);
         assert.ok(
           warnings.some(w => /path traversal blocked/i.test(w)),
           `Expected path traversal warning, got: ${warnings.join('; ')}`
@@ -692,6 +847,114 @@ module.exports = {
       fs.rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  test('does not auto-load arbitrary node_modules plugins without explicit opt-in', () => {
+    const projectRoot = makeTempDir();
+    const pluginDir = path.join(projectRoot, 'node_modules', 'custom-connector');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    try {
+      const manifest = validManifest({ connector_id: 'custom_connector', display_name: 'Custom Connector' });
+      fs.writeFileSync(path.join(pluginDir, 'thrunt-connector.json'), JSON.stringify(manifest));
+      const adapterCode = `
+'use strict';
+const sdk = require('${sdkPath}');
+module.exports = {
+  createAdapter() {
+    return {
+      capabilities: sdk.createConnectorCapabilities({
+        id: 'custom_connector',
+        display_name: 'Custom Connector',
+        auth_types: ['api_key'],
+        dataset_kinds: ['events'],
+        languages: ['spl'],
+        pagination_modes: ['cursor'],
+      }),
+      prepareQuery(spec) { return spec; },
+      executeRequest(req) { return { status: 200, body: {} }; },
+      normalizeResponse(resp) { return { events: [] }; },
+    };
+  },
+};
+`;
+      fs.writeFileSync(path.join(pluginDir, 'index.cjs'), adapterCode);
+
+      const reg = discoverPlugins({
+        includeBuiltIn: false,
+        cwd: projectRoot,
+      });
+      assert.strictEqual(reg.has('custom_connector'), false);
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('allows arbitrary node_modules plugins only when explicitly configured', () => {
+    const projectRoot = makeTempDir();
+    const pluginDir = path.join(projectRoot, 'node_modules', 'custom-connector');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    try {
+      const manifest = validManifest({ connector_id: 'custom_connector', display_name: 'Custom Connector' });
+      fs.writeFileSync(path.join(pluginDir, 'thrunt-connector.json'), JSON.stringify(manifest));
+      const adapterCode = `
+'use strict';
+const sdk = require('${sdkPath}');
+module.exports = {
+  createAdapter() {
+    return {
+      capabilities: sdk.createConnectorCapabilities({
+        id: 'custom_connector',
+        display_name: 'Custom Connector',
+        auth_types: ['api_key'],
+        dataset_kinds: ['events'],
+        languages: ['spl'],
+        pagination_modes: ['cursor'],
+      }),
+      prepareQuery(spec) { return spec; },
+      executeRequest(req) { return { status: 200, body: {} }; },
+      normalizeResponse(resp) { return { events: [] }; },
+    };
+  },
+};
+`;
+      fs.writeFileSync(path.join(pluginDir, 'index.cjs'), adapterCode);
+
+      const reg = discoverPlugins({
+        includeBuiltIn: false,
+        cwd: projectRoot,
+        config: {
+          connectors: {
+            allow_top_level_connector_discovery: true,
+          },
+        },
+      });
+      assert.strictEqual(reg.has('custom_connector'), true);
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('discovered reserved-prefix packages with built-in connector_id do not override built-ins', () => {
+    const projectRoot = makeTempDir();
+    try {
+      createMockNodeModulesPlugin(projectRoot, ['@thrunt', 'connector-shadow'], 'splunk');
+      createMockNodeModulesPlugin(projectRoot, ['thrunt-connector-shadow'], 'splunk');
+
+      const reg = discoverPlugins({
+        includeBuiltIn: true,
+        cwd: projectRoot,
+      });
+
+      assert.strictEqual(reg.isOverridden('splunk'), false);
+      assert.strictEqual(reg.isBuiltIn('splunk'), true);
+      assert.strictEqual(reg.getPluginInfo('splunk').source, 'built-in');
+
+      const splunkEntries = reg.listPlugins().filter(plugin => plugin.connector_id === 'splunk');
+      assert.strictEqual(splunkEntries.length, 1);
+      assert.strictEqual(splunkEntries[0].source, 'built-in');
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 // -- _scanNodeModules --
@@ -724,6 +987,37 @@ describe('_scanNodeModules', () => {
       const results = _scanNodeModules(tmpDir);
       assert.ok(results.length >= 1, 'should find thrunt-connector-foo');
       assert.ok(results.some(r => r.packageRoot.includes('thrunt-connector-foo')));
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('skips arbitrary top-level packages with thrunt-connector.json by default', () => {
+    const tmpDir = makeTempDir();
+    try {
+      const pkgDir = path.join(tmpDir, 'node_modules', 'custom-connector');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      fs.writeFileSync(path.join(pkgDir, 'thrunt-connector.json'), '{}');
+
+      const results = _scanNodeModules(tmpDir);
+      assert.strictEqual(results.length, 0, 'should ignore arbitrary top-level packages by default');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('allows arbitrary top-level packages only with explicit opt-in', () => {
+    const tmpDir = makeTempDir();
+    try {
+      const pkgDir = path.join(tmpDir, 'node_modules', 'custom-connector');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      fs.writeFileSync(path.join(pkgDir, 'thrunt-connector.json'), '{}');
+
+      const results = _scanNodeModules(tmpDir, {
+        allowTopLevelConnectorDiscovery: true,
+      });
+      assert.strictEqual(results.length, 1, 'should allow explicit top-level discovery');
+      assert.ok(results[0].packageRoot.includes('custom-connector'));
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

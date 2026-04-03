@@ -78,7 +78,17 @@ jobs:
         shell: bash
         run: |
           cd "$CONNECTOR_DIR"
-          npx c8 --reporter text --reporter lcov node --test tests/
+          TEST_FILES=()
+          while IFS= read -r -d '' test_file; do
+            TEST_FILES+=("$test_file")
+          done < <(find tests -type f \( -name '*.test.cjs' -o -name '*.test.js' -o -name '*.test.mjs' \) -print0)
+
+          if [ "${#TEST_FILES[@]}" -eq 0 ]; then
+            echo "No Node test files found under tests/"
+            exit 1
+          fi
+
+          npx c8 --reporter text --reporter lcov node --test "${TEST_FILES[@]}"
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3

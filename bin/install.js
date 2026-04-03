@@ -561,6 +561,12 @@ function convertCopilotToolName(claudeTool) {
   return claudeTool.toLowerCase();
 }
 
+function convertSlashCommandsToHyphenated(content) {
+  return content
+    .replace(/\/thrunt:([a-z0-9-]+)/gi, '/thrunt-$1')
+    .replace(/\/hunt:([a-z0-9-]+)/gi, '/hunt-$1');
+}
+
 /**
  * Apply Copilot-specific content conversion — CONV-06 (paths) + CONV-07 (command names).
  * Path mappings depend on install mode:
@@ -582,9 +588,8 @@ function convertClaudeToCopilotContent(content, isGlobal = false) {
   }
   c = c.replace(/\.\/\.claude\//g, './.github/');
   c = c.replace(/\.claude\//g, '.github/');
-  // CONV-07: Command name conversion for both utility and hunt namespaces
-  c = c.replace(/thrunt:/g, 'thrunt-');
-  c = c.replace(/hunt:/g, 'hunt-');
+  // CONV-07: Command name conversion only for slash commands, not code/object keys.
+  c = convertSlashCommandsToHyphenated(c);
   // Runtime-neutral agent name replacement (#766)
   c = neutralizeAgentReferences(c, 'copilot-instructions.md');
   return c;
@@ -675,9 +680,8 @@ function convertClaudeToAntigravityContent(content, isGlobal = false) {
   }
   c = c.replace(/\.\/\.claude\//g, './.agent/');
   c = c.replace(/\.claude\//g, '.agent/');
-  // Command name conversion for both utility and hunt namespaces
-  c = c.replace(/thrunt:/g, 'thrunt-');
-  c = c.replace(/hunt:/g, 'hunt-');
+  // Command name conversion only for slash commands, not code/object keys.
+  c = convertSlashCommandsToHyphenated(c);
   // Runtime-neutral agent name replacement (#766)
   c = neutralizeAgentReferences(c, 'GEMINI.md');
   return c;
@@ -790,9 +794,7 @@ function convertCursorToolName(claudeTool) {
 
 function convertSlashCommandsToCursorSkillMentions(content) {
   // Keep leading "/" for slash commands while normalizing both namespaces.
-  return content
-    .replace(/thrunt:/gi, 'thrunt-')
-    .replace(/hunt:/gi, 'hunt-');
+  return convertSlashCommandsToHyphenated(content);
 }
 
 function convertClaudeToCursorMarkdown(content) {
@@ -910,9 +912,7 @@ function convertWindsurfToolName(claudeTool) {
 
 function convertSlashCommandsToWindsurfSkillMentions(content) {
   // Keep leading "/" for slash commands while normalizing both namespaces.
-  return content
-    .replace(/thrunt:/gi, 'thrunt-')
-    .replace(/hunt:/gi, 'hunt-');
+  return convertSlashCommandsToHyphenated(content);
 }
 
 function convertClaudeToWindsurfMarkdown(content) {
@@ -3095,8 +3095,7 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
     } else if (isCursor && (entry.name.endsWith('.cjs') || entry.name.endsWith('.js'))) {
       // For Cursor, also convert Claude references in JS/CJS utility scripts
       let jsContent = fs.readFileSync(srcPath, 'utf8');
-      jsContent = jsContent.replace(/thrunt:/gi, 'thrunt-');
-      jsContent = jsContent.replace(/hunt:/gi, 'hunt-');
+      jsContent = convertSlashCommandsToHyphenated(jsContent);
       jsContent = jsContent.replace(/\.claude\/skills\//g, '.cursor/skills/');
       jsContent = jsContent.replace(/CLAUDE\.md/g, '.cursor/rules/');
       jsContent = jsContent.replace(/\bClaude Code\b/g, 'Cursor');
@@ -3104,8 +3103,7 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
     } else if (isWindsurf && (entry.name.endsWith('.cjs') || entry.name.endsWith('.js'))) {
       // For Windsurf, also convert Claude references in JS/CJS utility scripts
       let jsContent = fs.readFileSync(srcPath, 'utf8');
-      jsContent = jsContent.replace(/thrunt:/gi, 'thrunt-');
-      jsContent = jsContent.replace(/hunt:/gi, 'hunt-');
+      jsContent = convertSlashCommandsToHyphenated(jsContent);
       jsContent = jsContent.replace(/\.claude\/skills\//g, '.windsurf/skills/');
       jsContent = jsContent.replace(/CLAUDE\.md/g, '.windsurf/rules/');
       jsContent = jsContent.replace(/\bClaude Code\b/g, 'Windsurf');
@@ -4237,9 +4235,12 @@ function install(isGlobal, runtime = 'claude') {
     fs.writeFileSync(pkgJsonDest, '{"type":"commonjs"}\n');
     console.log(`  ${green}✓${reset} Wrote package.json (CommonJS mode)`);
 
-    // Copy hooks from dist/ (bundled with dependencies)
+    // Prefer built hooks/dist when present, but fall back to the checked-in hooks/
+    // sources so local installs from a dev checkout still get working hook files.
+    const bundledHooksSrc = path.join(src, 'hooks', 'dist');
+    const sourceHooksSrc = path.join(src, 'hooks');
+    const hooksSrc = fs.existsSync(bundledHooksSrc) ? bundledHooksSrc : sourceHooksSrc;
     // Template paths for the target runtime (replaces '.claude' with correct config dir)
-    const hooksSrc = path.join(src, 'hooks', 'dist');
     if (fs.existsSync(hooksSrc)) {
       const hooksDest = path.join(targetDir, 'hooks');
       fs.mkdirSync(hooksDest, { recursive: true });
@@ -4264,7 +4265,8 @@ function install(isGlobal, runtime = 'claude') {
         }
       }
       if (verifyInstalled(hooksDest, 'hooks')) {
-        console.log(`  ${green}✓${reset} Installed hooks (bundled)`);
+        const hooksSourceLabel = hooksSrc === bundledHooksSrc ? 'bundled' : 'source';
+        console.log(`  ${green}✓${reset} Installed hooks (${hooksSourceLabel})`);
       } else {
         failures.push('hooks');
       }
