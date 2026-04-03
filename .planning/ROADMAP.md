@@ -104,7 +104,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 16-01-PLAN.md -- Cross-surface selection API, context menu commands, highlight wiring
+- [x] 16-01-PLAN.md -- Cross-surface selection API, context menu commands, highlight wiring
 - [ ] 16-02-PLAN.md -- WebviewPanelSerializer registration and workspaceState persistence
 - [ ] 16-03-PLAN.md -- Session continuity Resume card in Hunt Overview
 
@@ -263,7 +263,7 @@ Plans:
 | 13. Hunt Overview Dashboard | 3/3 | Complete    | 2026-04-02 | 2026-04-02 |
 | 14. Evidence Board | v3.0 | 3/3 | Complete | 2026-04-02 |
 | 15. Query Analysis Upgrades | v3.0 | Complete    | 2026-04-03 | 2026-04-03 |
-| 16. Cross-Surface Navigation | v3.0 | 0/3 | Not started | - |
+| 16. Cross-Surface Navigation | v3.0 | 1/3 | In progress | - |
 | 17. War Room Copy | v4.0 | 0/1 | Not started | - |
 | 18. SLA Countdown Timer | v4.0 | 0/1 | Not started | - |
 | 19. IOC Quick-Entry | v4.0 | 0/1 | Not started | - |

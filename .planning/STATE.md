@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Investigative Surfaces
-status: in-progress
-stopped_at: Completed 15-03-PLAN.md
-last_updated: "2026-04-03T00:56:30.000Z"
-last_activity: 2026-04-03 -- Completed 15-03 Receipt QA Inspector
+status: in_progress
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-04-03T01:56:42.000Z"
+last_activity: 2026-04-03 -- Completed 16-01 Cross-Surface Selection Sync
 progress:
-  total_phases: 5
+  total_phases: 13
   completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_plans: 15
+  completed_plans: 13
+  percent: 87
 ---
 
 # Project State
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 ## Current Position
 
-Phase: 15 of 16 (Query Analysis Upgrades)
-Plan: 3 of 3 complete
-Status: Phase Complete
-Last activity: 2026-04-03 -- Completed 15-03 Receipt QA Inspector
+Phase: 16 of 16 (Cross-Surface Navigation & Session Continuity)
+Plan: 1 of 3 complete
+Status: In Progress
+Last activity: 2026-04-03 -- Completed 16-01 Cross-Surface Selection Sync
 
-Progress: [██████████] 100%
+Progress: [████████░░] 87%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 34 (v1.0: 12, v2.0: 12, v3.0: 10)
+- Total plans completed: 35 (v1.0: 12, v2.0: 12, v3.0: 11)
 
 **By Phase:**
 
@@ -54,6 +54,7 @@ Progress: [██████████] 100%
 | Phase 15 P01 | 6min | 2 tasks | 7 files |
 | Phase 15 P02 | 3min | 2 tasks | 3 files |
 | Phase 15 P03 | 3min | 2 tasks | 2 files |
+| Phase 16 P01 | 5min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,10 @@ Recent decisions affecting current work:
 - [Phase 15-02]: Heatmap opacity minimum 0.15 for non-zero cells; count bar width relative to max(queryA, queryB) event counts
 - [Phase 15-03]: Inspector replaces comparison/heatmap views when active (toggle pattern), not shown alongside
 - [Phase 15-03]: scoreColor/scoreLevelLabel helpers for mapping 0-6 deviation scores to low/medium/high CSS variants
+- [Phase 16-01]: store.select() deduplicates: firing with same ID twice emits only one event
+- [Phase 16-01]: selection:highlight message added to all 4 host-to-webview contracts for uniform cross-surface sync
+- [Phase 16-01]: EvidenceBoard node:select handler calls store.select() (no longer no-op)
+- [Phase 16-01]: openTemplateViewer resolves receipt items to their first related query
 
 ### Pending Todos
 
@@ -111,6 +116,6 @@ No blocking issues.
 
 ## Session Continuity
 
-Last session: 2026-04-03T00:56:30.000Z
-Stopped at: Completed 15-03-PLAN.md
+Last session: 2026-04-03T01:56:42.000Z
+Stopped at: Completed 16-01-PLAN.md
 Resume file: None

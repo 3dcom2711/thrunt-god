@@ -329,4 +329,190 @@ describe('deriveHuntOverview', () => {
       assert.deepEqual(vm.activityFeed, []);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Session continuity (16-03)
+  // ---------------------------------------------------------------------------
+
+  describe('sessionContinuity', () => {
+
+    it('returns lastActivity from STATE artifact when hunt is loaded', () => {
+      const store = createMockStore({
+        hunt: {
+          mission: {
+            status: 'loaded',
+            data: { signal: 's', owner: 'o', opened: 'd', mode: 'case', scope: 'sc' },
+          },
+          hypotheses: {
+            status: 'loaded',
+            data: { active: [], parked: [], disproved: [] },
+          },
+          huntMap: {
+            status: 'loaded',
+            data: { overview: '', phases: [] },
+          },
+          state: {
+            status: 'loaded',
+            data: {
+              activeSignal: '', currentFocus: '',
+              phase: 3, totalPhases: 5,
+              planInPhase: 2, totalPlansInPhase: 3,
+              status: 'In Progress',
+              lastActivity: '2026-04-02 -- Completed 15-03 Receipt QA Inspector',
+              scope: '', confidence: 'Medium', blockers: '',
+            },
+          },
+        },
+      });
+
+      const vm = callDerive(store, CLEAN_HEALTH, null);
+      assert.equal(vm.sessionContinuity.lastActivity, '2026-04-02 -- Completed 15-03 Receipt QA Inspector');
+    });
+
+    it('returns changesSummary from sessionDiff.summary when diff exists', () => {
+      const store = createMockStore({ hunt: null });
+      const sessionDiff = {
+        entries: [
+          { artifactType: 'query', artifactId: 'QRY-001', diffKind: 'added', timestamp: '2026-04-02' },
+          { artifactType: 'receipt', artifactId: 'RCT-001', diffKind: 'modified', timestamp: '2026-04-02' },
+        ],
+        summary: '1 added, 1 modified since last session',
+      };
+      const vm = callDerive(store, CLEAN_HEALTH, sessionDiff);
+
+      assert.equal(vm.sessionContinuity.changesSummary, '1 added, 1 modified since last session');
+      assert.equal(vm.sessionContinuity.hasChanges, true);
+    });
+
+    it('returns "No changes since last session" when sessionDiff is null', () => {
+      const store = createMockStore({ hunt: null });
+      const vm = callDerive(store, CLEAN_HEALTH, null);
+
+      assert.equal(vm.sessionContinuity.changesSummary, 'No changes since last session');
+      assert.equal(vm.sessionContinuity.hasChanges, false);
+    });
+
+    it('returns suggestedAction containing phase number when state is loaded', () => {
+      const store = createMockStore({
+        hunt: {
+          mission: {
+            status: 'loaded',
+            data: { signal: 's', owner: 'o', opened: 'd', mode: 'case', scope: 'sc' },
+          },
+          hypotheses: {
+            status: 'loaded',
+            data: { active: [], parked: [], disproved: [] },
+          },
+          huntMap: {
+            status: 'loaded',
+            data: {
+              overview: '',
+              phases: [
+                { number: 3, name: 'Evidence Collection', status: 'running' },
+              ],
+            },
+          },
+          state: {
+            status: 'loaded',
+            data: {
+              activeSignal: '', currentFocus: '',
+              phase: 3, totalPhases: 5,
+              planInPhase: 1, totalPlansInPhase: 2,
+              status: 'In Progress',
+              lastActivity: '2026-04-02',
+              scope: '', confidence: 'Medium', blockers: '',
+            },
+          },
+        },
+      });
+
+      const vm = callDerive(store, CLEAN_HEALTH, null);
+      assert.ok(vm.sessionContinuity.suggestedAction.includes('Phase 3'));
+      assert.ok(vm.sessionContinuity.suggestedAction.includes('Evidence Collection'));
+    });
+
+    it('returns "Review N changed artifacts" when many changes exist', () => {
+      const store = createMockStore({
+        hunt: {
+          mission: {
+            status: 'loaded',
+            data: { signal: 's', owner: 'o', opened: 'd', mode: 'case', scope: 'sc' },
+          },
+          hypotheses: {
+            status: 'loaded',
+            data: { active: [], parked: [], disproved: [] },
+          },
+          huntMap: {
+            status: 'loaded',
+            data: { overview: '', phases: [] },
+          },
+          state: {
+            status: 'loaded',
+            data: {
+              activeSignal: '', currentFocus: '',
+              phase: 2, totalPhases: 5,
+              planInPhase: 1, totalPlansInPhase: 2,
+              status: 'In Progress',
+              lastActivity: '2026-04-02',
+              scope: '', confidence: 'Medium', blockers: '',
+            },
+          },
+        },
+      });
+
+      const sessionDiff = {
+        entries: [
+          { artifactType: 'query', artifactId: 'QRY-001', diffKind: 'added', timestamp: '2026-04-02' },
+          { artifactType: 'query', artifactId: 'QRY-002', diffKind: 'modified', timestamp: '2026-04-02' },
+          { artifactType: 'receipt', artifactId: 'RCT-001', diffKind: 'added', timestamp: '2026-04-02' },
+        ],
+        summary: '2 added, 1 modified since last session',
+      };
+
+      const vm = callDerive(store, sessionDiff.entries.length >= 3 ? CLEAN_HEALTH : CLEAN_HEALTH, sessionDiff);
+      assert.equal(vm.sessionContinuity.suggestedAction, 'Review 3 changed artifacts');
+    });
+
+    it('returns currentPosition with phase and plan info when state is loaded', () => {
+      const store = createMockStore({
+        hunt: {
+          mission: {
+            status: 'loaded',
+            data: { signal: 's', owner: 'o', opened: 'd', mode: 'case', scope: 'sc' },
+          },
+          hypotheses: {
+            status: 'loaded',
+            data: { active: [], parked: [], disproved: [] },
+          },
+          huntMap: {
+            status: 'loaded',
+            data: { overview: '', phases: [] },
+          },
+          state: {
+            status: 'loaded',
+            data: {
+              activeSignal: '', currentFocus: '',
+              phase: 3, totalPhases: 5,
+              planInPhase: 2, totalPlansInPhase: 3,
+              status: 'In Progress',
+              lastActivity: '2026-04-02',
+              scope: '', confidence: 'Medium', blockers: '',
+            },
+          },
+        },
+      });
+
+      const vm = callDerive(store, CLEAN_HEALTH, null);
+      assert.equal(vm.sessionContinuity.currentPosition, 'Phase 3 of 5, Plan 2 of 3');
+    });
+
+    it('returns defaults when hunt is null', () => {
+      const store = createMockStore({ hunt: null });
+      const vm = callDerive(store, CLEAN_HEALTH, null);
+
+      assert.equal(vm.sessionContinuity.lastActivity, 'Unknown');
+      assert.equal(vm.sessionContinuity.currentPosition, 'No hunt detected');
+      assert.equal(vm.sessionContinuity.suggestedAction, 'Open a workspace with hunt artifacts');
+    });
+  });
 });

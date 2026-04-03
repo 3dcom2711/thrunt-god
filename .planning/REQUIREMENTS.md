@@ -54,8 +54,8 @@ Requirements for the Investigative Surfaces milestone. Each maps to roadmap phas
 
 - [ ] **XNAV-01**: All webview panels restore state on VS Code restart via WebviewPanelSerializer
 - [ ] **XNAV-02**: Pinned template and view state persists across sessions via workspaceState
-- [ ] **XNAV-03**: Selecting an artifact in any surface highlights it in all other open surfaces
-- [ ] **XNAV-04**: User can invoke "Show in Evidence Board" and "Open Template Viewer" from any artifact context
+- [x] **XNAV-03**: Selecting an artifact in any surface highlights it in all other open surfaces
+- [x] **XNAV-04**: User can invoke "Show in Evidence Board" and "Open Template Viewer" from any artifact context
 - [ ] **XNAV-05**: User can view session continuity summary driven from STATE.md plus recent file changes
 
 ## v4.0 Requirements
@@ -196,8 +196,8 @@ Deferred to v5.1+:
 | QANL-04 | Phase 15 | Complete |
 | XNAV-01 | Phase 16 | Pending |
 | XNAV-02 | Phase 16 | Pending |
-| XNAV-03 | Phase 16 | Pending |
-| XNAV-04 | Phase 16 | Pending |
+| XNAV-03 | Phase 16 | Complete |
+| XNAV-04 | Phase 16 | Complete |
 | XNAV-05 | Phase 16 | Pending |
 | AIRW-01 | Phase 17 | Pending |
 | AIRW-02 | Phase 17 | Pending |
