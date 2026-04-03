@@ -208,10 +208,11 @@ describe('computeArtifactHashes', () => {
     assert.equal(typeof hashes, 'object');
     assert.equal(hashes['QRY-001'], 'qhash1');
     assert.equal(hashes['RCT-001'], 'rhash1');
-    assert.equal(hashes['MISSION'], 'test-signal');
+    assert.ok(hashes['MISSION'].includes('"signal":"test-signal"'));
     assert.ok('HYPOTHESES' in hashes);
+    assert.ok('HUNTMAP' in hashes);
     assert.ok('STATE' in hashes);
-    assert.equal(hashes['STATE'], '2026-03-29');
+    assert.ok(hashes['STATE'].includes('"lastActivity":"2026-03-29"'));
   });
 
   it('returns empty record when store has no artifacts', () => {
@@ -225,6 +226,105 @@ describe('computeArtifactHashes', () => {
 
     const hashes = computeArtifactHashes(mockStore);
     assert.deepEqual(hashes, {});
+  });
+
+  it('detects singleton changes beyond the previous narrow fields', () => {
+    const baseStore = {
+      getQueries: () => new Map(),
+      getReceipts: () => new Map(),
+      getHunt: () => ({
+        mission: {
+          status: 'loaded',
+          data: {
+            mode: 'case',
+            opened: '2026-03-29',
+            owner: 'alice',
+            status: 'Open',
+            signal: 'signal',
+            desiredOutcome: 'outcome',
+            scope: 'scope',
+            workingTheory: 'theory',
+          },
+        },
+        hypotheses: {
+          status: 'loaded',
+          data: {
+            active: [{
+              id: 'HYP-01',
+              signal: 'signal',
+              assertion: 'first',
+              priority: 'High',
+              status: 'Open',
+              confidence: 'Medium',
+              scope: 'scope',
+              dataSources: ['okta'],
+              evidenceNeeded: 'evidence',
+              disproofCondition: 'none',
+            }],
+            parked: [],
+            disproved: [],
+          },
+        },
+        huntMap: {
+          status: 'loaded',
+          data: { overview: 'overview', phases: [{ number: 1, name: 'Phase 1' }] },
+        },
+        state: {
+          status: 'loaded',
+          data: {
+            activeSignal: 'sig',
+            currentFocus: 'focus',
+            phase: 1,
+            totalPhases: 2,
+            planInPhase: 1,
+            totalPlansInPhase: 2,
+            status: 'In Progress',
+            lastActivity: '2026-03-29',
+            scope: 'scope',
+            confidence: 'Medium',
+            blockers: '',
+          },
+        },
+      }),
+    };
+
+    const changedStore = {
+      ...baseStore,
+      getHunt: () => ({
+        ...baseStore.getHunt(),
+        mission: {
+          status: 'loaded',
+          data: {
+            ...baseStore.getHunt().mission.data,
+            owner: 'bob',
+          },
+        },
+        hypotheses: {
+          status: 'loaded',
+          data: {
+            ...baseStore.getHunt().hypotheses.data,
+            active: [{
+              ...baseStore.getHunt().hypotheses.data.active[0],
+              assertion: 'second',
+            }],
+          },
+        },
+        state: {
+          status: 'loaded',
+          data: {
+            ...baseStore.getHunt().state.data,
+            blockers: 'Need approval',
+          },
+        },
+      }),
+    };
+
+    const first = computeArtifactHashes(baseStore);
+    const second = computeArtifactHashes(changedStore);
+
+    assert.notEqual(first.MISSION, second.MISSION);
+    assert.notEqual(first.HYPOTHESES, second.HYPOTHESES);
+    assert.notEqual(first.STATE, second.STATE);
   });
 });
 

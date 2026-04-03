@@ -108,4 +108,38 @@ describe('QueryAnalysisPanel', () => {
 
     panel.dispose();
   });
+
+  it('switches an existing panel into inspector mode when opening a receipt inspector', async () => {
+    const store = createStore();
+    const context = {
+      extensionUri: vscode.Uri.file('/mock/extension'),
+      workspaceState: vscode.workspace.createMemento({
+        [ext.QA_STATE_KEY]: {
+          leftQueryId: 'QRY-001',
+          rightQueryId: 'QRY-002',
+          inspectorReceiptId: null,
+          mode: 'comparison',
+          sortBy: 'count',
+        },
+      }),
+      subscriptions: [],
+    };
+
+    const panel = ext.QueryAnalysisPanel.createOrShow(context, store);
+    const rawPanel = vscode.window._createdWebviewPanels[0];
+
+    rawPanel.webview._fireMessage({ type: 'webview:ready' });
+    await flush();
+
+    ext.QueryAnalysisPanel.createOrShow(context, store, 'RCT-009');
+    await flush();
+
+    const update = rawPanel.webview._messages.at(-1);
+    assert.equal(update.type, 'update');
+    assert.equal(update.viewModel.mode, 'inspector');
+    assert.equal(update.viewModel.receiptInspector.selectedReceiptId, 'RCT-009');
+    assert.equal(context.workspaceState.get(ext.QA_STATE_KEY).mode, 'inspector');
+
+    panel.dispose();
+  });
 });

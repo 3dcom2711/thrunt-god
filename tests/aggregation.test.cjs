@@ -242,6 +242,29 @@ describe('deduplicateEntities', () => {
     assert.deepStrictEqual(entities[0].tenant_ids, ['a']);
     assert.strictEqual(entities[0].occurrence_count, 2);
   });
+
+  test('coerces scalar entity values instead of throwing during deduplication', () => {
+    const results = [
+      makeTenantResult('a', [], [{ kind: 'port', value: 443 }]),
+      makeTenantResult('b', [], [{ kind: 'port', value: '443' }]),
+    ];
+
+    const entities = deduplicateEntities(results);
+    assert.strictEqual(entities.length, 1);
+    assert.deepStrictEqual(entities[0].tenant_ids, ['a', 'b']);
+    assert.strictEqual(entities[0].occurrence_count, 2);
+  });
+
+  test('skips malformed entities with missing values', () => {
+    const results = [
+      makeTenantResult('a', [], [{ kind: 'ip' }, { kind: 'user', value: 'admin' }]),
+    ];
+
+    const entities = deduplicateEntities(results);
+    assert.strictEqual(entities.length, 1);
+    assert.strictEqual(entities[0].kind, 'user');
+    assert.strictEqual(entities[0].value, 'admin');
+  });
 });
 
 // ─── aggregateResults ───────────────────────────────────────────────────────
@@ -582,6 +605,42 @@ describe('deduplicateEvents', () => {
       { connector_id: 's' },
       { connector_id: 's' },
     ];
+    const result = deduplicateEvents(events, { strategy: 'by_content_hash' });
+    assert.strictEqual(result.length, 1);
+  });
+
+  test('by_content_hash: preserves tenant provenance when event content matches', () => {
+    const events = [
+      {
+        id: 'e1',
+        tenant_id: 'tenant-a',
+        tenant_connector_id: 'tenant-a:splunk',
+        connector_id: 'splunk',
+        title: 'Failed login',
+        summary: 'brute force',
+        timestamp: '2024-01-15T10:30:45Z',
+      },
+      {
+        id: 'e2',
+        tenant_id: 'tenant-b',
+        tenant_connector_id: 'tenant-b:splunk',
+        connector_id: 'splunk',
+        title: 'Failed login',
+        summary: 'brute force',
+        timestamp: '2024-01-15T10:30:59Z',
+      },
+    ];
+    const result = deduplicateEvents(events, { strategy: 'by_content_hash' });
+    assert.strictEqual(result.length, 2);
+  });
+
+  test('by_content_hash: supports non-string timestamps without throwing', () => {
+    const minute = Date.parse('2024-01-15T10:30:00Z');
+    const events = [
+      { id: 'e1', connector_id: 'splunk', title: 'Failed login', summary: 'brute force', timestamp: minute },
+      { id: 'e2', connector_id: 'splunk', title: 'Failed login', summary: 'brute force', timestamp: minute + 30_000 },
+    ];
+
     const result = deduplicateEvents(events, { strategy: 'by_content_hash' });
     assert.strictEqual(result.length, 1);
   });

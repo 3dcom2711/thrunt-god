@@ -240,6 +240,10 @@ export class EvidenceBoardPanel implements vscode.Disposable {
           viewModel: this.buildViewModel(),
           isDark: isDarkTheme(vscode.window.activeColorTheme.kind),
         });
+        this.postMessage({
+          type: 'selection:highlight',
+          artifactId: this.store.getSelectedArtifactId(),
+        });
         return;
       case 'node:open': {
         const artifactPath = this.store.getArtifactPath(msg.nodeId);

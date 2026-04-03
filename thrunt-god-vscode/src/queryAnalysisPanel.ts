@@ -208,9 +208,13 @@ export class QueryAnalysisPanel implements vscode.Disposable {
     const existing = QueryAnalysisPanel.currentPanel;
     if (existing && !existing.isDisposed) {
       existing.panel.reveal(vscode.ViewColumn.Active);
-      // If opening with a receipt ID, switch to inspector mode
       if (initialReceiptId) {
+        if (existing.mode === 'comparison' || existing.mode === 'heatmap') {
+          existing.lastNonInspectorMode = existing.mode;
+        }
+        existing.mode = 'inspector';
         existing.inspectorReceiptId = initialReceiptId;
+        existing.persistState();
         if (existing.ready) {
           existing.postMessage({
             type: 'update',

@@ -151,4 +151,137 @@ describe('CLIBridge', () => {
 
     bridge.dispose();
   });
+
+  it('cleans up bridge state after a child process error', async () => {
+    const outputChannel = {
+      appendLine: () => {},
+      show: () => {},
+      clear: () => {},
+      dispose: () => {},
+    };
+
+    const childError = new Error('spawn EPERM');
+    let completion = null;
+    let receivedEnv = null;
+    const bridge = new ext.CLIBridge(outputChannel, (_command, _args, options) => {
+      receivedEnv = options.env;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+
+      process.nextTick(() => {
+        child.stdout.end();
+        child.stderr.end();
+        child.emit('error', childError);
+      });
+
+      return child;
+    });
+
+    bridge.onDidComplete((event) => {
+      completion = event;
+    });
+
+    await assert.rejects(
+      bridge.run({
+        cliPath: '/mock/thrunt-tools.cjs',
+        command: ['state', 'json'],
+        cwd: '/mock/workspace',
+        env: { ...process.env, THRUNT_PLANNING_DIR: '.hunt' },
+      }),
+      /spawn EPERM/
+    );
+
+    assert.equal(receivedEnv.THRUNT_PLANNING_DIR, '.hunt');
+    assert.equal(bridge.isRunning, false);
+    assert.equal(bridge.getActiveRun(), null);
+    assert.deepEqual(completion, {
+      status: 'failed',
+      exitCode: null,
+      summary: null,
+    });
+
+    bridge.dispose();
+  });
+
+  it('does not let a cancelled run kill the next process via stale SIGKILL fallback', async () => {
+    const originalSetTimeout = global.setTimeout;
+    const originalClearTimeout = global.clearTimeout;
+    const timers = [];
+    let nextTimerId = 1;
+
+    global.setTimeout = (callback, delay, ...args) => {
+      const handle = { id: nextTimerId++ };
+      timers.push({ handle, callback: () => callback(...args), delay, cleared: false });
+      return handle;
+    };
+    global.clearTimeout = (handle) => {
+      const timer = timers.find((entry) => entry.handle === handle);
+      if (timer) {
+        timer.cleared = true;
+      }
+    };
+
+    try {
+      const outputChannel = {
+        appendLine: () => {},
+        show: () => {},
+        clear: () => {},
+        dispose: () => {},
+      };
+
+      const children = [];
+      const bridge = new ext.CLIBridge(outputChannel, () => {
+        const child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.killSignals = [];
+        child.kill = (signal) => {
+          child.killSignals.push(signal);
+        };
+        children.push(child);
+        return child;
+      });
+
+      const firstRun = bridge.run({
+        cliPath: '/mock/thrunt-tools.cjs',
+        command: ['runtime', 'execute', '--pack', 'domain.identity-abuse'],
+        cwd: '/mock/workspace',
+        timeoutMs: 60000,
+      });
+
+      const firstChild = children[0];
+      bridge.cancel();
+      const cancelKillTimer = timers.find((entry) => entry.delay === 5000);
+      assert.ok(cancelKillTimer, 'expected SIGKILL fallback timer for cancelled run');
+      firstChild.stdout.end();
+      firstChild.stderr.end();
+      firstChild.emit('close', null);
+      await firstRun;
+      assert.equal(cancelKillTimer.cleared, true);
+
+      const secondRun = bridge.run({
+        cliPath: '/mock/thrunt-tools.cjs',
+        command: ['runtime', 'execute', '--pack', 'domain.identity-abuse'],
+        cwd: '/mock/workspace',
+        timeoutMs: 60000,
+      });
+
+      const secondChild = children[1];
+      cancelKillTimer.callback();
+
+      assert.deepEqual(firstChild.killSignals, ['SIGTERM']);
+      assert.deepEqual(secondChild.killSignals, []);
+
+      secondChild.stdout.end();
+      secondChild.stderr.end();
+      secondChild.emit('close', 0);
+      await secondRun;
+      bridge.dispose();
+    } finally {
+      global.setTimeout = originalSetTimeout;
+      global.clearTimeout = originalClearTimeout;
+    }
+  });
 });

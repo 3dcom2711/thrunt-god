@@ -57,7 +57,8 @@ function deduplicateEntities(tenantResults) {
     const tenantId = tr.tenant_id;
 
     for (const entity of entities) {
-      const key = `${entity.kind}:${entity.value.toLowerCase()}`;
+      const key = computeEntityDedupKey(entity);
+      if (!key) continue;
       const existing = map.get(key);
 
       if (existing) {
@@ -78,6 +79,30 @@ function deduplicateEntities(tenantResults) {
   return Array.from(map.values());
 }
 
+function computeEntityDedupKey(entity) {
+  if (!entity || typeof entity.kind !== 'string') return null;
+
+  const normalizedValue = normalizeEntityValue(entity.value);
+  if (normalizedValue == null) return null;
+
+  return `${entity.kind}:${normalizedValue.toLowerCase()}`;
+}
+
+function normalizeEntityValue(value) {
+  if (typeof value === 'string') return value;
+  if (
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value);
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  return null;
+}
+
 // ─── deduplicateEvents ─────────────────────────────────────────────────────
 
 /**
@@ -93,17 +118,35 @@ function computeEventDedupKey(event, strategy) {
     case 'by_id':
       return event.id || null;
     case 'by_content_hash': {
+      const timestampMinute = normalizeTimestampMinute(event.timestamp);
       const seed = [
+        event.tenant_id || '',
+        event.tenant_connector_id || '',
         event.connector_id || '',
         event.title || '',
         event.summary || '',
-        event.timestamp ? event.timestamp.slice(0, 16) : '',
+        timestampMinute,
       ].join(':');
       return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
     }
     default:
       return event.id || null;
   }
+}
+
+function normalizeTimestampMinute(value) {
+  if (typeof value === 'string') {
+    return value.slice(0, 16);
+  }
+
+  if (typeof value === 'number' || value instanceof Date) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString().slice(0, 16);
+    }
+  }
+
+  return '';
 }
 
 /**

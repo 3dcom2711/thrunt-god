@@ -14,6 +14,26 @@ export const SESSION_HASH_KEY = 'thruntGod.sessionHashes';
 
 type ArtifactHashMap = Record<string, string>;
 
+function normalizeHashValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeHashValue(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, normalizeHashValue(entry)])
+    );
+  }
+
+  return value;
+}
+
+function serializeHashValue(value: unknown): string {
+  return JSON.stringify(normalizeHashValue(value));
+}
+
 const BASE_WEBVIEW_STYLES = `
   :root {
     color-scheme: light dark;
@@ -54,15 +74,16 @@ export function computeArtifactHashes(store: HuntDataStore): ArtifactHashMap {
   const hunt = store.getHunt();
   if (hunt) {
     if (hunt.mission.status === 'loaded') {
-      hashes['MISSION'] = hunt.mission.data.signal;
+      hashes['MISSION'] = serializeHashValue(hunt.mission.data);
     }
     if (hunt.hypotheses.status === 'loaded') {
-      hashes['HYPOTHESES'] = JSON.stringify(
-        hunt.hypotheses.data.active.map((h) => h.status)
-      );
+      hashes['HYPOTHESES'] = serializeHashValue(hunt.hypotheses.data);
+    }
+    if (hunt.huntMap.status === 'loaded') {
+      hashes['HUNTMAP'] = serializeHashValue(hunt.huntMap.data);
     }
     if (hunt.state.status === 'loaded') {
-      hashes['STATE'] = hunt.state.data.lastActivity;
+      hashes['STATE'] = serializeHashValue(hunt.state.data);
     }
   }
 

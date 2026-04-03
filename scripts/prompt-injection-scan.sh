@@ -79,10 +79,28 @@ ALLOWLIST=(
   'thrunt-god/data/mitre-attack-enterprise.json'
 )
 
+normalize_path() {
+  local value="${1#./}"
+  value="${value%/}"
+  while [[ "$value" == *"//"* ]]; do
+    value="${value//\/\//\/}"
+  done
+  printf '%s' "$value"
+}
+
 is_allowlisted() {
   local file="$1"
+  local normalized
+  normalized="$(normalize_path "$file")"
+  local repo_root
+  repo_root="$(pwd -P)"
   for allowed in "${ALLOWLIST[@]}"; do
-    if [[ "$file" == *"$allowed" ]]; then
+    local candidate
+    candidate="$(normalize_path "$allowed")"
+    if [[ "$normalized" == "$candidate" ]]; then
+      return 0
+    fi
+    if [[ "$normalized" = /* && "$normalized" == "$repo_root/$candidate" ]]; then
       return 0
     fi
   done

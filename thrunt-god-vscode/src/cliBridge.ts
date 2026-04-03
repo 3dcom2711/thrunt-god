@@ -5,6 +5,7 @@ export interface CLIRunRequest {
   command: string[];
   cwd: string;
   cliPath: string;
+  env?: NodeJS.ProcessEnv;
   phase?: number;
   huntRoot?: vscode.Uri;
   timeoutMs?: number;
@@ -232,6 +233,7 @@ export class CLIBridge implements vscode.Disposable {
   private pendingDiagnostics: PendingDiagnostic[] = [];
   private completionSummary: string | null = null;
   private timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  private cancelKillHandle: ReturnType<typeof setTimeout> | null = null;
   private cancelled = false;
 
   constructor(
@@ -268,11 +270,20 @@ export class CLIBridge implements vscode.Disposable {
     this.diagnostics.clear();
 
     const spawnArgs = [request.cliPath, ...request.command, '--cwd', request.cwd];
-    const child = this.spawnImpl(process.execPath, spawnArgs, {
-      cwd: request.cwd,
-      env: process.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = this.spawnImpl(process.execPath, spawnArgs, {
+        cwd: request.cwd,
+        env: request.env ?? process.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown CLI launch failure.';
+      this.appendOutput(`[THRUNT CLI] Failed to start command: ${message}`);
+      this.finishRun(request, 'failed', null);
+      throw error;
+    }
 
     this.activeProcess = child;
     this.activeRun = {
@@ -302,46 +313,39 @@ export class CLIBridge implements vscode.Disposable {
     const stdoutDone = this.attachStream(child.stdout, false);
     const stderrDone = this.attachStream(child.stderr, true);
 
-    const exitCode = await new Promise<number | null>((resolve, reject) => {
-      child.once('error', (error) => {
-        reject(error);
+    try {
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        child.once('error', (error) => {
+          reject(error);
+        });
+        child.once('close', (code) => {
+          resolve(code);
+        });
+      }).finally(async () => {
+        await Promise.all([stdoutDone, stderrDone]);
       });
-      child.once('close', (code) => {
-        resolve(code);
-      });
-    }).finally(async () => {
-      await Promise.all([stdoutDone, stderrDone]);
-    });
 
-    const status: CLIRunStatus =
-      this.cancelled ? 'cancelled' : exitCode === 0 ? 'success' : 'failed';
-    if (status === 'success') {
-      this.appendOutput('[THRUNT CLI] Command completed successfully.');
-    } else if (status === 'cancelled') {
-      this.appendOutput('[THRUNT CLI] Command cancelled.');
-    } else {
-      this.appendOutput(
-        `[THRUNT CLI] Command failed${typeof exitCode === 'number' ? ` (exit ${exitCode})` : ''}.`
-      );
-    }
-
-    if (status === 'failed' && request.huntRoot && this.pendingDiagnostics.length > 0) {
-      for (const [uri, entries] of mapCliDiagnostics(request.huntRoot, this.pendingDiagnostics)) {
-        this.diagnostics.set(uri, entries);
+      const status: CLIRunStatus =
+        this.cancelled ? 'cancelled' : exitCode === 0 ? 'success' : 'failed';
+      if (status === 'success') {
+        this.appendOutput('[THRUNT CLI] Command completed successfully.');
+      } else if (status === 'cancelled') {
+        this.appendOutput('[THRUNT CLI] Command cancelled.');
+      } else {
+        this.appendOutput(
+          `[THRUNT CLI] Command failed${typeof exitCode === 'number' ? ` (exit ${exitCode})` : ''}.`
+        );
       }
-    }
 
-    this.activeProcess = null;
-    this.activeRun = null;
-    this.clearTimeout();
-    this.statusBarItem.hide();
-    this._onDidComplete.fire({
-      status,
-      exitCode,
-      summary: this.completionSummary,
-    });
-    this.emitChange();
-    return { exitCode };
+      this.finishRun(request, status, exitCode);
+      return { exitCode };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown CLI launch failure.';
+      this.appendOutput(`[THRUNT CLI] Failed to start command: ${message}`);
+      this.finishRun(request, 'failed', null);
+      throw error;
+    }
   }
 
   cancel(): void {
@@ -350,11 +354,14 @@ export class CLIBridge implements vscode.Disposable {
     }
 
     this.cancelled = true;
-    this.activeProcess.kill('SIGTERM');
-    setTimeout(() => {
-      if (this.activeProcess) {
-        this.activeProcess.kill('SIGKILL');
+    const cancelledProcess = this.activeProcess;
+    cancelledProcess.kill('SIGTERM');
+    this.clearCancelKillTimeout();
+    this.cancelKillHandle = setTimeout(() => {
+      if (this.activeProcess === cancelledProcess) {
+        cancelledProcess.kill('SIGKILL');
       }
+      this.cancelKillHandle = null;
     }, 5000);
   }
 
@@ -510,5 +517,36 @@ export class CLIBridge implements vscode.Disposable {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
     }
+  }
+
+  private clearCancelKillTimeout(): void {
+    if (this.cancelKillHandle) {
+      clearTimeout(this.cancelKillHandle);
+      this.cancelKillHandle = null;
+    }
+  }
+
+  private finishRun(
+    request: Pick<CLIRunRequest, 'huntRoot'>,
+    status: CLIRunStatus,
+    exitCode: number | null
+  ): void {
+    if (status === 'failed' && request.huntRoot && this.pendingDiagnostics.length > 0) {
+      for (const [uri, entries] of mapCliDiagnostics(request.huntRoot, this.pendingDiagnostics)) {
+        this.diagnostics.set(uri, entries);
+      }
+    }
+
+    this.activeProcess = null;
+    this.activeRun = null;
+    this.clearTimeout();
+    this.clearCancelKillTimeout();
+    this.statusBarItem.hide();
+    this._onDidComplete.fire({
+      status,
+      exitCode,
+      summary: this.completionSummary,
+    });
+    this.emitChange();
   }
 }

@@ -329,6 +329,27 @@ function resolveWorkspaceRoot(huntRoot?: vscode.Uri): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+function resolvePlanningDirName(huntRoot?: vscode.Uri): string | undefined {
+  if (!huntRoot) {
+    return undefined;
+  }
+
+  const dirName = path.basename(huntRoot.fsPath);
+  return dirName === '.hunt' || dirName === '.planning' ? dirName : undefined;
+}
+
+function buildThruntCliEnv(huntRoot?: vscode.Uri): NodeJS.ProcessEnv {
+  const planningDirName = resolvePlanningDirName(huntRoot);
+  if (!planningDirName) {
+    return process.env;
+  }
+
+  return {
+    ...process.env,
+    THRUNT_PLANNING_DIR: planningDirName,
+  };
+}
+
 async function resolveCliArgs(
   context: vscode.ExtensionContext,
   input: unknown
@@ -512,13 +533,14 @@ function resolveThruntCliPath(context: vscode.ExtensionContext): string {
 async function runThruntCli(
   context: vscode.ExtensionContext,
   workspaceRoot: string,
-  args: string[]
+  args: string[],
+  huntRoot?: vscode.Uri
 ): Promise<Record<string, unknown>> {
   const cliPath = resolveThruntCliPath(context);
   const commandArgs = [cliPath, ...args, '--cwd', workspaceRoot];
   const { stdout, stderr } = await execFileAsync(process.execPath, commandArgs, {
     cwd: workspaceRoot,
-    env: process.env,
+    env: buildThruntCliEnv(huntRoot),
   });
 
   let parsed: unknown = null;
@@ -545,7 +567,8 @@ async function runThruntCliCommand(
   context: vscode.ExtensionContext,
   cliOutputChannel: vscode.OutputChannel,
   workspaceRoot: string,
-  input?: unknown
+  input?: unknown,
+  huntRoot?: vscode.Uri
 ): Promise<Record<string, unknown> | undefined> {
   const args = await resolveCliArgs(context, input);
   if (!args || args.length === 0) {
@@ -559,7 +582,7 @@ async function runThruntCliCommand(
   cliOutputChannel.show(true);
 
   try {
-    const result = await runThruntCli(context, workspaceRoot, args);
+  const result = await runThruntCli(context, workspaceRoot, args, huntRoot);
     const stdout = typeof result.stdout === 'string' ? result.stdout.trimEnd() : '';
     const stderr = typeof result.stderr === 'string' ? result.stderr.trimEnd() : '';
 
@@ -751,6 +774,7 @@ export function activate(context: vscode.ExtensionContext): void {
       return await cliBridge.run({
         ...request,
         cliPath: resolveThruntCliPath(context),
+        env: buildThruntCliEnv(request.huntRoot),
       });
     } catch (error) {
       const message =
@@ -850,7 +874,13 @@ export function activate(context: vscode.ExtensionContext): void {
         return undefined;
       }
 
-      return runThruntCliCommand(context, cliOutputChannel, workspaceRoot, input);
+      return runThruntCliCommand(
+        context,
+        cliOutputChannel,
+        workspaceRoot,
+        input,
+        activeHuntRoot
+      );
     })
   );
 
@@ -868,7 +898,8 @@ export function activate(context: vscode.ExtensionContext): void {
         context,
         cliOutputChannel,
         workspaceRoot,
-        ['state', 'json']
+        ['state', 'json'],
+        activeHuntRoot
       );
       if (!result?.parsed) {
         await vscode.window.showErrorMessage('THRUNT state command did not return JSON output.');
@@ -894,7 +925,8 @@ export function activate(context: vscode.ExtensionContext): void {
         context,
         cliOutputChannel,
         workspaceRoot,
-        ['progress', 'table']
+        ['progress', 'table'],
+        activeHuntRoot
       );
       const rendered = readRenderedMarkdown(result?.parsed);
       if (!rendered) {
@@ -921,7 +953,8 @@ export function activate(context: vscode.ExtensionContext): void {
         context,
         cliOutputChannel,
         workspaceRoot,
-        ['huntmap', 'analyze', '--raw']
+        ['huntmap', 'analyze', '--raw'],
+        activeHuntRoot
       );
       if (!result?.parsed) {
         await vscode.window.showErrorMessage('THRUNT huntmap analysis did not return JSON output.');
@@ -947,7 +980,8 @@ export function activate(context: vscode.ExtensionContext): void {
         context,
         cliOutputChannel,
         workspaceRoot,
-        ['runtime', 'doctor', '--raw']
+        ['runtime', 'doctor', '--raw'],
+        activeHuntRoot
       );
       const rendered = renderRuntimeDoctorMarkdown(result?.parsed);
       if (!rendered) {
@@ -1600,7 +1634,7 @@ export function activate(context: vscode.ExtensionContext): void {
             }
 
             await store.initialScanComplete();
-            return runThruntCli(context, workspaceRoot, args);
+            return runThruntCli(context, workspaceRoot, args, huntRoot);
           }
         )
       );
