@@ -217,6 +217,7 @@ function createMockStore(options = {}) {
   const store = {
     onDidChange: emitter.event,
     _emitter: emitter,
+    getChildHunts: () => options.childHunts ?? [],
     getHunt: () => {
       if (options.noHunt) return null;
       return {
@@ -413,6 +414,47 @@ describe('HuntTreeDataProvider', () => {
       assert.equal(findingsNode.artifactType, 'phaseSummary');
       assert.equal(findingsNode.description, 'published');
       assert.ok(findingsNode.artifactPath.endsWith('/published/FINDINGS.md'));
+    });
+  });
+
+  describe('child hunt nodes', () => {
+    it('shows a child hunts group when nested cases are present', () => {
+      const providerWithChildren = new ext.HuntTreeDataProvider(
+        createMockStore({
+          childHunts: [
+            {
+              id: 'case:test-1',
+              name: 'test-1',
+              kind: 'case',
+              huntRootPath: path.join(HUNT_ROOT, 'cases', 'test-1'),
+              missionPath: path.join(HUNT_ROOT, 'cases', 'test-1', 'MISSION.md'),
+              signal: 'Investigate three signals from the parent program',
+              mode: 'Case',
+              status: 'Ready to plan',
+              opened: '2026-04-01',
+              owner: 'TBD',
+              currentPhase: 2,
+              totalPhases: 5,
+              phaseName: 'Hypothesis Shaping',
+              lastActivity: '2026-04-01',
+              blockerCount: 4,
+              findingsPublished: false,
+            },
+          ],
+        }),
+        huntRootUri
+      );
+
+      const roots = providerWithChildren.getChildren(undefined);
+      const childGroup = roots.find((item) => item.label === 'Child Hunts');
+      assert.ok(childGroup, 'Expected Child Hunts group');
+
+      const children = providerWithChildren.getChildren(childGroup);
+      assert.equal(children.length, 1);
+      assert.equal(children[0].label, 'test-1');
+      assert.equal(children[0].description, 'case · Phase 2/5 · ready to plan');
+      assert.equal(children[0].artifactType, 'mission');
+      assert.ok(children[0].artifactPath.endsWith('/cases/test-1/MISSION.md'));
     });
   });
 

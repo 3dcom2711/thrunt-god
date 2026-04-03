@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ArtifactType, Hypothesis, Receipt, Query } from './types';
+import type { ArtifactType, ChildHuntSummary, Hypothesis, Receipt, Query } from './types';
 import type { HuntDataStore } from './store';
 import type { IOCRegistry } from './iocRegistry';
 import type { CLIBridge } from './cliBridge';
@@ -14,6 +14,8 @@ type NodeType =
   | 'hypothesis'
   | 'phases-group'
   | 'phase'
+  | 'child-hunts-group'
+  | 'child-hunt'
   | 'query'
   | 'receipt';
 
@@ -75,8 +77,8 @@ export class HuntTreeItem extends vscode.TreeItem {
  * Matches the watcher's resolveArtifactType convention.
  */
 function resolveArtifactPath(huntRoot: vscode.Uri, type: string, id: string): string {
-  switch (type) {
-    case 'mission':
+    switch (type) {
+      case 'mission':
       return vscode.Uri.joinPath(huntRoot, 'MISSION.md').fsPath;
     case 'hypotheses-group':
       return vscode.Uri.joinPath(huntRoot, 'HYPOTHESES.md').fsPath;
@@ -191,6 +193,8 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
         return this.getPhaseNodes();
       case 'phase':
         return this.getQueriesForPhase(element.dataId ?? '');
+      case 'child-hunts-group':
+        return this.getChildHuntNodes();
       case 'query':
         return this.getReceiptsForQuery(element.dataId ?? '');
       default:
@@ -211,7 +215,7 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
         ? `Mission (${hunt.mission.data.mode})`
         : 'Mission';
 
-    return [
+    const roots = [
       new HuntTreeItem(missionLabel, vscode.TreeItemCollapsibleState.None, {
         iconPath: new vscode.ThemeIcon('shield'),
         contextValue: 'mission',
@@ -232,6 +236,18 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
         nodeType: 'phases-group',
       }),
     ];
+
+    if (this.store.getChildHunts().length > 0) {
+      roots.push(
+        new HuntTreeItem('Child Hunts', vscode.TreeItemCollapsibleState.Expanded, {
+          iconPath: new vscode.ThemeIcon('folder-library'),
+          contextValue: 'child-hunts-group',
+          nodeType: 'child-hunts-group',
+        })
+      );
+    }
+
+    return roots;
   }
 
   // --- Hypothesis nodes ---
@@ -314,6 +330,43 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
         dataId: p.number.toString(),
       });
     });
+  }
+
+  private getChildHuntNodes(): HuntTreeItem[] {
+    return this.store.getChildHunts().map((child) => {
+      const descriptionParts = [child.kind];
+      if (child.totalPhases > 0 && child.currentPhase > 0) {
+        descriptionParts.push(`Phase ${child.currentPhase}/${child.totalPhases}`);
+      }
+      if (child.findingsPublished) {
+        descriptionParts.push('published');
+      } else if (child.status) {
+        descriptionParts.push(child.status.toLowerCase());
+      }
+
+      return new HuntTreeItem(child.name, vscode.TreeItemCollapsibleState.None, {
+        description: descriptionParts.join(' · '),
+        iconPath: this.childHuntIcon(child),
+        tooltip: `${child.signal}\n${child.phaseName || 'No active phase'}`,
+        contextValue: 'child-hunt',
+        nodeType: 'child-hunt',
+        dataId: child.id,
+        artifactPath: child.missionPath,
+        artifactType: 'mission',
+      });
+    });
+  }
+
+  private childHuntIcon(child: ChildHuntSummary): vscode.ThemeIcon {
+    if (child.findingsPublished) {
+      return new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+    }
+
+    if (child.status.toLowerCase().includes('progress') || child.currentPhase > 0) {
+      return new vscode.ThemeIcon('folder-active');
+    }
+
+    return new vscode.ThemeIcon('folder');
   }
 
   private phaseStatusBadge(

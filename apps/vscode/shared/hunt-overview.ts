@@ -29,6 +29,19 @@ export interface HuntOverviewViewModel {
     focus: string;
   } | null;
 
+  childHunts: Array<{
+    id: string;
+    name: string;
+    kind: 'case' | 'workstream';
+    signal: string;
+    status: string;
+    currentPhase: number;
+    totalPhases: number;
+    phaseName: string;
+    lastActivity: string;
+    findingsPublished: boolean;
+  }>;
+
   phases: Array<{
     number: number;
     name: string;

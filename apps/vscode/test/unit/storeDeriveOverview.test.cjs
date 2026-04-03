@@ -36,6 +36,7 @@ function createMockStore(options = {}) {
 
   return {
     getHunt: () => options.hunt ?? null,
+    getChildHunts: () => options.childHunts ?? [],
     getQueries: () => defaultQueries,
     getReceipts: () => defaultReceipts,
   };
@@ -60,6 +61,7 @@ describe('deriveHuntOverview', () => {
       const vm = callDerive(store, CLEAN_HEALTH, null);
 
       assert.equal(vm.mission, null);
+      assert.deepEqual(vm.childHunts, []);
       assert.deepEqual(vm.phases, []);
       assert.equal(vm.currentPhase, 0);
       assert.deepEqual(vm.verdicts, { supported: 0, disproved: 0, inconclusive: 0, open: 0 });
@@ -118,6 +120,76 @@ describe('deriveHuntOverview', () => {
         mode: 'case',
         focus: 'network segment',
       });
+    });
+  });
+
+  describe('child hunt summaries', () => {
+    it('passes through nested case summaries separately from the program mission', () => {
+      const store = createMockStore({
+        childHunts: [
+          {
+            id: 'case:test-1',
+            name: 'test-1',
+            kind: 'case',
+            huntRootPath: '/mock/.planning/cases/test-1',
+            missionPath: '/mock/.planning/cases/test-1/MISSION.md',
+            signal: 'Investigate the three inherited signals',
+            mode: 'Case',
+            status: 'Ready to plan',
+            opened: '2026-04-01',
+            owner: 'TBD',
+            currentPhase: 2,
+            totalPhases: 5,
+            phaseName: 'Hypothesis Shaping',
+            lastActivity: '2026-04-01',
+            blockerCount: 4,
+            findingsPublished: false,
+          },
+        ],
+        hunt: {
+          mission: {
+            status: 'loaded',
+            data: {
+              signal: 'Program hunt',
+              owner: 'analyst-1',
+              opened: '2026-03-29',
+              mode: 'program',
+              scope: 'cloud and endpoint',
+            },
+          },
+          hypotheses: {
+            status: 'loaded',
+            data: { active: [], parked: [], disproved: [] },
+          },
+          huntMap: {
+            status: 'loaded',
+            data: { overview: '', phases: [] },
+          },
+          state: {
+            status: 'loaded',
+            data: {
+              activeSignal: 'program',
+              currentFocus: 'coordination',
+              phase: 1,
+              totalPhases: 5,
+              planInPhase: 1,
+              totalPlansInPhase: 1,
+              status: 'In Progress',
+              lastActivity: '2026-04-01',
+              scope: 'shared program scope',
+              confidence: 'Medium',
+              blockers: '',
+            },
+          },
+        },
+      });
+
+      const vm = callDerive(store, CLEAN_HEALTH, null);
+      assert.equal(vm.childHunts.length, 1);
+      assert.equal(vm.childHunts[0].name, 'test-1');
+      assert.equal(vm.childHunts[0].kind, 'case');
+      assert.equal(vm.childHunts[0].currentPhase, 2);
+      assert.equal(vm.childHunts[0].phaseName, 'Hypothesis Shaping');
     });
   });
 

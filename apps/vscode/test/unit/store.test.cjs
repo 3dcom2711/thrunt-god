@@ -539,6 +539,175 @@ High
       phaseStore.dispose();
       customWatcher.dispose();
     });
+
+    it('keeps nested case artifacts out of the program indexes while surfacing child hunts', async () => {
+      const customRoot = '/mock-hunt-root-program-cases';
+      const customWatcher = createMockWatcher();
+      const customOutput = createMockOutputChannel();
+      const customFiles = vscode.workspace._mockFiles;
+      customFiles.clear();
+
+      const entries = new Map([
+        ['MISSION.md', fixture('MISSION.md')],
+        ['HYPOTHESES.md', fixture('HYPOTHESES.md')],
+        ['HUNTMAP.md', fixture('HUNTMAP.md')],
+        ['STATE.md', fixture('STATE.md')],
+        ['QUERIES/QRY-20260329-001.md', fixture('QUERIES/QRY-20260329-001.md')],
+        ['RECEIPTS/RCT-20260329-001.md', fixture('RECEIPTS/RCT-20260329-001.md')],
+        ['cases/test-1/MISSION.md', `# Mission: test-1
+
+**Mode:** Case
+**Opened:** 2026-04-01
+**Owner:** TBD
+**Status:** Active
+
+## Signal
+
+Investigate the inherited program signals.
+
+## Desired Outcome
+
+Reach a case disposition.
+
+## Scope
+
+Scoped to the signal bundle.
+
+## Working Theory
+
+The bundled signals may or may not be linked.
+`],
+        ['cases/test-1/HUNTMAP.md', `# Huntmap: test-1
+
+## Overview
+
+Child case hunt.
+
+## Phases
+
+- [x] **Phase 1: Signal Intake** - document the signal
+- [ ] **Phase 2: Hypothesis Shaping** - refine the lead
+
+## Phase Details
+
+### Phase 1: Signal Intake
+**Goal**: Document the signal
+**Depends on**: Nothing
+**Plans**: 1
+
+Plans:
+- [x] 01-01: Intake
+
+### Phase 2: Hypothesis Shaping
+**Goal**: Refine the lead
+**Depends on**: Phase 1
+**Plans**: 1
+
+Plans:
+- [ ] 02-01: Shape
+`],
+        ['cases/test-1/STATE.md', `# Hunt State
+
+## Mission Reference
+
+See: .planning/cases/test-1/MISSION.md
+
+**Active signal:** test-1
+**Current focus:** Hypothesis shaping
+
+## Current Position
+
+Phase: 2 of 2 (Hypothesis Shaping)
+Plan: 1 of 1 in current phase
+Status: Ready to plan
+Last activity: 2026-04-01 — Phase 1 complete
+
+Progress: [█████░░░░░] 50%
+
+## Hunt Context
+
+### Current Scope
+
+- Scoped to the signal bundle
+
+### Data Sources In Play
+
+- Program receipts
+
+### Confidence
+
+Low
+
+### Blockers
+
+- Need more evidence
+
+## Session Continuity
+
+Last session: 2026-04-01
+Stopped at: Phase 1 complete
+Resume file: TBD
+`],
+        ['cases/test-1/RECEIPTS/RCT-CASE-001.md', `---
+receipt_id: RCT-CASE-001
+query_spec_version: "1.0"
+created_at: 2026-04-01T00:00:00Z
+source: Test
+connector_id: elastic
+dataset: endpoint
+result_status: ok
+claim_status: context
+related_hypotheses:
+  - HYP-01
+related_queries: []
+---
+
+# Receipt: Case Intake
+
+## Claim
+
+Child case receipt.
+
+## Evidence
+
+- Case-only evidence.
+
+## Confidence
+
+Low
+`],
+      ]);
+
+      for (const [relativePath, content] of entries) {
+        const absolutePath = path.join(customRoot, relativePath);
+        customFiles.set(absolutePath, {
+          content,
+          mtime: Date.now(),
+          size: Buffer.byteLength(content),
+        });
+      }
+
+      const caseStore = new ext.HuntDataStore(
+        vscode.Uri.file(customRoot),
+        customWatcher,
+        customOutput
+      );
+
+      await caseStore.initialScanComplete();
+
+      assert.ok(caseStore.getReceipt('RCT-20260329-001'));
+      assert.equal(caseStore.getReceipt('RCT-CASE-001'), undefined);
+
+      const childHunts = caseStore.getChildHunts();
+      assert.equal(childHunts.length, 1);
+      assert.equal(childHunts[0].name, 'test-1');
+      assert.equal(childHunts[0].kind, 'case');
+      assert.equal(childHunts[0].currentPhase, 2);
+      assert.equal(childHunts[0].totalPhases, 2);
+
+      caseStore.dispose();
+      customWatcher.dispose();
+    });
   });
 
   // --- Batch coalescing tests ---

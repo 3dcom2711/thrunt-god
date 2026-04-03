@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type {
   ArtifactType,
   ArtifactChangeEvent,
+  ChildHuntSummary,
   ParseResult,
   Query,
   Receipt,
@@ -107,6 +108,10 @@ function tokenizeMatchText(value: string): string[] {
     );
 }
 
+function normalizeFsPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
 /** Internal type for the watcher's onDidChange event shape */
 interface WatcherLike {
   onDidChange: vscode.Event<string[]>;
@@ -155,6 +160,7 @@ export class HuntDataStore implements vscode.Disposable {
   private readonly receiptToQueries = new Map<string, string[]>();
   private readonly receiptToHypotheses = new Map<string, string[]>();
   private readonly queryToPhase = new Map<string, number>();
+  private childHunts: ChildHuntSummary[] = [];
 
   // --- Batch window ---
   private readonly pendingPaths = new Set<string>();
@@ -297,6 +303,13 @@ export class HuntDataStore implements vscode.Disposable {
   }
 
   /**
+   * Get nested case/workstream hunts discovered under the current hunt root.
+   */
+  getChildHunts(): ChildHuntSummary[] {
+    return [...this.childHunts];
+  }
+
+  /**
    * Get all receipts linked to a specific query.
    * Uses the receiptToQueries cross-index.
    */
@@ -378,6 +391,7 @@ export class HuntDataStore implements vscode.Disposable {
     if (!hunt) {
       return {
         mission: null,
+        childHunts: [],
         phases: [],
         currentPhase: 0,
         verdicts: { supported: 0, disproved: 0, inconclusive: 0, open: 0 },
@@ -408,6 +422,22 @@ export class HuntDataStore implements vscode.Disposable {
             focus: hunt.mission.data.scope,
           }
         : null;
+
+    const childHunts =
+      typeof this.getChildHunts === 'function'
+        ? this.getChildHunts().map((child) => ({
+            id: child.id,
+            name: child.name,
+            kind: child.kind,
+            signal: child.signal,
+            status: child.status,
+            currentPhase: child.currentPhase,
+            totalPhases: child.totalPhases,
+            phaseName: child.phaseName,
+            lastActivity: child.lastActivity,
+            findingsPublished: child.findingsPublished,
+          }))
+        : [];
 
     // Phases
     const phases =
@@ -506,6 +536,7 @@ export class HuntDataStore implements vscode.Disposable {
 
     return {
       mission,
+      childHunts,
       phases,
       currentPhase,
       verdicts,
@@ -1104,8 +1135,14 @@ export class HuntDataStore implements vscode.Disposable {
     this.pendingPaths.clear();
 
     const events: ArtifactChangeEvent[] = [];
+    let childHuntChanged = false;
 
     for (const filePath of batch) {
+      if (this.isChildHuntArtifact(filePath)) {
+        childHuntChanged = true;
+        continue;
+      }
+
       const resolved = resolveArtifactType(filePath);
       if (!resolved) continue;
 
@@ -1149,12 +1186,25 @@ export class HuntDataStore implements vscode.Disposable {
       }
     }
 
+    if (childHuntChanged) {
+      this.childHunts = await this.discoverChildHunts();
+    }
+
     // Rebuild cross-artifact indexes after batch
     this.rebuildIndexes();
 
     // Emit events
     for (const event of events) {
       this._onDidChange.fire(event);
+    }
+
+    if (childHuntChanged && events.length === 0) {
+      this._onDidChange.fire({
+        type: 'store:rebuilt',
+        artifactType: 'state',
+        id: 'STATE',
+        filePath: this.huntRoot.fsPath,
+      });
     }
 
     // If more changes accumulated during processing, restart batch timer
@@ -1178,6 +1228,10 @@ export class HuntDataStore implements vscode.Disposable {
       const files = await this.findAllMarkdownFiles(this.huntRoot);
 
       for (const filePath of files) {
+        if (this.isChildHuntArtifact(filePath)) {
+          continue;
+        }
+
         const resolved = resolveArtifactType(filePath);
         if (!resolved) continue;
 
@@ -1205,6 +1259,8 @@ export class HuntDataStore implements vscode.Disposable {
           this.outputChannel.appendLine(`[Store] Failed to read artifact: ${filePath}`);
         }
       }
+
+      this.childHunts = await this.discoverChildHunts();
 
       // Build initial cross-artifact indexes
       this.rebuildIndexes();
@@ -1534,6 +1590,158 @@ export class HuntDataStore implements vscode.Disposable {
     }
 
     return undefined;
+  }
+
+  private getRelativeHuntPath(filePath: string): string | null {
+    const normalizedRoot = normalizeFsPath(this.huntRoot.fsPath);
+    const normalizedFile = normalizeFsPath(filePath);
+
+    if (normalizedFile === normalizedRoot) {
+      return '';
+    }
+
+    if (!normalizedFile.startsWith(`${normalizedRoot}/`)) {
+      return null;
+    }
+
+    return normalizedFile.slice(normalizedRoot.length + 1);
+  }
+
+  private parseChildHuntLocation(
+    filePath: string
+  ): { kind: 'case' | 'workstream'; name: string; relativeRoot: string } | null {
+    const relativePath = this.getRelativeHuntPath(filePath);
+    if (!relativePath) {
+      return null;
+    }
+
+    const match = /^(cases|workstreams)\/([^/]+)\/.+$/i.exec(relativePath);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      kind: match[1].toLowerCase() === 'cases' ? 'case' : 'workstream',
+      name: match[2],
+      relativeRoot: `${match[1]}/${match[2]}`,
+    };
+  }
+
+  private isChildHuntArtifact(filePath: string): boolean {
+    return this.parseChildHuntLocation(filePath) !== null;
+  }
+
+  private async discoverChildHunts(): Promise<ChildHuntSummary[]> {
+    const markdownFiles = await this.findMarkdownFilesWithGlob(this.huntRoot);
+    const childRoots = new Map<string, { kind: 'case' | 'workstream'; name: string }>();
+
+    for (const filePath of markdownFiles) {
+      if (!/\/MISSION\.md$/i.test(normalizeFsPath(filePath))) {
+        continue;
+      }
+
+      const location = this.parseChildHuntLocation(filePath);
+      if (!location) {
+        continue;
+      }
+
+      childRoots.set(location.relativeRoot, {
+        kind: location.kind,
+        name: location.name,
+      });
+    }
+
+    const results: ChildHuntSummary[] = [];
+    for (const [relativeRoot, location] of childRoots) {
+      const summary = await this.readChildHuntSummary(relativeRoot, location.kind, location.name);
+      if (summary) {
+        results.push(summary);
+      }
+    }
+
+    results.sort((left, right) => left.name.localeCompare(right.name));
+    return results;
+  }
+
+  private async readChildHuntSummary(
+    relativeRoot: string,
+    kind: 'case' | 'workstream',
+    name: string
+  ): Promise<ChildHuntSummary | null> {
+    const huntRoot = vscode.Uri.joinPath(this.huntRoot, ...relativeRoot.split('/'));
+    const mission = await this.readOptionalArtifact<Mission>(
+      vscode.Uri.joinPath(huntRoot, 'MISSION.md'),
+      'mission'
+    );
+
+    if (mission?.status !== 'loaded') {
+      return null;
+    }
+
+    const state = await this.readOptionalArtifact<HuntState>(
+      vscode.Uri.joinPath(huntRoot, 'STATE.md'),
+      'state'
+    );
+    const huntMap = await this.readOptionalArtifact<HuntMap>(
+      vscode.Uri.joinPath(huntRoot, 'HUNTMAP.md'),
+      'huntmap'
+    );
+    const findingsPublished = await this.pathExists(
+      vscode.Uri.joinPath(huntRoot, 'published', 'FINDINGS.md')
+    );
+
+    const stateData = state?.status === 'loaded' ? state.data : null;
+    const huntMapData = huntMap?.status === 'loaded' ? huntMap.data : null;
+    const currentPhase = stateData?.phase ?? 0;
+    const totalPhases = stateData?.totalPhases ?? huntMapData?.phases.length ?? 0;
+    const phaseName =
+      huntMapData?.phases.find((phase) => phase.number === currentPhase)?.name ?? '';
+    const blockerCount =
+      stateData?.blockers
+        ?.split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0).length ?? 0;
+
+    return {
+      id: `${kind}:${name}`,
+      name,
+      kind,
+      huntRootPath: huntRoot.fsPath,
+      missionPath: vscode.Uri.joinPath(huntRoot, 'MISSION.md').fsPath,
+      signal: mission.data.signal,
+      mode: mission.data.mode,
+      status: stateData?.status ?? mission.data.status,
+      opened: mission.data.opened,
+      owner: mission.data.owner,
+      currentPhase,
+      totalPhases,
+      phaseName,
+      lastActivity: stateData?.lastActivity ?? mission.data.opened,
+      blockerCount,
+      findingsPublished,
+    };
+  }
+
+  private async readOptionalArtifact<T>(
+    uri: vscode.Uri,
+    type: ArtifactType
+  ): Promise<ParseResult<T> | null> {
+    try {
+      const rawBytes = await vscode.workspace.fs.readFile(uri);
+      const raw = new TextDecoder().decode(rawBytes);
+      return parseArtifact(type, raw) as ParseResult<T>;
+    } catch {
+      return null;
+    }
+  }
+
+  private async pathExists(uri: vscode.Uri): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(uri);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

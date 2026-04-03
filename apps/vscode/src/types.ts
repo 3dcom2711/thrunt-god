@@ -86,6 +86,25 @@ export interface HuntState {
   blockers: string;
 }
 
+export interface ChildHuntSummary {
+  id: string;
+  name: string;
+  kind: 'case' | 'workstream';
+  huntRootPath: string;
+  missionPath: string;
+  signal: string;
+  mode: string;
+  status: string;
+  opened: string;
+  owner: string;
+  currentPhase: number;
+  totalPhases: number;
+  phaseName: string;
+  lastActivity: string;
+  blockerCount: number;
+  findingsPublished: boolean;
+}
+
 // Drain template metadata (extracted from Query result summary)
 export interface DrainTemplate {
   templateId: string;         // "T1", "T2", etc.

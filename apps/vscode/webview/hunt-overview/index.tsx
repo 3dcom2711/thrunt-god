@@ -139,6 +139,109 @@ function MissionCard({ mission }: { mission: HuntOverviewViewModel['mission'] })
   );
 }
 
+function ChildHuntsCard({
+  mission,
+  childHunts,
+}: {
+  mission: HuntOverviewViewModel['mission'];
+  childHunts: HuntOverviewViewModel['childHunts'];
+}) {
+  const isProgram = mission?.mode.toLowerCase() === 'program';
+  if (!isProgram && childHunts.length === 0) {
+    return null;
+  }
+
+  const publishedCount = childHunts.filter((child) => child.findingsPublished).length;
+
+  return (
+    <Panel>
+      <p class="hunt-section-heading">Child Hunts</p>
+      <p
+        style={{
+          margin: '0 0 14px',
+          color: 'var(--hunt-text-muted)',
+          fontSize: '13px',
+        }}
+      >
+        Program metrics stay scoped to the top-level hunt. Cases and workstreams are tracked separately here.
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '10px',
+          marginBottom: childHunts.length > 0 ? '14px' : 0,
+        }}
+      >
+        <StatCard label="Total" value={String(childHunts.length)} />
+        <StatCard
+          label="Active"
+          value={String(childHunts.filter((child) => !child.findingsPublished).length)}
+        />
+        <StatCard label="Published" value={String(publishedCount)} />
+      </div>
+      {childHunts.length === 0 ? (
+        <p style={{ margin: 0, color: 'var(--hunt-text-muted)' }}>
+          No child hunts discovered under the current program.
+        </p>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gap: '10px',
+          }}
+        >
+          {childHunts.map((child) => (
+            <div
+              key={child.id}
+              style={{
+                border: '1px solid var(--hunt-border)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                background: 'var(--hunt-surface-raised, var(--vscode-editor-inactiveSelectionBackground))',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  alignItems: 'baseline',
+                }}
+              >
+                <strong>{child.name}</strong>
+                <span style={{ color: 'var(--hunt-text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>
+                  {child.kind}
+                </span>
+              </div>
+              <div style={{ marginTop: '6px', fontSize: '13px' }}>{child.signal}</div>
+              <div
+                style={{
+                  marginTop: '10px',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                  fontSize: '12px',
+                  color: 'var(--hunt-text-muted)',
+                }}
+              >
+                <span>
+                  {child.totalPhases > 0
+                    ? `Phase ${child.currentPhase}/${child.totalPhases}`
+                    : child.status}
+                  {child.phaseName ? ` · ${child.phaseName}` : ''}
+                </span>
+                <span>{child.findingsPublished ? 'Published' : child.status}</span>
+                <span>Last activity: {child.lastActivity}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function PhaseRail({
   phases,
   currentPhase: _currentPhase,
@@ -525,6 +628,7 @@ function App() {
         >
           {viewModel.sessionContinuity && <ResumeCard sessionContinuity={viewModel.sessionContinuity} />}
           <MissionCard mission={viewModel.mission} />
+          <ChildHuntsCard mission={viewModel.mission} childHunts={viewModel.childHunts} />
           <PhaseRail
             phases={viewModel.phases}
             currentPhase={viewModel.currentPhase}
