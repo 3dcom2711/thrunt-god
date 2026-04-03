@@ -29,6 +29,11 @@
   --hunt-surface-raised: var(--hunt-surface-strong);
   --hunt-text-on-accent: #fff;
 
+  /* --- Semantic colours (receipt inspector) --- */
+  --hunt-semantic-supported: #4ec9b0;
+  --hunt-semantic-disproved: #f44747;
+  --hunt-accent-subtle: rgba(78, 201, 176, 0.12);
+
   /* --- Elevation --- */
   --hunt-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
 }
@@ -905,4 +910,326 @@ button {
 .hunt-qa-mode-toggle button.active {
   background: var(--hunt-accent);
   color: var(--hunt-text-on-accent, #fff);
+}
+
+/* ==========================================================================
+   Component Styles -- Query Analysis: Receipt Inspector
+   ========================================================================== */
+
+.hunt-qa-inspector {
+  margin: 16px 0;
+}
+
+.hunt-qa-inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.hunt-qa-inspector-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.hunt-qa-inspector-split {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  border: 1px solid var(--hunt-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  min-height: 400px;
+}
+
+.hunt-qa-inspector-list {
+  border-right: 1px solid var(--hunt-panel-border);
+  overflow-y: auto;
+  max-height: 600px;
+  background: var(--hunt-panel-bg);
+}
+
+.hunt-qa-inspector-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--hunt-panel-border);
+  background: transparent;
+  color: var(--hunt-text);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.hunt-qa-inspector-item:hover {
+  background: var(--hunt-surface-raised, rgba(128, 128, 128, 0.08));
+}
+
+.hunt-qa-inspector-item--selected {
+  background: var(--hunt-accent-subtle, rgba(78, 201, 176, 0.12));
+  border-left: 3px solid var(--hunt-accent);
+}
+
+.hunt-qa-inspector-item__id {
+  font-weight: 600;
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.hunt-qa-inspector-item__claim {
+  color: var(--hunt-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.hunt-qa-inspector-item__score {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hunt-qa-inspector-detail {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 600px;
+}
+
+.hunt-qa-inspector-empty {
+  padding: 24px;
+  color: var(--hunt-text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+/* Verdict badges */
+.hunt-qa-verdict-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hunt-qa-verdict-badge--supports {
+  background: rgba(78, 201, 176, 0.18);
+  color: var(--hunt-semantic-supported, #4ec9b0);
+}
+
+.hunt-qa-verdict-badge--contradicts {
+  background: rgba(244, 71, 71, 0.18);
+  color: var(--hunt-semantic-disproved, #f44747);
+}
+
+.hunt-qa-verdict-badge--inconclusive {
+  background: rgba(215, 186, 125, 0.18);
+  color: var(--hunt-warning, #d7ba7d);
+}
+
+/* Receipt detail */
+.hunt-qa-receipt-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.hunt-qa-receipt-detail__header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.hunt-qa-receipt-detail__confidence {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--hunt-text-muted);
+}
+
+.hunt-qa-receipt-detail__claim {
+  margin-bottom: 16px;
+}
+
+.hunt-qa-receipt-detail__claim p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hunt-qa-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hunt-text-muted);
+  margin-bottom: 4px;
+}
+
+/* Score card */
+.hunt-qa-score-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  margin: 16px 0;
+  border: 1px solid var(--hunt-panel-border);
+  border-radius: 6px;
+  background: var(--hunt-panel-bg);
+}
+
+.hunt-qa-score-card__value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hunt-qa-score-number {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hunt-qa-score-number--low {
+  color: var(--hunt-semantic-supported, #4ec9b0);
+}
+
+.hunt-qa-score-number--medium {
+  color: var(--hunt-warning, #d7ba7d);
+}
+
+.hunt-qa-score-number--high {
+  color: var(--hunt-semantic-disproved, #f44747);
+}
+
+.hunt-qa-score-badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.hunt-qa-score-badge--low {
+  background: rgba(78, 201, 176, 0.18);
+  color: var(--hunt-semantic-supported, #4ec9b0);
+}
+
+.hunt-qa-score-badge--medium {
+  background: rgba(215, 186, 125, 0.18);
+  color: var(--hunt-warning, #d7ba7d);
+}
+
+.hunt-qa-score-badge--high {
+  background: rgba(244, 71, 71, 0.18);
+  color: var(--hunt-semantic-disproved, #f44747);
+}
+
+.hunt-qa-score-card__category {
+  font-size: 12px;
+  color: var(--hunt-text-muted);
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* Factor table */
+.hunt-qa-factor-table-wrapper {
+  margin: 16px 0;
+}
+
+.hunt-qa-factor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.hunt-qa-factor-table th {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 2px solid var(--hunt-panel-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hunt-text-muted);
+}
+
+.hunt-qa-factor-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--hunt-panel-border);
+}
+
+.hunt-qa-factor-table__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.hunt-qa-factor-table__total td {
+  font-weight: 700;
+  border-top: 2px solid var(--hunt-panel-border);
+  border-bottom: none;
+}
+
+/* Framing sections */
+.hunt-qa-framing-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.hunt-qa-framing-block {
+  padding: 12px;
+  border: 1px solid var(--hunt-panel-border);
+  border-radius: 4px;
+}
+
+.hunt-qa-framing-block p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hunt-qa-no-framing {
+  padding: 24px;
+  text-align: center;
+  border: 1px dashed var(--hunt-panel-border);
+  border-radius: 6px;
+  margin: 16px 0;
+}
+
+.hunt-qa-no-framing p {
+  margin: 4px 0;
+}
+
+.hunt-qa-text-muted {
+  color: var(--hunt-text-muted);
+  font-size: 12px;
+}
+
+/* ATT&CK mapping tags */
+.hunt-qa-attack-mapping {
+  margin: 16px 0;
+}
+
+.hunt-qa-attack-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hunt-qa-attack-tag {
+  padding: 3px 10px;
+  border: 1px solid var(--hunt-panel-border);
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  color: var(--hunt-text);
+  background: var(--hunt-panel-bg);
 }
