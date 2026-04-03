@@ -8,7 +8,7 @@ import type {
   SessionContinuitySummary,
 } from '../../shared/hunt-overview';
 import { Panel, StatCard, GhostButton } from '../shared/components';
-import { useTheme, useHostMessage, createVsCodeApi } from '../shared/hooks';
+import { useTheme, useHostMessage, createVsCodeApi, useRovingTabindex } from '../shared/hooks';
 import '../shared/tokens.css';
 
 const vscode = createVsCodeApi<unknown, HuntOverviewToHostMessage>();
@@ -146,6 +146,9 @@ function PhaseRail({
   phases: HuntOverviewViewModel['phases'];
   currentPhase: number;
 }) {
+  const railRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(railRef, '.hunt-phase-rail__segment');
+
   if (phases.length === 0) {
     return null;
   }
@@ -153,7 +156,7 @@ function PhaseRail({
   return (
     <div>
       <p class="hunt-section-heading">Phases</p>
-      <div class="hunt-phase-rail">
+      <div class="hunt-phase-rail" ref={railRef} role="group" aria-label="Hunt phases">
         {phases.map((phase) => (
           <button
             key={phase.number}
@@ -176,6 +179,9 @@ function VerdictCards({
 }: {
   verdicts: HuntOverviewViewModel['verdicts'];
 }) {
+  const verdictContainerRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(verdictContainerRef, '.hunt-verdict-card');
+
   const navigateToHypotheses = () =>
     vscode.postMessage({ type: 'navigate', target: 'sidebar:hypotheses' });
   const onKeyDown = (e: KeyboardEvent) => {
@@ -186,6 +192,9 @@ function VerdictCards({
     <div>
       <p class="hunt-section-heading">Hypothesis Verdicts</p>
       <div
+        ref={verdictContainerRef}
+        role="group"
+        aria-label="Hypothesis verdict counts"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
@@ -377,6 +386,8 @@ function ActivityFeed({
   highlightedArtifactId: string | null;
   isPulsing: boolean;
 }) {
+  const feedContainerRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(feedContainerRef, '.hunt-activity-entry');
   const [showAll, setShowAll] = useState(false);
 
   if (entries.length === 0) {
@@ -421,7 +432,7 @@ function ActivityFeed({
       >
         {showAll ? 'Since Last Session' : 'Show All'}
       </GhostButton>
-      <div class="hunt-activity-feed" style={{ marginTop: '10px' }}>
+      <div class="hunt-activity-feed" ref={feedContainerRef} role="list" aria-label="Recent activity" style={{ marginTop: '10px' }}>
         {displayEntries.map((entry, index) => {
           const isHighlighted = entry.artifactId === highlightedArtifactId;
           let entryClass = 'hunt-activity-entry';
@@ -429,7 +440,7 @@ function ActivityFeed({
           if (isHighlighted && isPulsing) entryClass += ' hunt-selection-pulse';
 
           return (
-            <div class={entryClass} key={index}>
+            <div class={entryClass} key={index} role="listitem" tabIndex={0}>
               <span class={`hunt-diff-badge hunt-diff-badge--${entry.diffKind}`}>
                 {entry.diffKind}
               </span>
