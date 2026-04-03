@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Investigative Surfaces
-status: in_progress
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-04-03T02:19:00Z"
-last_activity: 2026-04-03 -- Completed 16-03 Session Continuity Resume Card
+status: in-progress
+stopped_at: Completed 16.1-01-PLAN.md
+last_updated: "2026-04-03T03:04:19.000Z"
+last_activity: 2026-04-03 -- Completed 16.1-01 Cross-Surface Selection Highlighting
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 5
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
+  total_plans: 17
+  completed_plans: 16
+  percent: 94
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 ## Current Position
 
-Phase: 16 of 16 (Cross-Surface Navigation & Session Continuity)
-Plan: 3 of 3 complete
-Status: Phase Complete
-Last activity: 2026-04-03 -- Completed 16-03 Session Continuity Resume Card
+Phase: 16.1 of 16.1 (Cross-Surface Selection Rendering & Keyboard Navigation)
+Plan: 1 of 2 complete
+Status: In Progress
+Last activity: 2026-04-03 -- Completed 16.1-01 Cross-Surface Selection Highlighting
 
-Progress: [██████████] 100%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [██████████] 100%
 | Phase 16 P01 | 5min | 2 tasks | 13 files |
 | Phase 16 P02 | 4min | 2 tasks | 7 files |
 | Phase 16 P03 | 3min | 2 tasks | 4 files |
+| Phase 16.1 P01 | 6min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,8 @@ Recent decisions affecting current work:
 - [Phase 16-02]: Drain Viewer serializer disposes panel if no queryId persisted
 - [Phase 16-03]: suggestedAction prioritizes "Review N changed artifacts" when 3+ changes, otherwise "Continue Phase N: Name"
 - [Phase 16-03]: ResumeCard renders conditionally via sessionContinuity truthiness check for forward-compatibility
+- [Phase 16.1-01]: pulseTimerRef pattern: useRef + setTimeout(200ms) to toggle isPulsing state, avoiding CSS class removal race conditions
+- [Phase 16.1-01]: Drain viewer cluster chips highlight when templateId OR parent queryId matches highlightedArtifactId
 
 ### Pending Todos
 
@@ -124,6 +127,6 @@ No blocking issues.
 
 ## Session Continuity
 
-Last session: 2026-04-03T02:19:00Z
-Stopped at: Completed 16-03-PLAN.md
+Last session: 2026-04-03T03:04:19Z
+Stopped at: Completed 16.1-01-PLAN.md
 Resume file: None

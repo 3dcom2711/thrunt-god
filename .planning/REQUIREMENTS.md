@@ -14,7 +14,7 @@ Requirements for the Investigative Surfaces milestone. Each maps to roadmap phas
 - [x] **DSYS-03**: Shared hooks library (useRovingTabindex, useTheme, useVsCodeApi, useHostMessage) available to all webviews
 - [x] **DSYS-04**: esbuild config produces 3 new webview ESM bundles alongside existing Drain Template Viewer
 - [x] **DSYS-05**: Existing Drain Template Viewer migrated from `--viewer-*` tokens to shared `--hunt-*` tokens
-- [x] **DSYS-06**: Keyboard-first navigation (roving tabindex, ARIA roles) works across all webview surfaces
+- [ ] **DSYS-06**: Keyboard-first navigation (roving tabindex, ARIA roles) works across all webview surfaces
 
 ### Hunt Overview Dashboard
 
@@ -167,8 +167,8 @@ Deferred to v5.1+:
 | DSYS-02 | Phase 12 | Complete |
 | DSYS-03 | Phase 12 | Complete |
 | DSYS-04 | Phase 12 | Complete |
-| DSYS-05 | Phase 12 | Pending |
-| DSYS-06 | Phase 12 | Complete |
+| DSYS-05 | Phase 12 | Complete |
+| DSYS-06 | Phase 16.1 | Pending |
 | DASH-01 | Phase 13 | Complete |
 | DASH-02 | Phase 13 | Complete |
 | DASH-03 | Phase 13 | Complete |
@@ -196,7 +196,7 @@ Deferred to v5.1+:
 | QANL-04 | Phase 15 | Complete |
 | XNAV-01 | Phase 16 | Complete |
 | XNAV-02 | Phase 16 | Complete |
-| XNAV-03 | Phase 16 | Complete |
+| XNAV-03 | Phase 16.1-01 | Complete |
 | XNAV-04 | Phase 16 | Complete |
 | XNAV-05 | Phase 16 | Complete |
 | AIRW-01 | Phase 17 | Pending |

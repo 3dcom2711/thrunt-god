@@ -123,7 +123,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 16.1-01-PLAN.md -- Cross-surface selection:highlight rendering in all 4 webviews, EB node:select emission, QA store.select() wiring, store.ts TS fix
+- [x] 16.1-01-PLAN.md -- Cross-surface selection:highlight rendering in all 4 webviews, EB node:select emission, QA store.select() wiring, store.ts TS fix
 - [ ] 16.1-02-PLAN.md -- useRovingTabindex wiring + ARIA attributes in Hunt Overview, Evidence Board, and Query Analysis
 
 ### v4.0 Active Incident Workflow
@@ -282,7 +282,7 @@ Plans:
 | 14. Evidence Board | v3.0 | 3/3 | Complete | 2026-04-02 |
 | 15. Query Analysis Upgrades | v3.0 | Complete    | 2026-04-03 | 2026-04-03 |
 | 16. Cross-Surface Navigation | 3/3 | Complete    | 2026-04-03 | - |
-| 16.1. Selection Rendering & Keyboard Nav | v3.0 | 0/2 | In progress | - |
+| 16.1. Selection Rendering & Keyboard Nav | v3.0 | 1/2 | In progress | - |
 | 17. War Room Copy | v4.0 | 0/1 | Not started | - |
 | 18. SLA Countdown Timer | v4.0 | 0/1 | Not started | - |
 | 19. IOC Quick-Entry | v4.0 | 0/1 | Not started | - |
