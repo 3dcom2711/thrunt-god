@@ -11,7 +11,7 @@ import type {
   HuntState,
   EvidenceReview,
 } from './types';
-import type { HuntOverviewViewModel, SessionDiff } from '../shared/hunt-overview';
+import type { HuntOverviewViewModel, SessionDiff, SessionContinuitySummary } from '../shared/hunt-overview';
 import type {
   EvidenceBoardViewModel,
   EvidenceBoardNode,
@@ -313,6 +313,13 @@ export class HuntDataStore implements vscode.Disposable {
         diagnosticsHealth,
         activityFeed: sessionDiff ? sessionDiff.entries : [],
         sessionDiff,
+        sessionContinuity: {
+          lastActivity: 'Unknown',
+          currentPosition: 'No hunt detected',
+          changesSummary: sessionDiff?.summary ?? 'No changes since last session',
+          suggestedAction: 'Open a workspace with hunt artifacts',
+          hasChanges: sessionDiff !== null && sessionDiff.entries.length > 0,
+        },
       };
     }
 
@@ -394,6 +401,34 @@ export class HuntDataStore implements vscode.Disposable {
         .map((text) => ({ text, timestamp: lastActivity }));
     }
 
+    // Session continuity summary
+    const lastActivity = hunt.state.status === 'loaded'
+      ? hunt.state.data.lastActivity
+      : 'Unknown';
+    const currentPosition = hunt.state.status === 'loaded'
+      ? `Phase ${hunt.state.data.phase} of ${hunt.state.data.totalPhases}, Plan ${hunt.state.data.planInPhase} of ${hunt.state.data.totalPlansInPhase}`
+      : 'Unknown position';
+    const hasChanges = sessionDiff !== null && sessionDiff.entries.length > 0;
+    const changesSummary = sessionDiff?.summary ?? 'No changes since last session';
+
+    let suggestedAction: string;
+    if (hasChanges && sessionDiff && sessionDiff.entries.length >= 3) {
+      suggestedAction = `Review ${sessionDiff.entries.length} changed artifacts`;
+    } else if (hunt.state.status === 'loaded') {
+      const phaseName = phases.find(p => p.number === hunt.state.data.phase)?.name ?? '';
+      suggestedAction = `Continue Phase ${hunt.state.data.phase}${phaseName ? `: ${phaseName}` : ''}`;
+    } else {
+      suggestedAction = 'Open the sidebar to explore artifacts';
+    }
+
+    const sessionContinuity: SessionContinuitySummary = {
+      lastActivity,
+      currentPosition,
+      changesSummary,
+      suggestedAction,
+      hasChanges,
+    };
+
     return {
       mission,
       phases,
@@ -405,6 +440,7 @@ export class HuntDataStore implements vscode.Disposable {
       diagnosticsHealth,
       activityFeed: sessionDiff ? sessionDiff.entries : [],
       sessionDiff,
+      sessionContinuity,
     };
   }
 

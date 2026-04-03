@@ -14,6 +14,15 @@ export interface SessionDiff {
   summary: string;         // e.g. "2 added, 1 modified since last session"
 }
 
+// Session continuity summary (XNAV-05)
+export interface SessionContinuitySummary {
+  lastActivity: string;        // e.g. "2026-04-03 -- Completed 15-03 Receipt QA Inspector"
+  currentPosition: string;     // e.g. "Phase 15 of 16, Plan 3 of 3"
+  changesSummary: string;      // e.g. "2 added, 1 modified since last session" or "No changes since last session"
+  suggestedAction: string;     // e.g. "Continue Phase 16: Cross-Surface Navigation" or "Review 3 changed artifacts"
+  hasChanges: boolean;         // Quick flag: sessionDiff has entries
+}
+
 // View model: data the host sends to the Hunt Overview webview
 export interface HuntOverviewViewModel {
   // Mission identity
@@ -65,6 +74,9 @@ export interface HuntOverviewViewModel {
 
   // Session diff (DASH-07)
   sessionDiff: SessionDiff | null;
+
+  // Session continuity summary (XNAV-05)
+  sessionContinuity: SessionContinuitySummary;
 }
 
 export interface HuntOverviewBootData {
