@@ -55,6 +55,21 @@ Bootstrap the hunt command surface into your local IDE environment.
 | Copilot              | `/hunt-help` |
 | Cursor / Windsurf    | `hunt-help`  |
 
+### Install the VS Code extension alpha
+
+Download `thrunt-god-0.3.0.vsix` from the [`v0.3.0` release](https://github.com/backbay-labs/thrunt-god/releases/tag/v0.3.0).
+
+Then install it one of two ways:
+
+1. In VS Code, open Extensions, click the `...` menu, choose `Install from VSIX...`, and select the downloaded file.
+2. From terminal:
+
+```bash
+code --install-extension thrunt-god-0.3.0.vsix
+```
+
+After install, open a folder containing `.planning/MISSION.md` or `.hunt/MISSION.md` and the THRUNT sidebar will activate automatically.
+
 ---
 
 ## The Five Phases
