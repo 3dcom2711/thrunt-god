@@ -334,7 +334,7 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
 
   private getChildHuntNodes(): HuntTreeItem[] {
     return this.store.getChildHunts().map((child) => {
-      const descriptionParts = [child.kind];
+      const descriptionParts: string[] = [child.kind];
       if (child.totalPhases > 0 && child.currentPhase > 0) {
         descriptionParts.push(`Phase ${child.currentPhase}/${child.totalPhases}`);
       }
