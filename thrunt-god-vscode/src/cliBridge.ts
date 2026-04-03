@@ -155,6 +155,8 @@ function buildMissionDiagnosticUri(huntRoot: vscode.Uri): vscode.Uri {
   return vscode.Uri.joinPath(huntRoot, 'MISSION.md');
 }
 
+const QUERY_ID_PATTERN = /(QRY-[A-Za-z0-9-]+)/;
+
 export function parseStructuredCliLine(line: string): StructuredCLIMessage | null {
   try {
     const parsed = JSON.parse(line) as StructuredCLIMessage & { type?: string };
@@ -175,7 +177,7 @@ export function mapCliDiagnostics(
     if (item.queryId) {
       uri = buildQueryDiagnosticUri(huntRoot, item.queryId);
     } else if (/query timeout/i.test(item.message)) {
-      const queryId = item.message.match(/(QRY-[0-9-]+)/)?.[1];
+      const queryId = item.message.match(QUERY_ID_PATTERN)?.[1];
       if (queryId) {
         uri = buildQueryDiagnosticUri(huntRoot, queryId);
       }
@@ -462,7 +464,7 @@ export class CLIBridge implements vscode.Disposable {
       this.pendingDiagnostics.push({
         code: 'QUERY_TIMEOUT',
         message: line,
-        queryId: line.match(/(QRY-[0-9-]+)/)?.[1],
+        queryId: line.match(QUERY_ID_PATTERN)?.[1],
       });
     }
   }

@@ -250,6 +250,53 @@ describe('HuntDataStore', () => {
       assert.equal(hunt.huntMap.status, 'loaded');
       assert.equal(hunt.state.status, 'loaded');
     });
+
+    it('discovers non-date query and receipt IDs through fallback glob scanning', async () => {
+      const fallbackRoot = '/mock-hunt-root-fallback';
+      const customWatcher = createMockWatcher();
+      const customOutput = createMockOutputChannel();
+      const customFiles = vscode.workspace._mockFiles;
+      customFiles.clear();
+
+      const mission = fixture('MISSION.md');
+      const query = fixture('QUERIES/QRY-20260329-001.md').replaceAll(
+        'QRY-20260329-001',
+        'QRY-alpha-7f9c'
+      );
+      const receipt = fixture('RECEIPTS/RCT-20260329-001.md')
+        .replaceAll('RCT-20260329-001', 'RCT-alpha-7f9c')
+        .replaceAll('QRY-20260329-001', 'QRY-alpha-7f9c');
+
+      customFiles.set(path.join(fallbackRoot, 'MISSION.md'), {
+        content: mission,
+        mtime: Date.now(),
+        size: Buffer.byteLength(mission),
+      });
+      customFiles.set(path.join(fallbackRoot, 'QUERIES/QRY-alpha-7f9c.md'), {
+        content: query,
+        mtime: Date.now(),
+        size: Buffer.byteLength(query),
+      });
+      customFiles.set(path.join(fallbackRoot, 'RECEIPTS/RCT-alpha-7f9c.md'), {
+        content: receipt,
+        mtime: Date.now(),
+        size: Buffer.byteLength(receipt),
+      });
+
+      const fallbackStore = new ext.HuntDataStore(
+        vscode.Uri.file(fallbackRoot),
+        customWatcher,
+        customOutput
+      );
+
+      await fallbackStore.initialScanComplete();
+
+      assert.ok(fallbackStore.getQuery('QRY-alpha-7f9c'));
+      assert.ok(fallbackStore.getReceipt('RCT-alpha-7f9c'));
+
+      fallbackStore.dispose();
+      customWatcher.dispose();
+    });
   });
 
   // --- Batch coalescing tests ---

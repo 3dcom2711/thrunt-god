@@ -373,6 +373,17 @@ try {
         },
       },
       openTextDocument: (uri) => Promise.resolve(createMockTextDocument(uri)),
+      findFiles: (pattern) => {
+        const basePath =
+          pattern && typeof pattern === 'object'
+            ? (pattern.base?.fsPath || pattern.base || '')
+            : '';
+        const files = [..._mockFiles.keys()]
+          .filter((filePath) => filePath.endsWith('.md'))
+          .filter((filePath) => (basePath ? filePath.startsWith(basePath) : true))
+          .map((filePath) => ({ fsPath: filePath, path: filePath, scheme: 'file' }));
+        return Promise.resolve(files);
+      },
       onDidChangeTextDocument: _textDocumentEmitter.event,
       // Expose mock file store for test setup
       _mockFiles,

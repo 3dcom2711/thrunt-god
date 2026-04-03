@@ -1173,7 +1173,15 @@ export class HuntDataStore implements vscode.Disposable {
         }
       }
     } catch {
-      // readDirectory not available, failed, or empty -- fall back to known artifact structure
+      // readDirectory not available, failed, or empty -- try a generic glob
+      // search before falling back to singleton probes.
+      const globbed = await this.findMarkdownFilesWithGlob(dir);
+      if (globbed.length > 0) {
+        return globbed;
+      }
+
+      // Last-resort fallback when directory listing and glob search are both
+      // unavailable in the current environment.
       const knownPaths = this.getKnownArtifactPaths();
       for (const relPath of knownPaths) {
         const uri = vscode.Uri.joinPath(this.huntRoot, relPath);
@@ -1189,12 +1197,32 @@ export class HuntDataStore implements vscode.Disposable {
     return files;
   }
 
+  private async findMarkdownFilesWithGlob(dir: vscode.Uri): Promise<string[]> {
+    const findFiles = (
+      vscode.workspace as typeof vscode.workspace & {
+        findFiles?: (pattern: vscode.RelativePattern) => Thenable<vscode.Uri[]>;
+      }
+    ).findFiles;
+
+    if (typeof findFiles !== 'function') {
+      return [];
+    }
+
+    try {
+      const matches = await findFiles(new vscode.RelativePattern(dir, '**/*.md'));
+      return [...new Set(matches.map((match) => match.fsPath))];
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Return known artifact relative paths for fallback scanning.
-   * This probes common artifact locations when readDirectory is unavailable.
+   * This probes singleton artifact locations when directory enumeration is
+   * unavailable. Query and receipt discovery should happen via glob search.
    */
   private getKnownArtifactPaths(): string[] {
-    const paths = [
+    return [
       'MISSION.md',
       'HYPOTHESES.md',
       'HUNTMAP.md',
@@ -1202,16 +1230,6 @@ export class HuntDataStore implements vscode.Disposable {
       'EVIDENCE_REVIEW.md',
       'FINDINGS.md',
     ];
-
-    // Probe for numbered query/receipt files (common pattern)
-    // Check QRY/RCT with date-based IDs
-    for (let i = 1; i <= 20; i++) {
-      const num = String(i).padStart(3, '0');
-      paths.push(`QUERIES/QRY-20260329-${num}.md`);
-      paths.push(`RECEIPTS/RCT-20260329-${num}.md`);
-    }
-
-    return paths;
   }
 
   // ---------------------------------------------------------------------------

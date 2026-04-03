@@ -31,12 +31,14 @@ describe('CLI bridge helpers', () => {
     const mapped = ext.mapCliDiagnostics(huntRoot, [
       { code: 'CONNECTOR_NOT_CONFIGURED', message: 'connector okta not configured' },
       { code: 'QUERY_TIMEOUT', message: 'query timeout for QRY-20260329-003', queryId: 'QRY-20260329-003' },
+      { code: 'QUERY_TIMEOUT', message: 'query timeout for QRY-alpha-7f9c' },
     ]);
 
-    assert.equal(mapped.length, 2);
+    assert.equal(mapped.length, 3);
     assert.equal(mapped[0][1][0].source, 'THRUNT CLI');
     assert.ok(mapped.some(([uri]) => uri.fsPath.endsWith('/MISSION.md')));
     assert.ok(mapped.some(([uri]) => uri.fsPath.endsWith('/QUERIES/QRY-20260329-003.md')));
+    assert.ok(mapped.some(([uri]) => uri.fsPath.endsWith('/QUERIES/QRY-alpha-7f9c.md')));
   });
 });
 
@@ -102,6 +104,50 @@ describe('CLIBridge', () => {
     assert.equal(lastProgress.queriesComplete, 1);
     assert.ok(lines.some((line) => line.includes('runtime execute --pack domain.identity-abuse')));
     assert.ok(lines.some((line) => line.includes('Phase 4 complete: 2 queries, 1 receipts, 149 events')));
+
+    bridge.dispose();
+  });
+
+  it('captures timeout diagnostics for alphanumeric query IDs from stderr output', async () => {
+    const lines = [];
+    const outputChannel = {
+      appendLine: (line) => lines.push(line),
+      show: () => {},
+      clear: () => {},
+      dispose: () => {},
+    };
+
+    const bridge = new ext.CLIBridge(outputChannel, () => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+
+      process.nextTick(() => {
+        child.stderr.write('query timeout for QRY-alpha-7f9c\n');
+        child.stdout.end();
+        child.stderr.end();
+        child.emit('close', 1);
+      });
+
+      return child;
+    });
+
+    const result = await bridge.run({
+      cliPath: '/mock/thrunt-tools.cjs',
+      command: ['runtime', 'execute', '--pack', 'domain.identity-abuse'],
+      cwd: '/mock/workspace',
+      huntRoot: vscode.Uri.file('/mock-hunt-root'),
+      phase: 4,
+    });
+
+    assert.equal(result.exitCode, 1);
+    assert.ok(
+      bridge.diagnostics
+        .get(vscode.Uri.file('/mock-hunt-root/QUERIES/QRY-alpha-7f9c.md'))
+        ?.some((diagnostic) => diagnostic.message.includes('query timeout'))
+    );
+    assert.ok(lines.some((line) => line.includes('query timeout for QRY-alpha-7f9c')));
 
     bridge.dispose();
   });
