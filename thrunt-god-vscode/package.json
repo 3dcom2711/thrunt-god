@@ -26,7 +26,9 @@
     "onCommand:thrunt-god.analyzeHuntmap",
     "onCommand:thrunt-god.showRuntimeDoctor",
     "onCommand:thrunt-god.openHuntOverview",
-    "onCommand:thrunt-god.openEvidenceBoard"
+    "onCommand:thrunt-god.openEvidenceBoard",
+    "onCommand:thrunt-god.openQueryAnalysis",
+    "onCommand:thrunt-god.openReceiptInspector"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -119,6 +121,16 @@
         "command": "thrunt-god.openEvidenceBoard",
         "title": "THRUNT: Open Evidence Board",
         "icon": "$(graph)"
+      },
+      {
+        "command": "thrunt-god.openQueryAnalysis",
+        "title": "THRUNT God: Open Query Analysis",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.openReceiptInspector",
+        "title": "THRUNT God: Open Receipt QA Inspector",
+        "category": "THRUNT"
       }
     ],
     "menus": {
@@ -187,6 +199,11 @@
         },
         {
           "command": "thrunt-god.openEvidenceBoard",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation"
+        },
+        {
+          "command": "thrunt-god.openQueryAnalysis",
           "when": "view == thruntGod.huntTree",
           "group": "navigation"
         }

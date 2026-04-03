@@ -18,6 +18,7 @@ import {
   computeSessionDiff,
 } from './huntOverviewPanel';
 import { EvidenceBoardPanel } from './evidenceBoardPanel';
+import { QueryAnalysisPanel, QUERY_ANALYSIS_VIEW_TYPE } from './queryAnalysisPanel';
 import type { SessionDiff } from '../shared/hunt-overview';
 import { resolveArtifactType } from './watcher';
 
@@ -895,6 +896,19 @@ export function activate(context: vscode.ExtensionContext): void {
       })
     );
 
+    // --- Phase 15: Query Analysis ---
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.openQueryAnalysis', () => {
+        QueryAnalysisPanel.createOrShow(context, store);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.openReceiptInspector', (receiptId?: string) => {
+        QueryAnalysisPanel.createOrShow(context, store, typeof receiptId === 'string' ? receiptId : undefined);
+      })
+    );
+
     // CodeLens navigation command
     context.subscriptions.push(
       vscode.commands.registerCommand(
@@ -1000,3 +1014,7 @@ export {
   EvidenceBoardPanel,
   EVIDENCE_BOARD_VIEW_TYPE,
 } from './evidenceBoardPanel';
+export {
+  QueryAnalysisPanel,
+  QUERY_ANALYSIS_VIEW_TYPE,
+} from './queryAnalysisPanel';
