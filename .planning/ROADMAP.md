@@ -4,9 +4,9 @@
 
 - ✅ **v1.0 Patent-Inspired Log Intelligence** -- Phases 1-6 (shipped 2026-04-01). Archive: `.planning/milestones/v1.0-ROADMAP.md`
 - ✅ **v2.0 THRUNT God VS Code Extension** -- Phases 7-11 (shipped 2026-04-02). Archive: `.planning/milestones/v2.0-ROADMAP.md`
-- **v3.0 Investigative Surfaces** -- Phases 12-16 (in progress)
-- **v4.0 Active Incident Workflow** -- Phases 17-20 (planned). Design: `design/ACTIVE-INCIDENT-WORKFLOW.md`
-- **v5.0 MCP/SIEM Platform** -- Phases 21-24 (planned). Design: `design/MCP-SIEM-CONNECTORS.md`
+- ✅ **v3.0 Investigative Surfaces** -- Phases 12-16.1 (shipped 2026-04-03). Archive: `.planning/milestones/v3.0-ROADMAP.md`
+- ✅ **v4.0 Active Incident Workflow** -- Phases 17-20 (shipped 2026-04-03). Design: `design/ACTIVE-INCIDENT-WORKFLOW.md`
+- 📋 **v5.0 MCP/SIEM Platform** -- Phases 21-24 (planned). Design: `design/MCP-SIEM-CONNECTORS.md`
 
 ## Phases
 
@@ -128,10 +128,10 @@ Plans:
 
 ### v4.0 Active Incident Workflow
 
-- [ ] **Phase 17: War Room Copy** - Clipboard-ready formatted summaries of findings, hypotheses, hunt overviews, and ATT&CK mappings for war room chat (completed in 3 days)
-- [ ] **Phase 18: SLA Countdown Timer** - Configurable incident response timer in status bar with detect/contain/report phases, color progression, workspaceState persistence (completed in 4 days)
-- [ ] **Phase 19: IOC Quick-Entry** - Paste IOCs (IP, hash, domain, email) via command palette, auto-classify, cross-reference against all queries/receipts, highlight across editors and webviews (completed in 5 days)
-- [ ] **Phase 20: CLI Bridge** - Run hunt phases from VSCode via child_process.spawn, streaming progress in output channel, auto-refresh sidebar on new artifacts, error-to-diagnostic mapping (completed in 7 days)
+- [x] **Phase 17: War Room Copy** - Clipboard-ready formatted summaries of findings, hypotheses, hunt overviews, and ATT&CK mappings for war room chat (completed 2026-04-03)
+- [x] **Phase 18: SLA Countdown Timer** - Configurable incident response timer in status bar with detect/contain/report phases, color progression, workspaceState persistence (completed 2026-04-03)
+- [x] **Phase 19: IOC Quick-Entry** - Paste IOCs (IP, hash, domain, email) via command palette, auto-classify, cross-reference against all queries/receipts, highlight across editors and webviews (completed 2026-04-03)
+- [x] **Phase 20: CLI Bridge** - Run hunt phases from VSCode via child_process.spawn, streaming progress in output channel, auto-refresh sidebar on new artifacts, error-to-diagnostic mapping (completed 2026-04-03)
 
 ### Phase Details (v4.0)
 
@@ -147,7 +147,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 17-01-PLAN.md -- WarRoomFormatter class, format functions, command registration, context menus, unit tests
+- [x] 17-01-PLAN.md -- WarRoomFormatter class, format functions, command registration, context menus, unit tests
 
 ### Phase 18: SLA Countdown Timer
 **Goal**: Hunters can track incident response SLA deadlines directly in the VS Code status bar with phase-aware countdown, color progression, and persistence across restarts
@@ -162,7 +162,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 18-01-PLAN.md -- SLATimerManager class, status bar integration, persistence, commands, unit tests
+- [x] 18-01-PLAN.md -- SLATimerManager class, status bar integration, persistence, commands, unit tests
 
 ### Phase 19: IOC Quick-Entry
 **Goal**: Hunters can paste an IOC and instantly see it highlighted across all open query logs, template views, and receipts, with cross-reference suggestions for related telemetry
@@ -177,7 +177,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 19-01-PLAN.md -- IOC Registry and classification, text editor decorations, webview integration, sidebar badges, unit tests
+- [x] 19-01-PLAN.md -- IOC Registry and classification, text editor decorations, webview integration, sidebar badges, unit tests
 
 ### Phase 20: CLI Bridge
 **Goal**: Hunters can run hunt phases directly from VS Code without switching to a terminal, with streaming progress, auto-refresh, and error integration
@@ -192,8 +192,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 20-01-PLAN.md -- CLIBridge class, spawn lifecycle, progress parsing, output channel
-- [ ] 20-02-PLAN.md -- QuickPick phase selector, error-to-diagnostic mapping, cancellation, integration tests
+- [x] 20-01-PLAN.md -- CLIBridge class, spawn lifecycle, progress parsing, output channel
+- [x] 20-02-PLAN.md -- QuickPick phase selector, error-to-diagnostic mapping, cancellation, integration tests
 
 ### v5.0 MCP/SIEM Platform
 
@@ -280,13 +280,13 @@ Plans:
 | 12. Design System & Webview Infrastructure | 3/3 | Complete    | 2026-04-02 | - |
 | 13. Hunt Overview Dashboard | 3/3 | Complete    | 2026-04-02 | 2026-04-02 |
 | 14. Evidence Board | v3.0 | 3/3 | Complete | 2026-04-02 |
-| 15. Query Analysis Upgrades | v3.0 | Complete    | 2026-04-03 | 2026-04-03 |
-| 16. Cross-Surface Navigation | 3/3 | Complete    | 2026-04-03 | - |
-| 16.1. Selection Rendering & Keyboard Nav | 2/2 | Complete   | 2026-04-03 | - |
-| 17. War Room Copy | v4.0 | 0/1 | Not started | - |
-| 18. SLA Countdown Timer | v4.0 | 0/1 | Not started | - |
-| 19. IOC Quick-Entry | v4.0 | 0/1 | Not started | - |
-| 20. CLI Bridge | v4.0 | 0/2 | Not started | - |
+| 15. Query Analysis Upgrades | v3.0 | 3/3 | Complete | 2026-04-03 |
+| 16. Cross-Surface Navigation | v3.0 | 3/3 | Complete | 2026-04-03 |
+| 16.1. Selection Rendering & Keyboard Nav | v3.0 | 2/2 | Complete | 2026-04-03 |
+| 17. War Room Copy | v4.0 | 1/1 | Complete | 2026-04-03 |
+| 18. SLA Countdown Timer | v4.0 | 1/1 | Complete | 2026-04-03 |
+| 19. IOC Quick-Entry | v4.0 | 1/1 | Complete | 2026-04-03 |
+| 20. CLI Bridge | v4.0 | 2/2 | Complete | 2026-04-03 |
 | 21. Splunk MVP | v5.0 | 0/3 | Not started | - |
 | 22. Sentinel + Env Auto-Pop | v5.0 | 0/2 | Not started | - |
 | 23. CrowdStrike + Hardening | v5.0 | 0/2 | Not started | - |

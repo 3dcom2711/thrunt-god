@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { HuntDataStore } from './store';
+import type { IOCRegistry } from './iocRegistry';
 import type { Query } from './types';
 import type {
   DrainViewerBootData,
@@ -75,7 +76,9 @@ export function deterministicTemplateColor(templateId: string): string {
 export function buildDrainViewerViewModel(
   query: Query,
   artifactPath: string,
-  pinState: DrainViewerPinState = {}
+  pinState: DrainViewerPinState = {},
+  templateIocMatches: Map<string, string[]> = new Map(),
+  activeIocs: string[] = []
 ): DrainViewerViewModel {
   const currentPins = pinState[query.queryId] ?? [];
   const currentPinnedIds = new Set(currentPins.map((pin) => pin.templateId));
@@ -94,11 +97,13 @@ export function buildDrainViewerViewModel(
         color: deterministicTemplateColor(template.templateId),
         detailSummary:
           detail?.summary ?? 'No additional template detail was serialized in this query artifact.',
+        matchedIocs: templateIocMatches.get(template.templateId) ?? [],
         detailLines: detail?.detailLines ?? [],
         sampleEventText: detail?.sampleEventText ?? null,
         sampleEventId: detail?.sampleEventId ?? null,
         eventIds: detail?.eventIds ?? [],
         isPinned: currentPinnedIds.has(template.templateId),
+        relatedReceiptIds: query.relatedReceipts ?? [],
       };
     });
 
@@ -114,6 +119,7 @@ export function buildDrainViewerViewModel(
       artifactPath,
       timeWindow: query.timeWindow ?? null,
     },
+    activeIocs,
     clusters,
     pinnedTemplates: flattenPinnedTemplates(pinState),
     emptyMessage:
@@ -188,6 +194,7 @@ export function togglePinnedTemplate(
           templateId: template.templateId,
           template: template.template,
           count: template.count,
+          percentage: template.percentage,
         },
       ];
 
@@ -219,6 +226,30 @@ function createNonce(): string {
   return value;
 }
 
+function resolveViewerArgs(
+  iocRegistryOrQueryId: IOCRegistry | string | undefined,
+  queryId: string | undefined
+): {
+  iocRegistry: IOCRegistry | undefined;
+  queryId: string;
+} {
+  if (typeof iocRegistryOrQueryId === 'string') {
+    return {
+      iocRegistry: undefined,
+      queryId: iocRegistryOrQueryId,
+    };
+  }
+
+  if (typeof queryId === 'string' && queryId.length > 0) {
+    return {
+      iocRegistry: iocRegistryOrQueryId,
+      queryId,
+    };
+  }
+
+  throw new Error('Drain template viewer requires a queryId.');
+}
+
 export class DrainTemplatePanel implements vscode.Disposable {
   static currentPanel: DrainTemplatePanel | undefined;
 
@@ -230,6 +261,7 @@ export class DrainTemplatePanel implements vscode.Disposable {
     private readonly context: vscode.ExtensionContext,
     private readonly store: HuntDataStore,
     private readonly panel: vscode.WebviewPanel,
+    private readonly iocRegistry: IOCRegistry | undefined,
     private currentQueryId: string
   ) {
     this.panel.webview.html = createDrainViewerHtml(this.panel.webview, context.extensionUri, {
@@ -268,15 +300,36 @@ export class DrainTemplatePanel implements vscode.Disposable {
         }
       })
     );
+
+    if (this.iocRegistry) {
+      this.disposables.push(
+        this.iocRegistry.onDidChange(() => {
+          if (this.ready) {
+            this.postMessage({
+              type: 'update',
+              viewModel: this.buildCurrentViewModel(),
+            });
+          }
+        })
+      );
+    }
   }
 
   static restorePanel(
     context: vscode.ExtensionContext,
     store: HuntDataStore,
     panel: vscode.WebviewPanel,
-    queryId: string
+    iocRegistryOrQueryId: IOCRegistry | string | undefined,
+    queryId?: string
   ): DrainTemplatePanel {
-    const restored = new DrainTemplatePanel(context, store, panel, queryId);
+    const resolved = resolveViewerArgs(iocRegistryOrQueryId, queryId);
+    const restored = new DrainTemplatePanel(
+      context,
+      store,
+      panel,
+      resolved.iocRegistry,
+      resolved.queryId
+    );
     DrainTemplatePanel.currentPanel = restored;
     return restored;
   }
@@ -284,17 +337,19 @@ export class DrainTemplatePanel implements vscode.Disposable {
   static createOrShow(
     context: vscode.ExtensionContext,
     store: HuntDataStore,
-    queryId: string
+    iocRegistryOrQueryId: IOCRegistry | string | undefined,
+    queryId?: string
   ): DrainTemplatePanel {
+    const resolved = resolveViewerArgs(iocRegistryOrQueryId, queryId);
     const existing = DrainTemplatePanel.currentPanel;
     if (existing) {
-      existing.reveal(queryId);
+      existing.reveal(resolved.queryId);
       return existing;
     }
 
     const panel = vscode.window.createWebviewPanel(
       DRAIN_VIEWER_VIEW_TYPE,
-      `Drain Template Viewer: ${queryId}`,
+      `Drain Template Viewer: ${resolved.queryId}`,
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
       {
         enableScripts: true,
@@ -303,7 +358,13 @@ export class DrainTemplatePanel implements vscode.Disposable {
       }
     );
 
-    const created = new DrainTemplatePanel(context, store, panel, queryId);
+    const created = new DrainTemplatePanel(
+      context,
+      store,
+      panel,
+      resolved.iocRegistry,
+      resolved.queryId
+    );
     DrainTemplatePanel.currentPanel = created;
     return created;
   }
@@ -387,6 +448,7 @@ export class DrainTemplatePanel implements vscode.Disposable {
           artifactPath,
           timeWindow: null,
         },
+        activeIocs: this.iocRegistry?.list().map((entry) => entry.value) ?? [],
         clusters: [],
         pinnedTemplates: flattenPinnedTemplates(readDrainViewerPins(this.context.workspaceState)),
         emptyMessage: 'The selected query is unavailable or has not been parsed yet.',
@@ -396,7 +458,9 @@ export class DrainTemplatePanel implements vscode.Disposable {
     return buildDrainViewerViewModel(
       queryResult.data,
       artifactPath,
-      readDrainViewerPins(this.context.workspaceState)
+      readDrainViewerPins(this.context.workspaceState),
+      this.iocRegistry?.getTemplateMatchesForQuery(this.currentQueryId) ?? new Map(),
+      this.iocRegistry?.list().map((entry) => entry.value) ?? []
     );
   }
 

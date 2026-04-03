@@ -10,11 +10,13 @@ export interface DrainViewerCluster {
   percentage: number;
   color: string;
   detailSummary: string;
+  matchedIocs: string[];
   detailLines: string[];
   sampleEventText: string | null;
   sampleEventId: string | null;
   eventIds: string[];
   isPinned: boolean;
+  relatedReceiptIds: string[];
 }
 
 export interface DrainViewerPinnedTemplate {
@@ -23,6 +25,7 @@ export interface DrainViewerPinnedTemplate {
   templateId: string;
   template: string;
   count: number;
+  percentage: number;
 }
 
 export interface DrainViewerViewModel {
@@ -37,6 +40,7 @@ export interface DrainViewerViewModel {
     artifactPath: string;
     timeWindow: DrainViewerTimeWindow | null;
   };
+  activeIocs: string[];
   clusters: DrainViewerCluster[];
   pinnedTemplates: DrainViewerPinnedTemplate[];
   emptyMessage: string | null;

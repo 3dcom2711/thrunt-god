@@ -92,4 +92,5 @@ export type HostToHuntOverviewMessage =
 export type HuntOverviewToHostMessage =
   | { type: 'webview:ready' }
   | { type: 'navigate'; target: string }
+  | { type: 'artifact:select'; artifactId: string }
   | { type: 'blur' };

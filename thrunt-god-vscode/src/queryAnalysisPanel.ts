@@ -3,6 +3,7 @@ import type { HuntDataStore } from './store';
 import type {
   QueryAnalysisBootData,
   QueryAnalysisViewModel,
+  QueryAnalysisMode,
   QueryAnalysisToHostMessage,
   HostToQueryAnalysisMessage,
 } from '../shared/query-analysis';
@@ -11,9 +12,11 @@ export const QUERY_ANALYSIS_VIEW_TYPE = 'thruntGod.queryAnalysis';
 export const QA_STATE_KEY = 'thruntGod.queryAnalysisState';
 
 interface QueryAnalysisPersistedState {
-  selectedQueryIds: string[];
-  sortBy: string;
-  comparisonMode: string;
+  leftQueryId: string | null;
+  rightQueryId: string | null;
+  inspectorReceiptId: string | null;
+  mode: QueryAnalysisMode;
+  sortBy: 'count' | 'deviation' | 'novelty' | 'recency';
 }
 
 const BASE_WEBVIEW_STYLES = `
@@ -95,10 +98,12 @@ export class QueryAnalysisPanel implements vscode.Disposable {
   private ready = false;
 
   // Internal state
-  private selectedQueryIds: string[] = [];
+  private leftQueryId: string | null = null;
+  private rightQueryId: string | null = null;
   private sortBy: 'count' | 'deviation' | 'novelty' | 'recency' = 'count';
   private inspectorReceiptId: string | null = null;
-  private comparisonMode: 'side-by-side' | 'matrix' = 'side-by-side';
+  private mode: QueryAnalysisMode = 'comparison';
+  private lastNonInspectorMode: 'comparison' | 'heatmap' = 'comparison';
 
   private constructor(
     private readonly context: vscode.ExtensionContext,
@@ -106,33 +111,32 @@ export class QueryAnalysisPanel implements vscode.Disposable {
     private readonly panel: vscode.WebviewPanel,
     initialReceiptId?: string
   ) {
-    // Restore persisted preferences or default to first 2 queries
-    const persisted = context.workspaceState.get<QueryAnalysisPersistedState>(QA_STATE_KEY);
-    if (persisted) {
-      // Validate persisted query IDs still exist in store
-      const queries = this.store.getQueries();
-      const validIds = persisted.selectedQueryIds.filter((id) => queries.has(id));
-      if (validIds.length > 0) {
-        this.selectedQueryIds = validIds;
-      } else {
-        const queryIds = [...queries.keys()];
-        this.selectedQueryIds = queryIds.slice(0, Math.min(2, queryIds.length));
-      }
-      if (persisted.sortBy === 'count' || persisted.sortBy === 'deviation' || persisted.sortBy === 'novelty' || persisted.sortBy === 'recency') {
-        this.sortBy = persisted.sortBy;
-      }
-      if (persisted.comparisonMode === 'side-by-side' || persisted.comparisonMode === 'matrix') {
-        this.comparisonMode = persisted.comparisonMode;
-      }
-    } else {
-      const queries = this.store.getQueries();
-      const queryIds = [...queries.keys()];
-      this.selectedQueryIds = queryIds.slice(0, Math.min(2, queryIds.length));
+    const persisted = context.workspaceState.get<QueryAnalysisPersistedState>(
+      QA_STATE_KEY
+    );
+    const queryIds = [...this.store.getQueries().keys()].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    const availableIds = new Set(queryIds);
+
+    this.leftQueryId =
+      persisted?.leftQueryId && availableIds.has(persisted.leftQueryId)
+        ? persisted.leftQueryId
+        : queryIds[0] ?? null;
+    this.rightQueryId =
+      persisted?.rightQueryId && availableIds.has(persisted.rightQueryId)
+        ? persisted.rightQueryId
+        : queryIds[1] ?? queryIds[0] ?? null;
+    this.inspectorReceiptId = persisted?.inspectorReceiptId ?? null;
+    this.sortBy = persisted?.sortBy ?? this.sortBy;
+    this.mode = persisted?.mode ?? this.mode;
+    if (this.mode === 'comparison' || this.mode === 'heatmap') {
+      this.lastNonInspectorMode = this.mode;
     }
 
-    // Set initial inspector receipt if provided
     if (initialReceiptId) {
       this.inspectorReceiptId = initialReceiptId;
+      this.mode = 'inspector';
     }
 
     this.panel.webview.html = createQueryAnalysisHtml(
@@ -251,9 +255,11 @@ export class QueryAnalysisPanel implements vscode.Disposable {
 
   private persistState(): void {
     void this.context.workspaceState.update(QA_STATE_KEY, {
-      selectedQueryIds: this.selectedQueryIds,
+      leftQueryId: this.leftQueryId,
+      rightQueryId: this.rightQueryId,
+      inspectorReceiptId: this.inspectorReceiptId,
+      mode: this.mode,
       sortBy: this.sortBy,
-      comparisonMode: this.comparisonMode,
     } satisfies QueryAnalysisPersistedState);
   }
 
@@ -275,10 +281,22 @@ export class QueryAnalysisPanel implements vscode.Disposable {
   }
 
   private buildViewModel(): QueryAnalysisViewModel {
+    const allQueryIds = [...this.store.getQueries().keys()].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    const selectedQueryIds =
+      this.mode === 'heatmap'
+        ? allQueryIds
+        : [this.leftQueryId, this.rightQueryId].filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0
+          );
+
     return this.store.deriveQueryAnalysis(
-      this.selectedQueryIds,
+      selectedQueryIds,
       this.sortBy,
-      this.inspectorReceiptId
+      this.inspectorReceiptId,
+      this.mode
     );
   }
 
@@ -291,15 +309,19 @@ export class QueryAnalysisPanel implements vscode.Disposable {
           viewModel: this.buildViewModel(),
           isDark: isDarkTheme(vscode.window.activeColorTheme.kind),
         });
+        this.postMessage({
+          type: 'selection:highlight',
+          artifactId: this.store.getSelectedArtifactId(),
+        });
         return;
-      case 'query:select': {
-        // Toggle query selection
-        const idx = this.selectedQueryIds.indexOf(msg.queryId);
-        if (idx >= 0) {
-          this.selectedQueryIds.splice(idx, 1);
+      case 'query:set':
+        if (msg.slot === 'left') {
+          this.leftQueryId = msg.queryId;
         } else {
-          this.selectedQueryIds.push(msg.queryId);
+          this.rightQueryId = msg.queryId;
         }
+        this.mode = 'comparison';
+        this.lastNonInspectorMode = 'comparison';
         this.store.select(msg.queryId);
         this.persistState();
         this.postMessage({
@@ -307,7 +329,6 @@ export class QueryAnalysisPanel implements vscode.Disposable {
           viewModel: this.buildViewModel(),
         });
         return;
-      }
       case 'sort:change':
         this.sortBy = msg.sortBy;
         this.persistState();
@@ -317,7 +338,10 @@ export class QueryAnalysisPanel implements vscode.Disposable {
         });
         return;
       case 'mode:change':
-        this.comparisonMode = msg.mode;
+        this.mode = msg.mode;
+        if (msg.mode === 'comparison' || msg.mode === 'heatmap') {
+          this.lastNonInspectorMode = msg.mode;
+        }
         this.persistState();
         this.postMessage({
           type: 'update',
@@ -325,27 +349,44 @@ export class QueryAnalysisPanel implements vscode.Disposable {
         });
         return;
       case 'receipt:select':
+        this.mode = 'inspector';
         this.inspectorReceiptId = msg.receiptId;
         this.store.select(msg.receiptId);
+        this.persistState();
         this.postMessage({
           type: 'update',
           viewModel: this.buildViewModel(),
         });
         return;
       case 'inspector:open':
-        this.inspectorReceiptId = msg.receiptId ?? null;
+        this.mode = 'inspector';
+        this.inspectorReceiptId = msg.receiptId ?? this.inspectorReceiptId;
+        if (msg.receiptId) {
+          this.store.select(msg.receiptId);
+        }
+        this.persistState();
         this.postMessage({
           type: 'update',
           viewModel: this.buildViewModel(),
         });
         return;
       case 'inspector:close':
+        this.mode = this.lastNonInspectorMode;
         this.inspectorReceiptId = null;
+        this.persistState();
         this.postMessage({
           type: 'update',
           viewModel: this.buildViewModel(),
         });
         return;
+      case 'navigate': {
+        const artifactPath = this.store.getArtifactPath(msg.artifactId);
+        this.store.select(msg.artifactId);
+        if (artifactPath) {
+          void vscode.window.showTextDocument(vscode.Uri.file(artifactPath));
+        }
+        return;
+      }
       case 'blur':
         void vscode.commands.executeCommand(
           'workbench.action.focusActiveEditorGroup'

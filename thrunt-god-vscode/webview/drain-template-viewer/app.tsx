@@ -79,6 +79,25 @@ function PinnedTemplates(props: {
   );
 }
 
+function ActiveIocs(props: { values: string[] }) {
+  if (props.values.length === 0) {
+    return null;
+  }
+
+  return (
+    <div class="ioc-strip" aria-label="Active IOC highlights">
+      <span class="ioc-strip__label">Active IOCs</span>
+      <div class="ioc-strip__values">
+        {props.values.map((value) => (
+          <span key={value} class="ioc-badge">
+            {value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DrainChart(props: {
   clusters: DrainViewerCluster[];
   selectedTemplateId: string | null;
@@ -216,18 +235,22 @@ function DrainChart(props: {
       node.setAttribute('role', 'button');
       node.setAttribute(
         'aria-label',
-        `${segment.templateId}. ${segment.template}. ${formatCount(segment.count)} events, ${formatPercentage(segment.percentage)} of the query total.`
+        `${segment.templateId}. ${segment.template}. ${formatCount(segment.count)} events, ${formatPercentage(segment.percentage)} of the query total.${segment.matchedIocs.length > 0 ? ` IOC matches: ${segment.matchedIocs.join(', ')}.` : ''}`
       );
       node.style.cursor = 'pointer';
       node.setAttribute(
         'stroke',
-        segment.templateId === props.selectedTemplateId
-          ? 'var(--hunt-accent-strong)'
-          : 'var(--hunt-panel-border)'
+        segment.matchedIocs.length > 0
+          ? 'var(--hunt-warning, #f59e0b)'
+          : segment.templateId === props.selectedTemplateId
+            ? 'var(--hunt-accent-strong)'
+            : 'var(--hunt-panel-border)'
       );
       node.setAttribute(
         'stroke-width',
-        segment.templateId === props.selectedTemplateId ? '3' : '1'
+        segment.matchedIocs.length > 0 || segment.templateId === props.selectedTemplateId
+          ? '3'
+          : '1'
       );
       node.addEventListener('click', select);
       node.addEventListener('keydown', onKeyDown);
@@ -277,6 +300,7 @@ function DrainChart(props: {
           const isHighlighted = cluster.templateId === highlightedArtifactId || queryId === highlightedArtifactId;
           if (isHighlighted) chipClass += ' hunt-selection-highlight';
           if (isHighlighted && isPulsing) chipClass += ' hunt-selection-pulse';
+          if (cluster.matchedIocs.length > 0) chipClass += ' is-ioc-match';
 
           return (
           <button
@@ -296,6 +320,11 @@ function DrainChart(props: {
             <span class="cluster-chip__meta">
               {formatCount(cluster.count)} · {formatPercentage(cluster.percentage)}
             </span>
+            {cluster.matchedIocs.length > 0 ? (
+              <span class="cluster-chip__ioc">
+                IOC match: {cluster.matchedIocs.join(', ')}
+              </span>
+            ) : null}
           </button>
           );
         })}
@@ -361,6 +390,7 @@ export function App(props: AppProps) {
             </strong>
           </article>
         </div>
+        <ActiveIocs values={props.viewModel.activeIocs} />
       </section>
 
       {props.isStale ? (

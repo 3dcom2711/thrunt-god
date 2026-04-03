@@ -57,12 +57,17 @@ function Root() {
       isDark={isDark}
       highlightedArtifactId={highlightedArtifactId}
       isPulsing={isPulsing}
-      onQuerySelect={(queryId) => vscode.postMessage({ type: 'query:select', queryId })}
+      onQuerySet={(slot, queryId) =>
+        vscode.postMessage({ type: 'query:set', slot, queryId })
+      }
       onSortChange={(sortBy) => vscode.postMessage({ type: 'sort:change', sortBy })}
       onModeChange={(mode) => vscode.postMessage({ type: 'mode:change', mode })}
       onReceiptSelect={(receiptId) => vscode.postMessage({ type: 'receipt:select', receiptId })}
       onInspectorOpen={(receiptId) => vscode.postMessage({ type: 'inspector:open', receiptId })}
       onInspectorClose={() => vscode.postMessage({ type: 'inspector:close' })}
+      onNavigate={(target, artifactId) =>
+        vscode.postMessage({ type: 'navigate', target, artifactId })
+      }
       onBlur={() => vscode.postMessage({ type: 'blur' })}
     />
   );

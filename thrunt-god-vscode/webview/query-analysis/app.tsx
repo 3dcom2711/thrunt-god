@@ -4,6 +4,7 @@ import type {
   ComparisonData,
   ComparisonTemplate,
   HeatmapData,
+  QueryAnalysisMode,
   ReceiptInspectorData,
   ReceiptInspectorItem,
 } from '../../shared/query-analysis';
@@ -35,27 +36,74 @@ interface AppProps {
   isDark: boolean;
   highlightedArtifactId?: string | null;
   isPulsing?: boolean;
-  onQuerySelect: (queryId: string) => void;
+  onQuerySet: (slot: 'left' | 'right', queryId: string) => void;
   onSortChange: (sortBy: 'count' | 'deviation' | 'novelty' | 'recency') => void;
-  onModeChange: (mode: 'side-by-side' | 'matrix') => void;
+  onModeChange: (mode: QueryAnalysisMode) => void;
   onReceiptSelect: (receiptId: string) => void;
   onInspectorOpen: (receiptId?: string) => void;
   onInspectorClose: () => void;
+  onNavigate: (target: 'query' | 'receipt', artifactId: string) => void;
   onBlur: () => void;
 }
 
 // ---------------------------------------------------------------------------
-// QuerySelector
+// ModeTabs / QuerySelector
 // ---------------------------------------------------------------------------
 
-function QuerySelector({
+function ModeTabs({
   viewModel,
-  onQuerySelect,
   onModeChange,
 }: {
   viewModel: QueryAnalysisViewModel;
-  onQuerySelect: (queryId: string) => void;
-  onModeChange: (mode: 'side-by-side' | 'matrix') => void;
+  onModeChange: (mode: QueryAnalysisMode) => void;
+}) {
+  const heatmapAvailable = viewModel.queries.length >= 3;
+
+  return (
+    <div class="hunt-qa-mode-toggle" role="tablist" aria-label="Query Analysis modes">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={viewModel.mode === 'comparison'}
+        class={viewModel.mode === 'comparison' ? 'active' : ''}
+        onClick={() => onModeChange('comparison')}
+      >
+        Comparison
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={viewModel.mode === 'heatmap'}
+        class={viewModel.mode === 'heatmap' ? 'active' : ''}
+        disabled={!heatmapAvailable}
+        title={
+          heatmapAvailable
+            ? 'Compare template presence across all queries'
+            : 'Heatmap requires at least three queries'
+        }
+        onClick={() => onModeChange('heatmap')}
+      >
+        Heatmap
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={viewModel.mode === 'inspector'}
+        class={viewModel.mode === 'inspector' ? 'active' : ''}
+        onClick={() => onModeChange('inspector')}
+      >
+        Inspector
+      </button>
+    </div>
+  );
+}
+
+function QuerySelector({
+  viewModel,
+  onQuerySet,
+}: {
+  viewModel: QueryAnalysisViewModel;
+  onQuerySet: (slot: 'left' | 'right', queryId: string) => void;
 }) {
   const selectedA = viewModel.selectedQueryIds[0] ?? '';
   const selectedB = viewModel.selectedQueryIds[1] ?? '';
@@ -64,7 +112,9 @@ function QuerySelector({
     <div class="hunt-qa-selector">
       <select
         value={selectedA}
-        onChange={(e) => onQuerySelect((e.target as HTMLSelectElement).value)}
+        onChange={(e) =>
+          onQuerySet('left', (e.target as HTMLSelectElement).value)
+        }
         aria-label="Query A"
       >
         {viewModel.queries.map((q) => (
@@ -78,7 +128,9 @@ function QuerySelector({
 
       <select
         value={selectedB}
-        onChange={(e) => onQuerySelect((e.target as HTMLSelectElement).value)}
+        onChange={(e) =>
+          onQuerySet('right', (e.target as HTMLSelectElement).value)
+        }
         aria-label="Query B"
       >
         {viewModel.queries.map((q) => (
@@ -87,25 +139,6 @@ function QuerySelector({
           </option>
         ))}
       </select>
-
-      {viewModel.queries.length >= 3 && (
-        <div class="hunt-qa-mode-toggle">
-          <button
-            type="button"
-            class={viewModel.comparisonMode === 'side-by-side' ? 'active' : ''}
-            onClick={() => onModeChange('side-by-side')}
-          >
-            Side-by-side
-          </button>
-          <button
-            type="button"
-            class={viewModel.comparisonMode === 'matrix' ? 'active' : ''}
-            onClick={() => onModeChange('matrix')}
-          >
-            Matrix
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -303,23 +336,62 @@ function HeatmapView({ data }: { data: HeatmapData }) {
 }
 
 // ---------------------------------------------------------------------------
-// ReceiptDetail
+// ReceiptDetail / Diagnostics
 // ---------------------------------------------------------------------------
 
-function ReceiptDetail(props: { receipt: ReceiptInspectorItem }) {
+function DiagnosticsSummary({ receipt }: { receipt: ReceiptInspectorItem }) {
+  const flagged = receipt.diagnostics.filter((item) => item.status === 'flagged');
+
+  return (
+    <div class="hunt-qa-framing-section">
+      <div class="hunt-qa-framing-block">
+        <span class="hunt-qa-label">QA Diagnostics</span>
+        <p>
+          {receipt.diagnosticCounts.errors} errors, {receipt.diagnosticCounts.warnings}{' '}
+          warnings, {receipt.diagnosticCounts.infos} info flags
+        </p>
+      </div>
+      {flagged.length > 0 ? (
+        flagged.map((item) => (
+          <div key={item.id} class="hunt-qa-framing-block">
+            <span class="hunt-qa-label">
+              {item.label} ({item.severity})
+            </span>
+            <p>{item.message}</p>
+          </div>
+        ))
+      ) : (
+        <div class="hunt-qa-framing-block">
+          <span class="hunt-qa-label">Status</span>
+          <p>No receipt QA issues detected.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReceiptDetail(props: {
+  receipt: ReceiptInspectorItem;
+  onNavigate: (target: 'query' | 'receipt', artifactId: string) => void;
+}) {
   const r = props.receipt;
 
   return (
     <div class="hunt-qa-receipt-detail">
       {/* Header */}
       <div class="hunt-qa-receipt-detail__header">
-        <h3>{r.receiptId}</h3>
-        <span class={`hunt-qa-verdict-badge hunt-qa-verdict-badge--${r.claimStatus}`}>
-          {r.claimStatus}
-        </span>
-        <span class="hunt-qa-receipt-detail__confidence">
-          Confidence: {r.confidence}
-        </span>
+        <div>
+          <h3>{r.receiptId}</h3>
+          <span class={`hunt-qa-verdict-badge hunt-qa-verdict-badge--${r.claimStatus}`}>
+            {r.claimStatus}
+          </span>
+          <span class="hunt-qa-receipt-detail__confidence">
+            Confidence: {r.confidence}
+          </span>
+        </div>
+        <GhostButton onClick={() => props.onNavigate('receipt', r.receiptId)}>
+          Open Receipt
+        </GhostButton>
       </div>
 
       {/* Claim */}
@@ -420,6 +492,41 @@ function ReceiptDetail(props: { receipt: ReceiptInspectorItem }) {
           </p>
         </div>
       )}
+
+      <DiagnosticsSummary receipt={r} />
+
+      <div class="hunt-qa-framing-section">
+        <div class="hunt-qa-framing-block">
+          <span class="hunt-qa-label">Linked Hypotheses</span>
+          <p>
+            {r.relatedHypotheses.length > 0
+              ? r.relatedHypotheses.join(', ')
+              : 'No hypotheses linked.'}
+          </p>
+        </div>
+        <div class="hunt-qa-framing-block">
+          <span class="hunt-qa-label">Linked Queries</span>
+          <p>
+            {r.relatedQueries.length > 0
+              ? r.relatedQueries.join(', ')
+              : 'No queries linked.'}
+          </p>
+          {r.relatedQueries.length > 0 ? (
+            <div class="hunt-qa-attack-tags">
+              {r.relatedQueries.map((queryId) => (
+                <button
+                  key={queryId}
+                  type="button"
+                  class="hunt-qa-attack-tag"
+                  onClick={() => props.onNavigate('query', queryId)}
+                >
+                  {queryId}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -433,6 +540,7 @@ function ReceiptInspectorView(props: {
   highlightedArtifactId?: string | null;
   isPulsing?: boolean;
   onReceiptSelect: (receiptId: string) => void;
+  onNavigate: (target: 'query' | 'receipt', artifactId: string) => void;
   onClose: () => void;
 }) {
   const receiptListRef = useRef<HTMLDivElement>(null);
@@ -478,6 +586,12 @@ function ReceiptInspectorView(props: {
                   {receipt.deviationScore.toFixed(1)}
                 </span>
               )}
+              {(receipt.diagnosticCounts.errors > 0 ||
+                receipt.diagnosticCounts.warnings > 0) && (
+                <span class="hunt-qa-inspector-item__score">
+                  {receipt.diagnosticCounts.errors}E / {receipt.diagnosticCounts.warnings}W
+                </span>
+              )}
               <span class="hunt-qa-inspector-item__claim">
                 {receipt.claim.length > 60 ? receipt.claim.slice(0, 60) + '...' : receipt.claim}
               </span>
@@ -492,7 +606,7 @@ function ReceiptInspectorView(props: {
         {/* Right: detail panel */}
         <div class="hunt-qa-inspector-detail">
           {selected ? (
-            <ReceiptDetail receipt={selected} />
+            <ReceiptDetail receipt={selected} onNavigate={props.onNavigate} />
           ) : (
             <p class="hunt-qa-inspector-empty">Select a receipt to inspect.</p>
           )}
@@ -522,39 +636,77 @@ export function App(props: AppProps) {
   return (
     <main class="hunt-surface" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 18px' }}>
       <Panel>
-        <p class="hunt-qa-eyebrow">Query Analysis</p>
-        <h1 style={{ margin: 0, fontSize: 'clamp(1.5rem, 2.5vw, 2.4rem)', lineHeight: 1.1 }}>
-          Template Comparison
-        </h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}
+        >
+          <div>
+            <p class="hunt-qa-eyebrow">Query Analysis</p>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 'clamp(1.5rem, 2.5vw, 2.4rem)',
+                lineHeight: 1.1,
+              }}
+            >
+              {viewModel.mode === 'inspector'
+                ? 'Receipt QA Inspector'
+                : viewModel.mode === 'heatmap'
+                  ? 'Template Heatmap'
+                  : 'Template Comparison'}
+            </h1>
+          </div>
+          <GhostButton onClick={props.onBlur}>Back to Editor</GhostButton>
+        </div>
       </Panel>
 
-      <QuerySelector
-        viewModel={viewModel}
-        onQuerySelect={props.onQuerySelect}
-        onModeChange={props.onModeChange}
-      />
+      <ModeTabs viewModel={viewModel} onModeChange={props.onModeChange} />
 
-      <SortControls viewModel={viewModel} onSortChange={props.onSortChange} />
+      {viewModel.mode === 'comparison' ? (
+        <QuerySelector
+          viewModel={viewModel}
+          onQuerySet={props.onQuerySet}
+        />
+      ) : null}
 
-      {viewModel.receiptInspector ? (
+      {viewModel.mode !== 'inspector' ? (
+        <SortControls viewModel={viewModel} onSortChange={props.onSortChange} />
+      ) : null}
+
+      {viewModel.mode === 'inspector' && viewModel.receiptInspector ? (
         <ReceiptInspectorView
           data={viewModel.receiptInspector}
           highlightedArtifactId={props.highlightedArtifactId}
           isPulsing={props.isPulsing}
           onReceiptSelect={props.onReceiptSelect}
+          onNavigate={props.onNavigate}
           onClose={props.onInspectorClose}
         />
       ) : (
         <>
-          {viewModel.comparison && <ComparisonView data={viewModel.comparison} />}
-
-          {viewModel.heatmap && <HeatmapView data={viewModel.heatmap} />}
-
-          <div style={{ marginTop: '24px' }}>
-            <GhostButton onClick={() => props.onInspectorOpen()}>
-              Open Receipt QA Inspector
-            </GhostButton>
-          </div>
+          {viewModel.mode === 'comparison' ? (
+            viewModel.comparison ? (
+              <ComparisonView data={viewModel.comparison} />
+            ) : (
+              <Panel>
+                <p style={{ color: 'var(--hunt-text-muted)', margin: 0 }}>
+                  Select two queries with template data to compare distributions.
+                </p>
+              </Panel>
+            )
+          ) : viewModel.heatmap ? (
+            <HeatmapView data={viewModel.heatmap} />
+          ) : (
+            <Panel>
+              <p style={{ color: 'var(--hunt-text-muted)', margin: 0 }}>
+                At least three queries with template data are needed for heatmap mode.
+              </p>
+            </Panel>
+          )}
         </>
       )}
     </main>
