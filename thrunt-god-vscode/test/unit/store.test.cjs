@@ -362,4 +362,50 @@ describe('HuntDataStore', () => {
       // (unless other receipts also link to HYP-01)
     });
   });
+
+  // --- Selection API tests ---
+
+  describe('selection API', () => {
+    it('select() fires onDidSelect with the artifact ID', async () => {
+      const events = [];
+      store.onDidSelect((id) => { events.push(id); });
+
+      store.select('QRY-20260329-001');
+
+      assert.equal(events.length, 1);
+      assert.equal(events[0], 'QRY-20260329-001');
+    });
+
+    it('select(null) fires onDidSelect with null to clear selection', async () => {
+      const events = [];
+      store.onDidSelect((id) => { events.push(id); });
+
+      store.select('QRY-20260329-001');
+      store.select(null);
+
+      assert.equal(events.length, 2);
+      assert.equal(events[0], 'QRY-20260329-001');
+      assert.equal(events[1], null);
+    });
+
+    it('getSelectedArtifactId() returns current selection after select()', () => {
+      assert.equal(store.getSelectedArtifactId(), null);
+
+      store.select('RCT-20260329-002');
+      assert.equal(store.getSelectedArtifactId(), 'RCT-20260329-002');
+
+      store.select(null);
+      assert.equal(store.getSelectedArtifactId(), null);
+    });
+
+    it('calling select() with same ID twice does NOT fire duplicate events', () => {
+      const events = [];
+      store.onDidSelect((id) => { events.push(id); });
+
+      store.select('QRY-20260329-001');
+      store.select('QRY-20260329-001');
+
+      assert.equal(events.length, 1, 'Expected only 1 event (dedup), got ' + events.length);
+    });
+  });
 });
