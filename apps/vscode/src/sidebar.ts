@@ -211,8 +211,8 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
     }
 
     const missionLabel =
-      hunt.mission.status === 'loaded' && hunt.mission.data.mode
-        ? `Mission (${hunt.mission.data.mode})`
+      hunt.mission.status === 'loaded' && hunt.mission.data.mode.toLowerCase() === 'program'
+        ? 'Program'
         : 'Mission';
 
     const roots = [
@@ -239,7 +239,7 @@ export class HuntTreeDataProvider implements vscode.TreeDataProvider<HuntTreeIte
 
     if (this.store.getChildHunts().length > 0) {
       roots.push(
-        new HuntTreeItem('Child Hunts', vscode.TreeItemCollapsibleState.Expanded, {
+        new HuntTreeItem('Cases', vscode.TreeItemCollapsibleState.Expanded, {
           iconPath: new vscode.ThemeIcon('folder-library'),
           contextValue: 'child-hunts-group',
           nodeType: 'child-hunts-group',

@@ -223,7 +223,7 @@ function createMockStore(options = {}) {
       return {
         mission: {
           status: 'loaded',
-          data: {
+          data: options.mission ?? {
             mode: 'case',
             opened: '2026-03-29',
             owner: 'hunter',
@@ -320,9 +320,30 @@ describe('HuntTreeDataProvider', () => {
     it('returns Mission, Hypotheses, Phases when store has data', () => {
       const roots = provider.getChildren(undefined);
       assert.equal(roots.length, 3);
-      assert.ok(roots[0].label.startsWith('Mission'));
+      assert.equal(roots[0].label, 'Mission');
       assert.equal(roots[1].label, 'Hypotheses');
       assert.equal(roots[2].label, 'Phases');
+    });
+
+    it('shows Program for program-mode hunts', () => {
+      const programProvider = new ext.HuntTreeDataProvider(
+        createMockStore({
+          mission: {
+            mode: 'Program',
+            opened: '2026-03-29',
+            owner: 'hunter',
+            status: 'Open',
+            signal: 'Brute force SSH',
+            desiredOutcome: 'Identify attacker',
+            scope: 'auth logs',
+            workingTheory: 'Credential stuffing',
+          },
+        }),
+        huntRootUri
+      );
+
+      const roots = programProvider.getChildren(undefined);
+      assert.equal(roots[0].label, 'Program');
     });
 
     it('returns empty array when store returns null hunt', () => {
@@ -418,7 +439,7 @@ describe('HuntTreeDataProvider', () => {
   });
 
   describe('child hunt nodes', () => {
-    it('shows a child hunts group when nested cases are present', () => {
+    it('shows a cases group when nested cases are present', () => {
       const providerWithChildren = new ext.HuntTreeDataProvider(
         createMockStore({
           childHunts: [
@@ -446,8 +467,8 @@ describe('HuntTreeDataProvider', () => {
       );
 
       const roots = providerWithChildren.getChildren(undefined);
-      const childGroup = roots.find((item) => item.label === 'Child Hunts');
-      assert.ok(childGroup, 'Expected Child Hunts group');
+      const childGroup = roots.find((item) => item.label === 'Cases');
+      assert.ok(childGroup, 'Expected Cases group');
 
       const children = providerWithChildren.getChildren(childGroup);
       assert.equal(children.length, 1);

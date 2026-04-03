@@ -155,7 +155,7 @@ function ChildHuntsCard({
 
   return (
     <Panel>
-      <p class="hunt-section-heading">Child Hunts</p>
+      <p class="hunt-section-heading">Cases</p>
       <p
         style={{
           margin: '0 0 14px',
@@ -163,7 +163,7 @@ function ChildHuntsCard({
           fontSize: '13px',
         }}
       >
-        Program metrics stay scoped to the top-level hunt. Cases and workstreams are tracked separately here.
+        Program metrics stay scoped to the top-level hunt. Cases are tracked separately here.
       </p>
       <div
         style={{
@@ -182,7 +182,7 @@ function ChildHuntsCard({
       </div>
       {childHunts.length === 0 ? (
         <p style={{ margin: 0, color: 'var(--hunt-text-muted)' }}>
-          No child hunts discovered under the current program.
+          No cases discovered under the current program.
         </p>
       ) : (
         <div
