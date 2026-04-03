@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Investigative Surfaces
 status: in-progress
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-04-02T23:26:54.000Z"
-last_activity: 2026-04-02 -- Completed 14-03 Evidence Board matrix mode
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-04-03T00:37:24.000Z"
+last_activity: 2026-04-03 -- Completed 15-01 Query Analysis data pipeline
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_plans: 12
+  completed_plans: 10
+  percent: 83
 ---
 
 # Project State
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 ## Current Position
 
-Phase: 14 of 16 (Evidence Board)
-Plan: 3 of 3 complete
-Status: Phase Complete
-Last activity: 2026-04-02 -- Completed 14-03 Evidence Board matrix mode
+Phase: 15 of 16 (Query Analysis Upgrades)
+Plan: 1 of 3 complete
+Status: In Progress
+Last activity: 2026-04-03 -- Completed 15-01 Query Analysis data pipeline
 
-Progress: [██████████] 100%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 32 (v1.0: 12, v2.0: 12, v3.0: 8)
+- Total plans completed: 33 (v1.0: 12, v2.0: 12, v3.0: 9)
 
 **By Phase:**
 
@@ -51,6 +51,7 @@ Progress: [██████████] 100%
 | Phase 14 P01 | 6min | 2 tasks | 5 files |
 | Phase 14 P02 | 5min | 2 tasks | 3 files |
 | Phase 14 P03 | 2min | 2 tasks | 2 files |
+| Phase 15 P01 | 6min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 14-03]: MatrixView uses useMemo cell lookup map (hypothesisId:receiptId key) for O(1) cell resolution
 - [Phase 14-03]: Gap detection scans all cells per row/column for absent-only check via useMemo-derived sets
 - [Phase 14-03]: Column click toggles hypothesis focus, shared with graph mode via existing state
+- [Phase 15-01]: Inline sort logic in deriveQueryAnalysis (prototype.call() testing cannot access private methods)
+- [Phase 15-01]: QueryAnalysisPanel defaults selectedQueryIds to first 2 queries from store
+- [Phase 15-01]: Inspector mode opens via initialReceiptId parameter on createOrShow
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ No blocking issues.
 
 ## Session Continuity
 
-Last session: 2026-04-02T23:26:54.000Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-04-03T00:37:24.000Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None

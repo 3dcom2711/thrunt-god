@@ -132,4 +132,4 @@ Deferred to v3.1+:
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after roadmap creation*
+*Last updated: 2026-04-03 after 15-01 data pipeline completion (QANL requirements pending Plans 02/03 for webview)*

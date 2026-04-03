@@ -85,7 +85,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 15-01-PLAN.md -- Extension-host data pipeline: ViewModel expansion, deriveQueryAnalysis store derivation, QueryAnalysisPanel provider, command registration, unit tests
+- [x] 15-01-PLAN.md -- Extension-host data pipeline: ViewModel expansion, deriveQueryAnalysis store derivation, QueryAnalysisPanel provider, command registration, unit tests
 - [ ] 15-02-PLAN.md -- Comparison and heatmap webview: two-column template diff, presence matrix, sort controls, CSS
 - [ ] 15-03-PLAN.md -- Receipt QA inspector webview: split-pane layout, deviation score card, factor table, framing breakdown, CSS
 
@@ -114,5 +114,5 @@ Plans:
 | 12. Design System & Webview Infrastructure | 3/3 | Complete    | 2026-04-02 | - |
 | 13. Hunt Overview Dashboard | 3/3 | Complete    | 2026-04-02 | 2026-04-02 |
 | 14. Evidence Board | v3.0 | 3/3 | Complete | 2026-04-02 |
-| 15. Query Analysis Upgrades | v3.0 | 0/3 | Not started | - |
+| 15. Query Analysis Upgrades | v3.0 | 1/3 | In progress | - |
 | 16. Cross-Surface Navigation | v3.0 | 0/2 | Not started | - |
