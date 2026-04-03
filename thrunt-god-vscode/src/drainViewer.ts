@@ -270,6 +270,17 @@ export class DrainTemplatePanel implements vscode.Disposable {
     );
   }
 
+  static restorePanel(
+    context: vscode.ExtensionContext,
+    store: HuntDataStore,
+    panel: vscode.WebviewPanel,
+    queryId: string
+  ): DrainTemplatePanel {
+    const restored = new DrainTemplatePanel(context, store, panel, queryId);
+    DrainTemplatePanel.currentPanel = restored;
+    return restored;
+  }
+
   static createOrShow(
     context: vscode.ExtensionContext,
     store: HuntDataStore,

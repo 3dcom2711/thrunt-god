@@ -18,7 +18,17 @@ const BUNDLE_PATH = path.join(__dirname, '..', '..', 'dist', 'extension.js');
 const ext = require(BUNDLE_PATH);
 const vscode = require('vscode');
 
-const { computeSessionDiff, computeArtifactHashes } = ext;
+const {
+  computeSessionDiff,
+  computeArtifactHashes,
+  HuntOverviewPanel,
+  EvidenceBoardPanel,
+  QueryAnalysisPanel,
+  DrainTemplatePanel,
+  EB_STATE_KEY,
+  QA_STATE_KEY,
+  DTV_STATE_KEY,
+} = ext;
 
 // ---------------------------------------------------------------------------
 // computeSessionDiff tests
@@ -215,5 +225,50 @@ describe('computeArtifactHashes', () => {
 
     const hashes = computeArtifactHashes(mockStore);
     assert.deepEqual(hashes, {});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WebviewPanelSerializer: restorePanel static method checks
+// ---------------------------------------------------------------------------
+
+describe('WebviewPanelSerializer restorePanel', () => {
+
+  it('HuntOverviewPanel has a static restorePanel method', () => {
+    assert.equal(typeof HuntOverviewPanel.restorePanel, 'function');
+  });
+
+  it('EvidenceBoardPanel has a static restorePanel method', () => {
+    assert.equal(typeof EvidenceBoardPanel.restorePanel, 'function');
+  });
+
+  it('QueryAnalysisPanel has a static restorePanel method', () => {
+    assert.equal(typeof QueryAnalysisPanel.restorePanel, 'function');
+  });
+
+  it('DrainTemplatePanel has a static restorePanel method', () => {
+    assert.equal(typeof DrainTemplatePanel.restorePanel, 'function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkspaceState key constants exported
+// ---------------------------------------------------------------------------
+
+describe('workspaceState key constants', () => {
+
+  it('EB_STATE_KEY is a non-empty string', () => {
+    assert.equal(typeof EB_STATE_KEY, 'string');
+    assert.ok(EB_STATE_KEY.length > 0);
+  });
+
+  it('QA_STATE_KEY is a non-empty string', () => {
+    assert.equal(typeof QA_STATE_KEY, 'string');
+    assert.ok(QA_STATE_KEY.length > 0);
+  });
+
+  it('DTV_STATE_KEY is a non-empty string', () => {
+    assert.equal(typeof DTV_STATE_KEY, 'string');
+    assert.ok(DTV_STATE_KEY.length > 0);
   });
 });

@@ -294,6 +294,17 @@ export class HuntOverviewPanel implements vscode.Disposable {
     );
   }
 
+  static restorePanel(
+    context: vscode.ExtensionContext,
+    store: HuntDataStore,
+    panel: vscode.WebviewPanel,
+    sessionDiff: SessionDiff | null
+  ): HuntOverviewPanel {
+    const restored = new HuntOverviewPanel(context, store, panel, sessionDiff);
+    HuntOverviewPanel.currentPanel = restored;
+    return restored;
+  }
+
   static createOrShow(
     context: vscode.ExtensionContext,
     store: HuntDataStore,

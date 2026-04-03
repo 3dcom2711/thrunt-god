@@ -29,7 +29,11 @@
     "onCommand:thrunt-god.openHuntOverview",
     "onCommand:thrunt-god.openEvidenceBoard",
     "onCommand:thrunt-god.openQueryAnalysis",
-    "onCommand:thrunt-god.openReceiptInspector"
+    "onCommand:thrunt-god.openReceiptInspector",
+    "onWebviewPanel:thruntGod.huntOverview",
+    "onWebviewPanel:thruntGod.evidenceBoard",
+    "onWebviewPanel:thruntGod.queryAnalysis",
+    "onWebviewPanel:thruntGod.drainViewer"
   ],
   "main": "./dist/extension.js",
   "contributes": {

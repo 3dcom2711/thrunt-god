@@ -155,6 +155,16 @@ export class EvidenceBoardPanel implements vscode.Disposable {
     );
   }
 
+  static restorePanel(
+    context: vscode.ExtensionContext,
+    store: HuntDataStore,
+    panel: vscode.WebviewPanel
+  ): EvidenceBoardPanel {
+    const restored = new EvidenceBoardPanel(context, store, panel);
+    EvidenceBoardPanel.currentPanel = restored;
+    return restored;
+  }
+
   static createOrShow(
     context: vscode.ExtensionContext,
     store: HuntDataStore

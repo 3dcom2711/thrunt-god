@@ -10,14 +10,15 @@ import { HuntTreeDataProvider, HuntTreeItem } from './sidebar';
 import { HuntStatusBar } from './statusBar';
 import { HuntCodeLensProvider } from './codeLens';
 import { EvidenceIntegrityDiagnostics } from './diagnostics';
-import { DrainTemplatePanel } from './drainViewer';
+import { DrainTemplatePanel, DTV_STATE_KEY, DRAIN_VIEWER_VIEW_TYPE } from './drainViewer';
 import {
   HuntOverviewPanel,
+  HUNT_OVERVIEW_VIEW_TYPE,
   SESSION_HASH_KEY,
   computeArtifactHashes,
   computeSessionDiff,
 } from './huntOverviewPanel';
-import { EvidenceBoardPanel } from './evidenceBoardPanel';
+import { EvidenceBoardPanel, EVIDENCE_BOARD_VIEW_TYPE } from './evidenceBoardPanel';
 import { QueryAnalysisPanel, QUERY_ANALYSIS_VIEW_TYPE } from './queryAnalysisPanel';
 import type { SessionDiff } from '../shared/hunt-overview';
 import { resolveArtifactType } from './watcher';
@@ -601,6 +602,58 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(cliOutputChannel);
 
+  // --- Deferred store pattern for WebviewPanelSerializers ---
+  // Serializers must be registered synchronously during activate(), but
+  // the store is only available after async hunt root detection.
+  let resolveStore: ((store: HuntDataStore) => void) | undefined;
+  const storeReady = new Promise<HuntDataStore>((resolve) => {
+    resolveStore = resolve;
+  });
+  function waitForStore(): Promise<HuntDataStore> {
+    return storeReady;
+  }
+  let deferredSessionDiff: SessionDiff | null = null;
+
+  // Register WebviewPanelSerializers immediately (VS Code needs them sync)
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(HUNT_OVERVIEW_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+        const store = await waitForStore();
+        HuntOverviewPanel.restorePanel(context, store, panel, deferredSessionDiff);
+      },
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(EVIDENCE_BOARD_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+        const store = await waitForStore();
+        EvidenceBoardPanel.restorePanel(context, store, panel);
+      },
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(QUERY_ANALYSIS_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+        const store = await waitForStore();
+        QueryAnalysisPanel.restorePanel(context, store, panel);
+      },
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(DRAIN_VIEWER_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+        const store = await waitForStore();
+        const persisted = context.workspaceState.get<{ queryId: string }>(DTV_STATE_KEY);
+        const queryId = persisted?.queryId ?? '';
+        if (queryId) {
+          DrainTemplatePanel.restorePanel(context, store, panel, queryId);
+        } else {
+          panel.dispose(); // Can't restore without a queryId
+        }
+      },
+    })
+  );
+
   // Register the info command immediately (available even before hunt root detection)
   context.subscriptions.push(
     vscode.commands.registerCommand('thrunt-god.showInfo', () => {
@@ -767,6 +820,9 @@ export function activate(context: vscode.ExtensionContext): void {
     activeStore = store;
     context.subscriptions.push(store);
 
+    // Resolve deferred store so serializers can proceed
+    resolveStore?.(store);
+
     // 3. Log store events for debugging
     context.subscriptions.push(
       store.onDidChange((event) => {
@@ -914,6 +970,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const currentHashes = computeArtifactHashes(store);
       const diff = computeSessionDiff(previousHashes, currentHashes);
       sessionDiff = diff.entries.length > 0 ? diff : null;
+      deferredSessionDiff = sessionDiff;
 
       if (sessionDiff) {
         vscode.window.showInformationMessage(
@@ -1041,6 +1098,7 @@ export { EvidenceIntegrityDiagnostics } from './diagnostics';
 export {
   DRAIN_VIEWER_PIN_KEY,
   DRAIN_VIEWER_VIEW_TYPE,
+  DTV_STATE_KEY,
   DrainTemplatePanel,
   buildDrainViewerViewModel,
   createDrainViewerHtml,
@@ -1059,8 +1117,10 @@ export {
 export {
   EvidenceBoardPanel,
   EVIDENCE_BOARD_VIEW_TYPE,
+  EB_STATE_KEY,
 } from './evidenceBoardPanel';
 export {
   QueryAnalysisPanel,
   QUERY_ANALYSIS_VIEW_TYPE,
+  QA_STATE_KEY,
 } from './queryAnalysisPanel';

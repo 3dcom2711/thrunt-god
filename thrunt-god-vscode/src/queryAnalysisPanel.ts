@@ -185,6 +185,17 @@ export class QueryAnalysisPanel implements vscode.Disposable {
     );
   }
 
+  static restorePanel(
+    context: vscode.ExtensionContext,
+    store: HuntDataStore,
+    panel: vscode.WebviewPanel,
+    initialReceiptId?: string
+  ): QueryAnalysisPanel {
+    const restored = new QueryAnalysisPanel(context, store, panel, initialReceiptId);
+    QueryAnalysisPanel.currentPanel = restored;
+    return restored;
+  }
+
   static createOrShow(
     context: vscode.ExtensionContext,
     store: HuntDataStore,
