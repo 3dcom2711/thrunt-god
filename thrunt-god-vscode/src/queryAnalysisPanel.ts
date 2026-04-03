@@ -300,6 +300,22 @@ export class QueryAnalysisPanel implements vscode.Disposable {
     );
   }
 
+  private setComparisonQuery(
+    slot: 'left' | 'right',
+    queryId: string
+  ): void {
+    // The two selectors map to fixed slots, so updating one side must replace
+    // only that slot rather than toggling membership in a shared selection set.
+    if (slot === 'left') {
+      this.leftQueryId = queryId;
+    } else {
+      this.rightQueryId = queryId;
+    }
+
+    this.mode = 'comparison';
+    this.lastNonInspectorMode = 'comparison';
+  }
+
   private handleMessage(msg: QueryAnalysisToHostMessage): void {
     switch (msg.type) {
       case 'webview:ready':
@@ -315,13 +331,7 @@ export class QueryAnalysisPanel implements vscode.Disposable {
         });
         return;
       case 'query:set':
-        if (msg.slot === 'left') {
-          this.leftQueryId = msg.queryId;
-        } else {
-          this.rightQueryId = msg.queryId;
-        }
-        this.mode = 'comparison';
-        this.lastNonInspectorMode = 'comparison';
+        this.setComparisonQuery(msg.slot, msg.queryId);
         this.store.select(msg.queryId);
         this.persistState();
         this.postMessage({

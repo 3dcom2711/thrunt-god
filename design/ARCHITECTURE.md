@@ -1099,8 +1099,8 @@ Rationale:
 - React's `useRef` + `useEffect` pattern is the established way to host D3
   visualizations inside a component tree. The React component owns the
   container; D3 owns the SVG inside it.
-- Using Preact as a production alias (`{ 'react': 'preact/compat' }` in
-  esbuild) keeps the framework overhead under 4KB gzipped while maintaining
+- Using a production alias that maps React imports to `preact/compat` in
+  esbuild keeps the framework overhead under 4KB gzipped while maintaining
   full React API compatibility.
 
 ### Visualization: D3
