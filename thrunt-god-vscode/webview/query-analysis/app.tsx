@@ -1,4 +1,4 @@
-import { useMemo } from 'preact/hooks';
+import { useMemo, useRef } from 'preact/hooks';
 import type {
   QueryAnalysisViewModel,
   ComparisonData,
@@ -8,6 +8,7 @@ import type {
   ReceiptInspectorItem,
 } from '../../shared/query-analysis';
 import { Panel, GhostButton } from '../shared/components';
+import { useRovingTabindex } from '../shared/hooks';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -127,8 +128,11 @@ function SortControls({
   viewModel: QueryAnalysisViewModel;
   onSortChange: (sortBy: 'count' | 'deviation' | 'novelty' | 'recency') => void;
 }) {
+  const sortPillsRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(sortPillsRef, '.hunt-qa-sort-pill:not(.hunt-qa-sort-pill--disabled)');
+
   return (
-    <div class="hunt-qa-sort-pills" role="radiogroup" aria-label="Sort templates by">
+    <div class="hunt-qa-sort-pills" ref={sortPillsRef} role="radiogroup" aria-label="Sort templates by">
       {viewModel.availableSorts.map((sort) => {
         const isActive = viewModel.sortBy === sort.key;
         let className = 'hunt-qa-sort-pill';
@@ -159,10 +163,13 @@ function SortControls({
 // ---------------------------------------------------------------------------
 
 function ComparisonView({ data }: { data: ComparisonData }) {
+  const comparisonRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(comparisonRef, '.hunt-qa-comparison-row');
+
   const maxEventCount = Math.max(data.queryA.eventCount, data.queryB.eventCount, 1);
 
   return (
-    <div class="hunt-qa-comparison-grid">
+    <div class="hunt-qa-comparison-grid" ref={comparisonRef} role="list" aria-label="Template comparison">
       {/* Column headers */}
       <div class="hunt-qa-comparison-header">
         <div>{data.queryA.title}</div>
@@ -179,7 +186,7 @@ function ComparisonView({ data }: { data: ComparisonData }) {
 
       {/* Template rows */}
       {data.templates.map((tpl: ComparisonTemplate) => (
-        <div class="hunt-qa-comparison-row" key={tpl.templateId}>
+        <div class="hunt-qa-comparison-row" key={tpl.templateId} role="listitem" tabIndex={0}>
           {/* Template label spanning both columns */}
           <div class="hunt-qa-comparison-label" title={tpl.template}>
             {tpl.template}
@@ -246,7 +253,7 @@ function HeatmapView({ data }: { data: HeatmapData }) {
   }, [data.rows]);
 
   return (
-    <table class="hunt-qa-heatmap">
+    <table class="hunt-qa-heatmap" aria-label="Template presence heatmap">
       <thead>
         <tr>
           <th class="hunt-qa-heatmap-row-label">Template</th>
@@ -428,6 +435,9 @@ function ReceiptInspectorView(props: {
   onReceiptSelect: (receiptId: string) => void;
   onClose: () => void;
 }) {
+  const receiptListRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(receiptListRef, '.hunt-qa-inspector-item');
+
   const selected = props.data.receipts.find(
     (r) => r.receiptId === props.data.selectedReceiptId
   ) ?? props.data.receipts[0] ?? null;
@@ -442,7 +452,7 @@ function ReceiptInspectorView(props: {
       </div>
       <div class="hunt-qa-inspector-split">
         {/* Left: receipt list */}
-        <div class="hunt-qa-inspector-list" role="list" aria-label="Receipts">
+        <div class="hunt-qa-inspector-list" ref={receiptListRef} role="list" aria-label="Receipts">
           {props.data.receipts.map((receipt) => {
             const isHighlighted = receipt.receiptId === props.highlightedArtifactId;
             let itemClass = `hunt-qa-inspector-item ${

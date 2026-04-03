@@ -22,7 +22,7 @@ import type {
   EvidenceBoardMatrixCell,
 } from '../../shared/evidence-board';
 import { Panel } from '../shared/components';
-import { useTheme, useHostMessage, createVsCodeApi } from '../shared/hooks';
+import { useTheme, useHostMessage, createVsCodeApi, useRovingTabindex } from '../shared/hooks';
 import '../shared/tokens.css';
 
 // ---------------------------------------------------------------------------
@@ -337,6 +337,9 @@ function GraphView({
 }) {
   const { positions, ready } = useForceSimulation(viewModel.nodes, viewModel.edges);
 
+  const graphContainerRef = useRef<HTMLDivElement>(null);
+  useRovingTabindex(graphContainerRef, '.hunt-eb-node[tabindex]');
+
   // Compute connected set for focus dimming
   const connectedNodes = useMemo(() => {
     if (!focusedHypothesis) return null;
@@ -386,6 +389,15 @@ function GraphView({
     [onNodeHover],
   );
 
+  const handleNodeKeyDown = useCallback(
+    (e: KeyboardEvent, nodeId: string) => {
+      if (e.key === 'Enter') {
+        onNodeClick(nodeId);
+      }
+    },
+    [onNodeClick],
+  );
+
   if (!ready || positions.size === 0) {
     return (
       <div class="hunt-eb-graph">
@@ -397,8 +409,8 @@ function GraphView({
   }
 
   return (
-    <div class="hunt-eb-graph">
-      <svg ref={svgRef} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet">
+    <div class="hunt-eb-graph" ref={graphContainerRef}>
+      <svg ref={svgRef} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet" role="group" aria-label="Evidence lineage graph">
         {/* Tier labels */}
         {TIER_LABELS.map((label, tier) => (
           <text
@@ -456,8 +468,12 @@ function GraphView({
               key={node.id}
               class={groupClass}
               transform={`translate(${pos.x}, ${pos.y})`}
+              tabIndex={isDimmed ? -1 : 0}
+              role="img"
+              aria-label={`${node.label} (${node.type}${node.verdict ? ', ' + node.verdict : ''})`}
               onClick={(e: MouseEvent) => handleNodeClick(e, node.id)}
               onContextMenu={(e: MouseEvent) => handleContextMenu(e, node.id)}
+              onKeyDown={(e: KeyboardEvent) => handleNodeKeyDown(e, node.id)}
               onMouseEnter={(e: MouseEvent) => handleMouseEnter(e, node)}
               onMouseLeave={onNodeHoverEnd}
             >
@@ -548,7 +564,7 @@ function MatrixView({
 
   return (
     <div class="hunt-eb-matrix">
-      <table>
+      <table aria-label="Evidence coverage matrix">
         <thead>
           <tr>
             <th />
@@ -563,11 +579,14 @@ function MatrixView({
                   key={hId}
                   class={thClass || undefined}
                   title={hId}
+                  tabIndex={0}
+                  role="button"
                   style={{
                     cursor: 'pointer',
                     opacity: focusedHypothesis && hId !== focusedHypothesis ? 0.15 : 1,
                   }}
                   onClick={() => handleColumnClick(hId)}
+                  onKeyDown={(e: KeyboardEvent) => { if (e.key === 'Enter') handleColumnClick(hId); }}
                 >
                   {hId.length > 8 ? hId.slice(0, 8) + '...' : hId}
                 </th>
