@@ -151,7 +151,7 @@ Plans:
 
 - [x] **Phase 50: Program & Case Hierarchy** - Refactor planningPaths and all artifact-resolving modules; new-program and new-case commands; case migration (completed 2026-04-08)
 - [x] **Phase 51: Program Dashboard & Extension Wiring** - STATE.md case rollup, VS Code webview for program overview, extension artifact watcher for cases/ (completed 2026-04-08)
-- [ ] **Phase 52: Cross-Case Intelligence** - SQLite+FTS5 case index, auto-search on new-case, case-search CLI command
+- [x] **Phase 52: Cross-Case Intelligence** - SQLite+FTS5 case index, auto-search on new-case, case-search CLI command (completed 2026-04-08)
 - [ ] **Phase 53: MCP Server & ATT&CK Tools** - @thrunt/mcp-hunt-intel stdio server, technique/group/software lookup, Navigator layer generation, coverage analysis
 - [ ] **Phase 54: Detection Rule Ingestion** - Multi-format parsers (Sigma, ESCU, Elastic TOML, KQL markdown), unified detections table, bundled SigmaHQ rules
 - [ ] **Phase 55: Detection Coverage & Gap Analysis** - Cross-source coverage comparison, gap identification against threat profiles, detection suggestions
@@ -198,7 +198,7 @@ Plans:
   2. Opening a new case with `thrunt new-case` automatically queries past cases and surfaces any matches for similar signals, hypotheses, or techniques before the hunter writes their first query
   3. Running `thrunt-tools case-search <query>` returns matching past cases with case name, matched text in context, technique overlap, and outcome summary — optionally filtered by program
   4. Search results include enough context that a hunter can decide whether a past case is relevant without opening it
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 52-01-PLAN.md — SQLite+FTS5 db.cjs module with openProgramDb, ensureSchema, indexCase, searchCases, findTechniqueOverlap
 - [ ] 52-02-PLAN.md — Wire indexing into cmdCaseClose, auto-search into cmdCaseNew, new cmdCaseSearch CLI command
@@ -300,7 +300,7 @@ Plans:
 | 49. Reusable CI & Ecosystem Tooling | 2/2 | Complete | 2026-03-31 |
 | 50. Program & Case Hierarchy | 3/3 | Complete    | 2026-04-08 |
 | 51. Program Dashboard & Extension Wiring | 2/2 | Complete    | 2026-04-08 |
-| 52. Cross-Case Intelligence | 1/2 | In Progress|  |
+| 52. Cross-Case Intelligence | 2/2 | Complete   | 2026-04-08 |
 | 53. MCP Server & ATT&CK Tools | 0/TBD | Not started | - |
 | 54. Detection Rule Ingestion | 0/TBD | Not started | - |
 | 55. Detection Coverage & Gap Analysis | 0/TBD | Not started | - |

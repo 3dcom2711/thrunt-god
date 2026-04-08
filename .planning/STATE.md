@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: executing
-stopped_at: Completed 52-01-PLAN.md
-last_updated: "2026-04-08T14:44:31.274Z"
-last_activity: 2026-04-08 -- Phase 52 Plan 01 complete (db.cjs SQLite+FTS5 module)
+status: completed
+stopped_at: Completed 52-02-PLAN.md
+last_updated: "2026-04-08T15:06:42.770Z"
+last_activity: 2026-04-08 -- Phase 52 Plan 02 complete (command integration + case-search CLI)
 progress:
   total_phases: 15
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 20
-  completed_plans: 19
-  percent: 95
+  completed_plans: 20
+  percent: 100
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 ## Current Position
 
 Phase: 52 of 57 (Cross-Case Intelligence)
-Plan: 52-01 (complete) of 2 plans in phase
-Status: In Progress (1/2 plans complete)
-Last activity: 2026-04-08 -- Phase 52 Plan 01 complete (db.cjs SQLite+FTS5 module)
+Plan: 2 of 2 plans in phase
+Status: Phase Complete (2/2 plans complete)
+Last activity: 2026-04-08 -- Phase 52 Plan 02 complete (command integration + case-search CLI)
 
-Progress: [█████████░] 95% (v3.0 Phase 52: 1/2 plans)
+Progress: [██████████] 100% (v3.0 Phase 52: 2/2 plans)
 
 ## Accumulated Context
 
@@ -70,6 +70,9 @@ Progress: [█████████░] 95% (v3.0 Phase 52: 1/2 plans)
 - [Phase 52]: parseHypotheses splits on ## or ### headings into individual artifact rows for granular FTS matching
 - [Phase 52]: All IOCs stored as single ioc artifact row with type prefixes (ip:, md5:, sha256:) rather than individual rows
 - [Phase 52]: IOC extraction uses cascading hash regex (SHA256 first, then SHA1, then MD5) to avoid substring false positives
+- [Phase 52]: db.cjs require made lazy in commands.cjs (try/catch) for environments without better-sqlite3
+- [Phase 52]: cmdCaseNew FTS query OR-joins name tokens for broader matching (AND too restrictive)
+- [Phase 52]: Parent technique IDs expanded to sub-techniques via DB LIKE query for overlap matching
 
 ### Blockers/Concerns
 
@@ -77,6 +80,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-08T14:44:24.935Z
-Stopped at: Completed 52-01-PLAN.md
-Resume: Phase 52 Plan 01 complete. db.cjs SQLite+FTS5 module created with 5 core exports + 2 helpers. 35 new tests pass, full suite 2696/2697 (pre-existing integration-helpers timeout). Plan 02 next: integration into cmdCaseClose/cmdCaseNew + case-search CLI.
+Last session: 2026-04-08T15:06:42.766Z
+Stopped at: Completed 52-02-PLAN.md
+Resume: Phase 52 complete. Both plans done. db.cjs module (Plan 01) + command integration + case-search CLI (Plan 02). 14 new tests, 2710 total pass. Cross-case intelligence fully operational: close->index->search/auto-search pipeline working end-to-end.
