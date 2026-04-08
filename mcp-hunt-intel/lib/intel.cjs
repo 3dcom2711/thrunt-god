@@ -7,6 +7,13 @@ const os = require('os');
 // Resolve better-sqlite3 from mcp-hunt-intel's own dependencies (or monorepo root)
 const Database = require('better-sqlite3');
 
+// Lazy-load detections module (avoids circular dependency; only needed at DB open time)
+let _detections;
+function getDetections() {
+  if (!_detections) _detections = require('./detections.cjs');
+  return _detections;
+}
+
 // ─── Defaults (overridable via openIntelDb opts) ────────────────────────────
 
 const INTEL_DB_DIR = path.join(os.homedir(), '.thrunt');
@@ -212,6 +219,12 @@ function openIntelDb(opts = {}) {
 
   ensureIntelSchema(db);
   populateIfEmpty(db);
+
+  // Extend schema with detections tables (Phase 54)
+  getDetections().ensureDetectionsSchema(db);
+
+  // Lazy-populate detections from bundled rules + env var paths (Phase 54)
+  getDetections().populateDetectionsIfEmpty(db);
 
   return db;
 }
