@@ -31,9 +31,6 @@ function loadLayers() {
   return layers;
 }
 
-// Shared db for read-only tests
-let sharedDb, sharedTmpDir;
-
 // ── layers.cjs ─────────────────────────────────────────────────────────────
 
 describe('layers.cjs - buildNavigatorLayer', () => {
@@ -116,287 +113,261 @@ describe('tools.cjs - exports', () => {
   });
 });
 
-// ── lookup_technique logic ─────────────────────────────────────────────────
+// ── Tool handler tests with shared DB ──────────────────────────────────────
 
-describe('lookup_technique handler', () => {
+describe('tool handlers with intel DB', () => {
+  let db, tmpDir;
+
   before(() => {
-    sharedTmpDir = makeTempDir();
+    tmpDir = makeTempDir();
     const { openIntelDb } = loadIntel();
-    sharedDb = openIntelDb({ dbDir: sharedTmpDir });
+    db = openIntelDb({ dbDir: tmpDir });
   });
 
   after(() => {
-    if (sharedDb) sharedDb.close();
-    if (sharedTmpDir) fs.rmSync(sharedTmpDir, { recursive: true, force: true });
+    if (db) db.close();
+    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('returns technique data for valid ID (T1059)', async () => {
-    const { handleLookupTechnique } = loadTools();
-    const result = await handleLookupTechnique(sharedDb, { technique_id: 'T1059' });
-    assert.ok(!result.isError, 'should not be an error');
-    assert.ok(result.content);
-    assert.equal(result.content[0].type, 'text');
+  // ── lookup_technique ─────────────────────────────────────────────────
 
-    const data = JSON.parse(result.content[0].text);
-    assert.equal(data.id, 'T1059');
-    assert.ok(data.name);
-    assert.ok(data.description);
-    assert.ok(data.tactics);
-    assert.ok(data.platforms);
-  });
+  describe('lookup_technique', () => {
+    it('returns technique data for valid ID (T1059)', async () => {
+      const { handleLookupTechnique } = loadTools();
+      const result = await handleLookupTechnique(db, { technique_id: 'T1059' });
+      assert.ok(!result.isError, 'should not be an error');
+      assert.ok(result.content);
+      assert.equal(result.content[0].type, 'text');
 
-  it('returns sub-technique data for dotted ID (T1059.001)', async () => {
-    const { handleLookupTechnique } = loadTools();
-    const result = await handleLookupTechnique(sharedDb, { technique_id: 'T1059.001' });
-    assert.ok(!result.isError, 'should not be an error');
-
-    const data = JSON.parse(result.content[0].text);
-    assert.equal(data.id, 'T1059.001');
-    assert.ok(data.name);
-  });
-
-  it('includes sub_techniques array for parent technique', async () => {
-    const { handleLookupTechnique } = loadTools();
-    const result = await handleLookupTechnique(sharedDb, { technique_id: 'T1059' });
-    const data = JSON.parse(result.content[0].text);
-    assert.ok(Array.isArray(data.sub_techniques), 'should include sub_techniques');
-    assert.ok(data.sub_techniques.length > 0, 'T1059 should have sub-techniques');
-  });
-
-  it('returns isError: true for invalid ID', async () => {
-    const { handleLookupTechnique } = loadTools();
-    const result = await handleLookupTechnique(sharedDb, { technique_id: 'T9999' });
-    assert.equal(result.isError, true);
-    assert.ok(result.content[0].text.includes('not found'));
-  });
-});
-
-// ── search_techniques logic ────────────────────────────────────────────────
-
-describe('search_techniques handler', () => {
-  before(() => {
-    if (!sharedDb) {
-      sharedTmpDir = makeTempDir();
-      const { openIntelDb } = loadIntel();
-      sharedDb = openIntelDb({ dbDir: sharedTmpDir });
-    }
-  });
-
-  it('returns multiple results for keyword "credential"', async () => {
-    const { handleSearchTechniques } = loadTools();
-    const result = await handleSearchTechniques(sharedDb, { query: 'credential', limit: 20 });
-    assert.ok(!result.isError);
-
-    const data = JSON.parse(result.content[0].text);
-    assert.ok(Array.isArray(data));
-    assert.ok(data.length > 1, 'should find multiple techniques related to credential');
-  });
-
-  it('narrows results with tactic filter "Persistence"', async () => {
-    const { handleSearchTechniques } = loadTools();
-    const allResults = await handleSearchTechniques(sharedDb, { query: 'account', limit: 100 });
-    const filteredResults = await handleSearchTechniques(sharedDb, { query: 'account', tactic: 'Persistence', limit: 100 });
-
-    const allData = JSON.parse(allResults.content[0].text);
-    const filtData = JSON.parse(filteredResults.content[0].text);
-    assert.ok(filtData.length <= allData.length, 'filtered should be <= unfiltered');
-  });
-
-  it('narrows results with platform filter "Windows"', async () => {
-    const { handleSearchTechniques } = loadTools();
-    const allResults = await handleSearchTechniques(sharedDb, { query: 'execution', limit: 100 });
-    const filteredResults = await handleSearchTechniques(sharedDb, { query: 'execution', platform: 'Windows', limit: 100 });
-
-    const allData = JSON.parse(allResults.content[0].text);
-    const filtData = JSON.parse(filteredResults.content[0].text);
-    // Platform filter may not reduce if all have Windows -- just ensure it runs
-    assert.ok(Array.isArray(filtData));
-  });
-
-  it('respects limit parameter', async () => {
-    const { handleSearchTechniques } = loadTools();
-    const result = await handleSearchTechniques(sharedDb, { query: 'access', limit: 5 });
-    const data = JSON.parse(result.content[0].text);
-    assert.ok(data.length <= 5, 'should return at most 5 results');
-  });
-});
-
-// ── lookup_group logic ─────────────────────────────────────────────────────
-
-describe('lookup_group handler', () => {
-  before(() => {
-    if (!sharedDb) {
-      sharedTmpDir = makeTempDir();
-      const { openIntelDb } = loadIntel();
-      sharedDb = openIntelDb({ dbDir: sharedTmpDir });
-    }
-  });
-
-  it('returns group data with techniques and software for valid ID (G0007)', async () => {
-    const { handleLookupGroup } = loadTools();
-    const result = await handleLookupGroup(sharedDb, { group_id: 'G0007' });
-    assert.ok(!result.isError);
-
-    const data = JSON.parse(result.content[0].text);
-    assert.equal(data.id, 'G0007');
-    assert.ok(data.name);
-    assert.ok(data.description);
-    assert.ok(Array.isArray(data.techniques), 'should include techniques array');
-    assert.ok(Array.isArray(data.software), 'should include software array');
-  });
-
-  it('supports name-based lookup', async () => {
-    const { handleLookupGroup } = loadTools();
-    const result = await handleLookupGroup(sharedDb, { group_id: 'APT28' });
-    assert.ok(!result.isError, 'should find group by name');
-
-    const data = JSON.parse(result.content[0].text);
-    assert.ok(data.name);
-    assert.ok(data.techniques);
-  });
-
-  it('returns isError: true for invalid group', async () => {
-    const { handleLookupGroup } = loadTools();
-    const result = await handleLookupGroup(sharedDb, { group_id: 'G9999' });
-    assert.equal(result.isError, true);
-    assert.ok(result.content[0].text.includes('not found'));
-  });
-});
-
-// ── generate_layer modes ───────────────────────────────────────────────────
-
-describe('generate_layer handler', () => {
-  before(() => {
-    if (!sharedDb) {
-      sharedTmpDir = makeTempDir();
-      const { openIntelDb } = loadIntel();
-      sharedDb = openIntelDb({ dbDir: sharedTmpDir });
-    }
-  });
-
-  it('custom mode produces valid layer with given technique IDs', async () => {
-    const { handleGenerateLayer } = loadTools();
-    const result = await handleGenerateLayer(sharedDb, {
-      mode: 'custom',
-      name: 'Custom Layer',
-      technique_ids: ['T1059', 'T1078'],
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.id, 'T1059');
+      assert.ok(data.name);
+      assert.ok(data.description);
+      assert.ok(data.tactics);
+      assert.ok(data.platforms);
     });
-    assert.ok(!result.isError);
 
-    const layer = JSON.parse(result.content[0].text);
-    assert.equal(layer.name, 'Custom Layer');
-    assert.equal(layer.versions.layer, '4.5');
-    assert.equal(layer.domain, 'enterprise-attack');
-    assert.equal(layer.techniques.length, 2);
-    assert.ok(layer.techniques.every(t => t.score === 100));
-  });
+    it('returns sub-technique data for dotted ID (T1059.001)', async () => {
+      const { handleLookupTechnique } = loadTools();
+      const result = await handleLookupTechnique(db, { technique_id: 'T1059.001' });
+      assert.ok(!result.isError, 'should not be an error');
 
-  it('group mode produces layer with group techniques', async () => {
-    const { handleGenerateLayer } = loadTools();
-    const result = await handleGenerateLayer(sharedDb, {
-      mode: 'group',
-      name: 'APT28 Layer',
-      group_id: 'G0007',
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.id, 'T1059.001');
+      assert.ok(data.name);
     });
-    assert.ok(!result.isError);
 
-    const layer = JSON.parse(result.content[0].text);
-    assert.ok(layer.techniques.length > 0, 'group layer should have techniques');
-    assert.equal(layer.versions.layer, '4.5');
-  });
-
-  it('coverage mode produces layer (all score=0 before Phase 54)', async () => {
-    const { handleGenerateLayer } = loadTools();
-    const result = await handleGenerateLayer(sharedDb, {
-      mode: 'coverage',
-      name: 'Coverage Snapshot',
+    it('includes sub_techniques array for parent technique', async () => {
+      const { handleLookupTechnique } = loadTools();
+      const result = await handleLookupTechnique(db, { technique_id: 'T1059' });
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(Array.isArray(data.sub_techniques), 'should include sub_techniques');
+      assert.ok(data.sub_techniques.length > 0, 'T1059 should have sub-techniques');
     });
-    assert.ok(!result.isError);
 
-    const layer = JSON.parse(result.content[0].text);
-    assert.ok(layer.techniques.length > 0, 'coverage layer should have techniques');
-    // Before Phase 54 (no detections table), all scores should be 0
-    assert.ok(layer.techniques.every(t => t.score === 0), 'all scores should be 0 before Phase 54');
-  });
-
-  it('gap mode produces layer highlighting uncovered techniques', async () => {
-    const { handleGenerateLayer } = loadTools();
-    const result = await handleGenerateLayer(sharedDb, {
-      mode: 'gap',
-      name: 'APT28 Gaps',
-      group_id: 'G0007',
+    it('returns isError: true for invalid ID', async () => {
+      const { handleLookupTechnique } = loadTools();
+      const result = await handleLookupTechnique(db, { technique_id: 'T9999' });
+      assert.equal(result.isError, true);
+      assert.ok(result.content[0].text.includes('not found'));
     });
-    assert.ok(!result.isError);
-
-    const layer = JSON.parse(result.content[0].text);
-    assert.ok(layer.techniques.length > 0, 'gap layer should have techniques');
-    // Before Phase 54, all are uncovered so all should have score=100 + red color
-    assert.ok(layer.techniques.every(t => t.score === 100), 'all uncovered should score 100');
   });
 
-  it('generated layer techniques have techniqueID, score, enabled', async () => {
-    const { handleGenerateLayer } = loadTools();
-    const result = await handleGenerateLayer(sharedDb, {
-      mode: 'custom',
-      name: 'Test',
-      technique_ids: ['T1059'],
+  // ── search_techniques ────────────────────────────────────────────────
+
+  describe('search_techniques', () => {
+    it('returns multiple results for keyword "credential"', async () => {
+      const { handleSearchTechniques } = loadTools();
+      const result = await handleSearchTechniques(db, { query: 'credential', limit: 20 });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(Array.isArray(data));
+      assert.ok(data.length > 1, `should find multiple techniques related to credential, got ${data.length}`);
     });
-    const layer = JSON.parse(result.content[0].text);
-    const tech = layer.techniques[0];
-    assert.ok('techniqueID' in tech, 'should have techniqueID');
-    assert.ok('score' in tech, 'should have score');
-    assert.ok('enabled' in tech, 'should have enabled');
-  });
-});
 
-// ── analyze_coverage ───────────────────────────────────────────────────────
+    it('narrows results with tactic filter "Persistence"', async () => {
+      const { handleSearchTechniques } = loadTools();
+      const allResults = await handleSearchTechniques(db, { query: 'account', limit: 100 });
+      const filteredResults = await handleSearchTechniques(db, { query: 'account', tactic: 'Persistence', limit: 100 });
 
-describe('analyze_coverage handler', () => {
-  before(() => {
-    if (!sharedDb) {
-      sharedTmpDir = makeTempDir();
-      const { openIntelDb } = loadIntel();
-      sharedDb = openIntelDb({ dbDir: sharedTmpDir });
-    }
-  });
+      const allData = JSON.parse(allResults.content[0].text);
+      const filtData = JSON.parse(filteredResults.content[0].text);
+      assert.ok(filtData.length <= allData.length, 'filtered should be <= unfiltered');
+    });
 
-  it('returns structured coverage data for group', async () => {
-    const { handleAnalyzeCoverage } = loadTools();
-    const result = await handleAnalyzeCoverage(sharedDb, { group_id: 'G0007', include_techniques: true });
-    assert.ok(!result.isError);
+    it('narrows results with platform filter "Windows"', async () => {
+      const { handleSearchTechniques } = loadTools();
+      const allResults = await handleSearchTechniques(db, { query: 'execution', limit: 100 });
+      const filteredResults = await handleSearchTechniques(db, { query: 'execution', platform: 'Windows', limit: 100 });
 
-    const data = JSON.parse(result.content[0].text);
-    assert.equal(data.group_id, 'G0007');
-    assert.ok(data.group_name);
-    assert.ok(typeof data.total_techniques === 'number');
-    assert.ok(typeof data.covered === 'number');
-    assert.ok(typeof data.uncovered === 'number');
-    assert.ok(typeof data.gap_percent === 'number');
-    assert.ok(Array.isArray(data.by_tactic));
+      const allData = JSON.parse(allResults.content[0].text);
+      const filtData = JSON.parse(filteredResults.content[0].text);
+      // Platform filter may not reduce if all have Windows -- just ensure it runs
+      assert.ok(Array.isArray(filtData));
+    });
+
+    it('respects limit parameter', async () => {
+      const { handleSearchTechniques } = loadTools();
+      const result = await handleSearchTechniques(db, { query: 'access', limit: 5 });
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(data.length <= 5, 'should return at most 5 results');
+    });
   });
 
-  it('by_tactic has tactic, total, covered, uncovered, gap_percent per entry', async () => {
-    const { handleAnalyzeCoverage } = loadTools();
-    const result = await handleAnalyzeCoverage(sharedDb, { group_id: 'G0007', include_techniques: true });
-    const data = JSON.parse(result.content[0].text);
+  // ── lookup_group ─────────────────────────────────────────────────────
 
-    assert.ok(data.by_tactic.length > 0, 'should have tactic breakdown');
-    const tactic = data.by_tactic[0];
-    assert.ok('tactic' in tactic);
-    assert.ok('total' in tactic);
-    assert.ok('covered' in tactic);
-    assert.ok('uncovered' in tactic);
-    assert.ok('gap_percent' in tactic);
+  describe('lookup_group', () => {
+    it('returns group data with techniques and software for valid ID (G0007)', async () => {
+      const { handleLookupGroup } = loadTools();
+      const result = await handleLookupGroup(db, { group_id: 'G0007' });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.id, 'G0007');
+      assert.ok(data.name);
+      assert.ok(data.description);
+      assert.ok(Array.isArray(data.techniques), 'should include techniques array');
+      assert.ok(Array.isArray(data.software), 'should include software array');
+    });
+
+    it('supports name-based lookup', async () => {
+      const { handleLookupGroup } = loadTools();
+      const result = await handleLookupGroup(db, { group_id: 'APT28' });
+      assert.ok(!result.isError, 'should find group by name');
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(data.name);
+      assert.ok(data.techniques);
+    });
+
+    it('returns isError: true for invalid group', async () => {
+      const { handleLookupGroup } = loadTools();
+      const result = await handleLookupGroup(db, { group_id: 'G9999' });
+      assert.equal(result.isError, true);
+      assert.ok(result.content[0].text.includes('not found'));
+    });
   });
 
-  it('degrades gracefully before Phase 54 (covered=0)', async () => {
-    const { handleAnalyzeCoverage } = loadTools();
-    const result = await handleAnalyzeCoverage(sharedDb, { group_id: 'G0007', include_techniques: false });
-    const data = JSON.parse(result.content[0].text);
+  // ── generate_layer ───────────────────────────────────────────────────
 
-    // Before Phase 54, no detections table -> covered=0 for everything
-    assert.equal(data.covered, 0, 'covered should be 0 before Phase 54');
-    assert.equal(data.gap_percent, 100, 'gap should be 100% before Phase 54');
+  describe('generate_layer', () => {
+    it('custom mode produces valid layer with given technique IDs', async () => {
+      const { handleGenerateLayer } = loadTools();
+      const result = await handleGenerateLayer(db, {
+        mode: 'custom',
+        name: 'Custom Layer',
+        technique_ids: ['T1059', 'T1078'],
+      });
+      assert.ok(!result.isError);
+
+      const layer = JSON.parse(result.content[0].text);
+      assert.equal(layer.name, 'Custom Layer');
+      assert.equal(layer.versions.layer, '4.5');
+      assert.equal(layer.domain, 'enterprise-attack');
+      assert.equal(layer.techniques.length, 2);
+      assert.ok(layer.techniques.every(t => t.score === 100));
+    });
+
+    it('group mode produces layer with group techniques', async () => {
+      const { handleGenerateLayer } = loadTools();
+      const result = await handleGenerateLayer(db, {
+        mode: 'group',
+        name: 'APT28 Layer',
+        group_id: 'G0007',
+      });
+      assert.ok(!result.isError);
+
+      const layer = JSON.parse(result.content[0].text);
+      assert.ok(layer.techniques.length > 0, 'group layer should have techniques');
+      assert.equal(layer.versions.layer, '4.5');
+    });
+
+    it('coverage mode produces layer (all score=0 before Phase 54)', async () => {
+      const { handleGenerateLayer } = loadTools();
+      const result = await handleGenerateLayer(db, {
+        mode: 'coverage',
+        name: 'Coverage Snapshot',
+      });
+      assert.ok(!result.isError);
+
+      const layer = JSON.parse(result.content[0].text);
+      assert.ok(layer.techniques.length > 0, 'coverage layer should have techniques');
+      // Before Phase 54 (no detections table), all scores should be 0
+      assert.ok(layer.techniques.every(t => t.score === 0), 'all scores should be 0 before Phase 54');
+    });
+
+    it('gap mode produces layer highlighting uncovered techniques', async () => {
+      const { handleGenerateLayer } = loadTools();
+      const result = await handleGenerateLayer(db, {
+        mode: 'gap',
+        name: 'APT28 Gaps',
+        group_id: 'G0007',
+      });
+      assert.ok(!result.isError);
+
+      const layer = JSON.parse(result.content[0].text);
+      assert.ok(layer.techniques.length > 0, 'gap layer should have techniques');
+      // Before Phase 54, all are uncovered so all should have score=100 + red color
+      assert.ok(layer.techniques.every(t => t.score === 100), 'all uncovered should score 100');
+    });
+
+    it('generated layer techniques have techniqueID, score, enabled', async () => {
+      const { handleGenerateLayer } = loadTools();
+      const result = await handleGenerateLayer(db, {
+        mode: 'custom',
+        name: 'Test',
+        technique_ids: ['T1059'],
+      });
+      const layer = JSON.parse(result.content[0].text);
+      const tech = layer.techniques[0];
+      assert.ok('techniqueID' in tech, 'should have techniqueID');
+      assert.ok('score' in tech, 'should have score');
+      assert.ok('enabled' in tech, 'should have enabled');
+    });
+  });
+
+  // ── analyze_coverage ─────────────────────────────────────────────────
+
+  describe('analyze_coverage', () => {
+    it('returns structured coverage data for group', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, { group_id: 'G0007', include_techniques: true });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.group_id, 'G0007');
+      assert.ok(data.group_name);
+      assert.ok(typeof data.total_techniques === 'number');
+      assert.ok(typeof data.covered === 'number');
+      assert.ok(typeof data.uncovered === 'number');
+      assert.ok(typeof data.gap_percent === 'number');
+      assert.ok(Array.isArray(data.by_tactic));
+    });
+
+    it('by_tactic has tactic, total, covered, uncovered, gap_percent per entry', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, { group_id: 'G0007', include_techniques: true });
+      const data = JSON.parse(result.content[0].text);
+
+      assert.ok(data.by_tactic.length > 0, 'should have tactic breakdown');
+      const tactic = data.by_tactic[0];
+      assert.ok('tactic' in tactic);
+      assert.ok('total' in tactic);
+      assert.ok('covered' in tactic);
+      assert.ok('uncovered' in tactic);
+      assert.ok('gap_percent' in tactic);
+    });
+
+    it('degrades gracefully before Phase 54 (covered=0)', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, { group_id: 'G0007', include_techniques: false });
+      const data = JSON.parse(result.content[0].text);
+
+      // Before Phase 54, no detections table -> covered=0 for everything
+      assert.equal(data.covered, 0, 'covered should be 0 before Phase 54');
+      assert.equal(data.gap_percent, 100, 'gap should be 100% before Phase 54');
+    });
   });
 });
 
@@ -404,15 +375,7 @@ describe('analyze_coverage handler', () => {
 
 describe('timeout enforcement', () => {
   it('withTimeout aborts slow handlers', async () => {
-    const { withTimeout } = loadTools();
-
-    // Save current timeout and set a very short one
-    const origTimeout = process.env.THRUNT_MCP_TIMEOUT;
-    process.env.THRUNT_MCP_TIMEOUT = '50'; // 50ms
-
-    // Re-require to pick up new timeout -- use the wrapper directly
-    // The withTimeout function reads THRUNT_MCP_TIMEOUT at module load, so we
-    // test the pattern by creating a timeout wrapper manually
+    // Test the pattern directly with a short timeout
     const TIMEOUT_MS = 50;
     function testWithTimeout(fn) {
       return async (args) => {
@@ -444,13 +407,6 @@ describe('timeout enforcement', () => {
     const result = await slowHandler({});
     assert.equal(result.isError, true);
     assert.ok(result.content[0].text.includes('timed out'));
-
-    // Restore env
-    if (origTimeout) {
-      process.env.THRUNT_MCP_TIMEOUT = origTimeout;
-    } else {
-      delete process.env.THRUNT_MCP_TIMEOUT;
-    }
   });
 });
 
@@ -525,19 +481,22 @@ describe('server smoke test', () => {
         }
       });
 
-      // Send JSON-RPC initialize request with Content-Length framing
-      const request = JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {},
-          clientInfo: { name: 'test', version: '0.1.0' },
-        },
-      });
-      const message = `Content-Length: ${Buffer.byteLength(request)}\r\n\r\n${request}`;
-      proc.stdin.write(message);
+      // Wait for server to start (stderr will show startup messages), then send request
+      setTimeout(() => {
+        // Send JSON-RPC initialize request as line-delimited JSON
+        // (MCP SDK StdioServerTransport accepts newline-delimited JSON)
+        const request = JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '0.1.0' },
+          },
+        });
+        proc.stdin.write(request + '\n');
+      }, 500);
 
       // Timeout after 10 seconds
       setTimeout(() => {
@@ -550,8 +509,8 @@ describe('server smoke test', () => {
     });
 
     // Verify we got a JSON-RPC response on stdout
-    assert.ok(result.stdout.includes('"jsonrpc"'), `should receive JSON-RPC response, got stdout: ${result.stdout.slice(0, 200)}`);
-    assert.ok(result.stdout.includes('"result"'), `should have result field, got: ${result.stdout.slice(0, 200)}`);
+    assert.ok(result.stdout.includes('"jsonrpc"'), `should receive JSON-RPC response, got stdout: "${result.stdout.slice(0, 300)}", stderr: "${result.stderr.slice(0, 300)}"`);
+    assert.ok(result.stdout.includes('"result"'), `should have result field, got: ${result.stdout.slice(0, 300)}`);
 
     // Cleanup
     fs.rmSync(tmpDir, { recursive: true, force: true });
