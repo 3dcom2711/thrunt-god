@@ -15,7 +15,7 @@ function makeTempIntelDir() {
 
 let intel;
 function loadIntel() {
-  if (!intel) intel = require('../mcp-hunt-intel/lib/intel.cjs');
+  if (!intel) intel = require('../apps/mcp/lib/intel.cjs');
   return intel;
 }
 

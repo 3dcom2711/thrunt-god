@@ -2457,9 +2457,9 @@ describe('cmdCaseNew detection coverage', () => {
     // Whether empty or not, the case creation should succeed
   });
 
-  test('cmdCaseNew succeeds with detection_coverage when mcp-hunt-intel unavailable', () => {
+  test('cmdCaseNew succeeds with detection_coverage when @thrunt/mcp unavailable', () => {
     // This tests the non-fatal degradation path.
-    // In test environment, mcp-hunt-intel modules ARE available, so we verify
+    // In test environment, @thrunt/mcp modules ARE available, so we verify
     // that detection_coverage is always present (non-fatal means array, possibly empty)
     setupProgramState(tmpDir, []);
 

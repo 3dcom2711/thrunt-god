@@ -99,6 +99,15 @@ None - no external service configuration required.
 - All 4 knowledge graph tables created in program.db alongside existing case_index/case_artifacts tables
 - importStixFromIntel ready to be called during program initialization
 
+## Self-Check: PASSED
+
+- FOUND: mcp-hunt-intel/lib/knowledge.cjs
+- FOUND: tests/knowledge.test.cjs
+- FOUND: 56-01-SUMMARY.md
+- FOUND: a7fd55e (RED commit)
+- FOUND: 45d8a72 (GREEN commit)
+- FOUND: aaa8122 (docs commit)
+
 ---
 *Phase: 56-knowledge-graph*
 *Completed: 2026-04-08*

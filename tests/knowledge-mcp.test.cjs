@@ -16,11 +16,11 @@ function makeTempDir() {
 
 let knowledge, tools;
 function loadKnowledge() {
-  if (!knowledge) knowledge = require('../mcp-hunt-intel/lib/knowledge.cjs');
+  if (!knowledge) knowledge = require('../apps/mcp/lib/knowledge.cjs');
   return knowledge;
 }
 function loadTools() {
-  if (!tools) tools = require('../mcp-hunt-intel/lib/tools.cjs');
+  if (!tools) tools = require('../apps/mcp/lib/tools.cjs');
   return tools;
 }
 

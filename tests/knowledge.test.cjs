@@ -24,13 +24,13 @@ function makeProgramDb(dir) {
 }
 
 function makeIntelDb(dir) {
-  const { openIntelDb } = require('../mcp-hunt-intel/lib/intel.cjs');
+  const { openIntelDb } = require('../apps/mcp/lib/intel.cjs');
   return openIntelDb({ dbDir: dir });
 }
 
 let knowledge;
 function loadKnowledge() {
-  if (!knowledge) knowledge = require('../mcp-hunt-intel/lib/knowledge.cjs');
+  if (!knowledge) knowledge = require('../apps/mcp/lib/knowledge.cjs');
   return knowledge;
 }
 

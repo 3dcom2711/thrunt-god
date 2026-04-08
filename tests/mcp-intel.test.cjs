@@ -16,15 +16,15 @@ function makeTempDir() {
 
 let intel, tools, layers;
 function loadIntel() {
-  if (!intel) intel = require('../mcp-hunt-intel/lib/intel.cjs');
+  if (!intel) intel = require('../apps/mcp/lib/intel.cjs');
   return intel;
 }
 function loadTools() {
-  if (!tools) tools = require('../mcp-hunt-intel/lib/tools.cjs');
+  if (!tools) tools = require('../apps/mcp/lib/tools.cjs');
   return tools;
 }
 function loadLayers() {
-  if (!layers) layers = require('../mcp-hunt-intel/lib/layers.cjs');
+  if (!layers) layers = require('../apps/mcp/lib/layers.cjs');
   return layers;
 }
 
@@ -513,20 +513,20 @@ describe('timeout enforcement', () => {
 
 describe('server.cjs stdout purity', () => {
   it('server.cjs does not contain console.log calls', () => {
-    const serverPath = path.join(__dirname, '..', 'mcp-hunt-intel', 'bin', 'server.cjs');
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
     const content = fs.readFileSync(serverPath, 'utf-8');
     assert.ok(!content.includes('console.log('));
     assert.ok(content.includes('console.error'));
   });
 
   it('server.cjs has shebang line', () => {
-    const serverPath = path.join(__dirname, '..', 'mcp-hunt-intel', 'bin', 'server.cjs');
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
     const content = fs.readFileSync(serverPath, 'utf-8');
     assert.ok(content.startsWith('#!/usr/bin/env node'));
   });
 
   it('server.cjs can be required without throwing', () => {
-    const serverPath = path.join(__dirname, '..', 'mcp-hunt-intel', 'bin', 'server.cjs');
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
     const content = fs.readFileSync(serverPath, 'utf-8');
     const code = content.replace(/^#!.*\n/, '');
     assert.doesNotThrow(() => {
@@ -558,7 +558,7 @@ describe('tools.cjs - registerTools count', () => {
 describe('server smoke test', () => {
   it('responds to JSON-RPC initialize request', async () => {
     const tmpDir = makeTempDir();
-    const serverPath = path.join(__dirname, '..', 'mcp-hunt-intel', 'bin', 'server.cjs');
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
 
     const result = await new Promise((resolve, reject) => {
       const proc = spawn(process.execPath, [serverPath], {

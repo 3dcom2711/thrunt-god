@@ -306,4 +306,4 @@ Plans:
 | 54. Detection Rule Ingestion | 2/2 | Complete    | 2026-04-08 |
 | 55. Detection Coverage & Gap Analysis | 2/2 | Complete    | 2026-04-08 |
 | 56. Knowledge Graph | 2/2 | Complete    | 2026-04-08 |
-| 57. Agent Wiring & Workflow Integration | 2/2 | Complete   | 2026-04-08 |
+| 57. Agent Wiring & Workflow Integration | 2/2 | Complete    | 2026-04-08 |

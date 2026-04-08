@@ -19,11 +19,11 @@ try {
 }
 const { openProgramDb, indexCase, searchCases, findTechniqueOverlap, extractTechniqueIds } = dbModule || {};
 
-// Lazy-require mcp-hunt-intel modules: may not be available in all environments
+// Lazy-require @thrunt/mcp modules: may not be available in all environments
 let intelModule, coverageModule;
 try {
-  intelModule = require('../../../mcp-hunt-intel/lib/intel.cjs');
-  coverageModule = require('../../../mcp-hunt-intel/lib/coverage.cjs');
+  intelModule = require('../../../apps/mcp/lib/intel.cjs');
+  coverageModule = require('../../../apps/mcp/lib/coverage.cjs');
 } catch {
   intelModule = null;
   coverageModule = null;

@@ -15,11 +15,11 @@ function makeTempDir() {
 
 let prompts, intel;
 function loadPrompts() {
-  if (!prompts) prompts = require('../mcp-hunt-intel/lib/prompts.cjs');
+  if (!prompts) prompts = require('../apps/mcp/lib/prompts.cjs');
   return prompts;
 }
 function loadIntel() {
-  if (!intel) intel = require('../mcp-hunt-intel/lib/intel.cjs');
+  if (!intel) intel = require('../apps/mcp/lib/intel.cjs');
   return intel;
 }
 

@@ -15,11 +15,11 @@ function makeTempDir() {
 
 let intel, coverage;
 function loadIntel() {
-  if (!intel) intel = require('../mcp-hunt-intel/lib/intel.cjs');
+  if (!intel) intel = require('../apps/mcp/lib/intel.cjs');
   return intel;
 }
 function loadCoverage() {
-  if (!coverage) coverage = require('../mcp-hunt-intel/lib/coverage.cjs');
+  if (!coverage) coverage = require('../apps/mcp/lib/coverage.cjs');
   return coverage;
 }
 

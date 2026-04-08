@@ -19,13 +19,13 @@ const { extractFrontmatter } = require('./frontmatter.cjs');
 // Lazy-load knowledge graph module (Phase 56)
 let _knowledge;
 function getKnowledge() {
-  if (!_knowledge) _knowledge = require('../../../mcp-hunt-intel/lib/knowledge.cjs');
+  if (!_knowledge) _knowledge = require('../../../apps/mcp/lib/knowledge.cjs');
   return _knowledge;
 }
 
 let _intel;
 function getIntel() {
-  if (!_intel) _intel = require('../../../mcp-hunt-intel/lib/intel.cjs');
+  if (!_intel) _intel = require('../../../apps/mcp/lib/intel.cjs');
   return _intel;
 }
 

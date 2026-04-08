@@ -17,7 +17,7 @@ const INTEL_DB_PATH = path.join(INTEL_DB_DIR, 'intel.db');
 
 // Resolve data files: prefer package-local data/, fall back to monorepo thrunt-god/data/
 const LOCAL_DATA = path.join(__dirname, '..', 'data');
-const MONOREPO_DATA = path.join(__dirname, '..', '..', 'thrunt-god', 'data');
+const MONOREPO_DATA = path.join(__dirname, '..', '..', '..', 'thrunt-god', 'data');
 const DATA_DIR = fs.existsSync(path.join(LOCAL_DATA, 'mitre-attack-enterprise.json')) ? LOCAL_DATA : MONOREPO_DATA;
 const TECHNIQUES_DATA = path.join(DATA_DIR, 'mitre-attack-enterprise.json');
 const GROUPS_DATA = path.join(DATA_DIR, 'mitre-attack-groups.json');

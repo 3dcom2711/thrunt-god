@@ -2,7 +2,7 @@
 'use strict';
 
 // All logging to stderr (JSON-RPC only on stdout)
-const log = (...args) => console.error('[mcp-hunt-intel]', ...args);
+const log = (...args) => console.error('[thrunt-mcp]', ...args);
 
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
@@ -11,7 +11,7 @@ const { registerTools } = require('../lib/tools.cjs');
 const { registerPrompts } = require('../lib/prompts.cjs');
 
 const server = new McpServer({
-  name: 'mcp-hunt-intel',
+  name: 'thrunt-mcp',
   version: '0.1.0',
 });
 
