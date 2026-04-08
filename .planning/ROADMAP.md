@@ -216,8 +216,8 @@ Plans:
   6. The global ~/.thrunt/intel.db is populated with ATT&CK STIX data on first run and shared safely between CLI and MCP server via WAL mode and busy_timeout
 **Plans:** 2 plans
 Plans:
-- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
-- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
+- [ ] 53-01-PLAN.md — Package scaffold, curated ATT&CK groups data, intel.cjs data layer (intel.db schema, population, query functions)
+- [ ] 53-02-PLAN.md — MCP server entry point, 5 tool registrations (lookup_technique, search_techniques, lookup_group, generate_layer, analyze_coverage), Navigator layer builder
 
 ### Phase 54: Detection Rule Ingestion
 **Goal**: Detection rules from Sigma, Splunk ESCU, Elastic, and KQL sources are parsed, normalized, and searchable in a unified table
@@ -300,8 +300,8 @@ Plans:
 | 49. Reusable CI & Ecosystem Tooling | 2/2 | Complete | 2026-03-31 |
 | 50. Program & Case Hierarchy | 3/3 | Complete    | 2026-04-08 |
 | 51. Program Dashboard & Extension Wiring | 2/2 | Complete    | 2026-04-08 |
-| 52. Cross-Case Intelligence | 2/2 | Complete   | 2026-04-08 |
-| 53. MCP Server & ATT&CK Tools | 0/TBD | Not started | - |
+| 52. Cross-Case Intelligence | 2/2 | Complete    | 2026-04-08 |
+| 53. MCP Server & ATT&CK Tools | 0/2 | In progress | - |
 | 54. Detection Rule Ingestion | 0/TBD | Not started | - |
 | 55. Detection Coverage & Gap Analysis | 0/TBD | Not started | - |
 | 56. Knowledge Graph | 0/TBD | Not started | - |
