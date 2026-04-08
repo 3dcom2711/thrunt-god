@@ -153,7 +153,7 @@ Plans:
 - [x] **Phase 51: Program Dashboard & Extension Wiring** - STATE.md case rollup, VS Code webview for program overview, extension artifact watcher for cases/ (completed 2026-04-08)
 - [x] **Phase 52: Cross-Case Intelligence** - SQLite+FTS5 case index, auto-search on new-case, case-search CLI command (completed 2026-04-08)
 - [x] **Phase 53: MCP Server & ATT&CK Tools** - @thrunt/mcp-hunt-intel stdio server, technique/group/software lookup, Navigator layer generation, coverage analysis (completed 2026-04-08)
-- [ ] **Phase 54: Detection Rule Ingestion** - Multi-format parsers (Sigma, ESCU, Elastic TOML, KQL markdown), unified detections table, bundled SigmaHQ rules
+- [x] **Phase 54: Detection Rule Ingestion** - Multi-format parsers (Sigma, ESCU, Elastic TOML, KQL markdown), unified detections table, bundled SigmaHQ rules (completed 2026-04-08)
 - [ ] **Phase 55: Detection Coverage & Gap Analysis** - Cross-source coverage comparison, gap identification against threat profiles, detection suggestions
 - [ ] **Phase 56: Knowledge Graph** - Persistent entity/relation graph in program.db, decision logging, institutional memory, ATT&CK STIX auto-population
 - [ ] **Phase 57: Agent Wiring & Workflow Integration** - MCP tools in agent frontmatter, new-case auto-workflow, pre-built MCP prompts
@@ -230,7 +230,7 @@ Plans:
   4. A KQL markdown file is parsed and produces a record with detection query, Microsoft table references, and MITRE tags
   5. All parsed rules land in a unified detections table with FTS5 external content, searchable by technique ID, tactic, severity, source format, or process name
   6. Bundled SigmaHQ core rules are indexed on first run; setting SIGMA_PATHS, SPLUNK_PATHS, or ELASTIC_PATHS environment variables causes those custom rule directories to be indexed in addition to bundled rules
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 54-01-PLAN.md — Four format-specific parsers (Sigma, ESCU, Elastic, KQL), detections schema, directory indexers, FTS search, test fixtures
 - [ ] 54-02-PLAN.md — Wire detections into openIntelDb lifecycle, bundle SigmaHQ core rules, env var path handling, integration tests
@@ -303,7 +303,7 @@ Plans:
 | 51. Program Dashboard & Extension Wiring | 2/2 | Complete    | 2026-04-08 |
 | 52. Cross-Case Intelligence | 2/2 | Complete    | 2026-04-08 |
 | 53. MCP Server & ATT&CK Tools | 2/2 | Complete    | 2026-04-08 |
-| 54. Detection Rule Ingestion | 1/2 | In Progress|  |
+| 54. Detection Rule Ingestion | 2/2 | Complete   | 2026-04-08 |
 | 55. Detection Coverage & Gap Analysis | 0/TBD | Not started | - |
 | 56. Knowledge Graph | 0/TBD | Not started | - |
 | 57. Agent Wiring & Workflow Integration | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
 status: in-progress
-stopped_at: Completed 54-01-PLAN.md
-last_updated: "2026-04-08T18:26:28.000Z"
-last_activity: 2026-04-08 -- Phase 54 Plan 01 complete (detection rule parsers + schema + indexers + FTS search)
+stopped_at: Completed 54-02-PLAN.md
+last_updated: "2026-04-08T18:38:51.000Z"
+last_activity: 2026-04-08 -- Phase 54 Plan 02 complete (detections lifecycle wiring + bundled SigmaHQ rules + integration tests)
 progress:
   total_phases: 15
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 24
-  completed_plans: 23
-  percent: 96
+  completed_plans: 24
+  percent: 100
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 ## Current Position
 
 Phase: 54 of 57 (Detection Rule Ingestion)
-Plan: 1 of 2 plans in phase
-Status: In Progress (1/2 plans complete)
-Last activity: 2026-04-08 -- Phase 54 Plan 01 complete (detection rule parsers + schema + indexers + FTS search)
+Plan: 2 of 2 plans in phase
+Status: Complete (2/2 plans complete)
+Last activity: 2026-04-08 -- Phase 54 Plan 02 complete (detections lifecycle wiring + bundled SigmaHQ rules + integration tests)
 
-Progress: [█████████░] 96% (v3.0 Phase 54: 1/2 plans)
+Progress: [██████████] 100% (v3.0 Phase 54: 2/2 plans)
 
 ## Accumulated Context
 
@@ -86,6 +86,9 @@ Progress: [█████████░] 96% (v3.0 Phase 54: 1/2 plans)
 - [Phase 54]: KQL parser uses regex heuristic for generic code blocks (where|project|summarize|extend|DeviceEvents)
 - [Phase 54]: Elastic TOML parser iterates all [[rule.threat]] entries including nested subtechniques
 - [Phase 54]: Directory indexers skip entries with empty IDs (format prefix only) to prevent bad data
+- [Phase 54]: Lazy require pattern for detections module in intel.cjs (getDetections() avoids circular dependency)
+- [Phase 54]: SigmaHQ core rules bundled from r2026-01-01 release (1378 rules across 9 categories)
+- [Phase 54]: populateDetectionsIfEmpty called after populateIfEmpty in openIntelDb to ensure ATT&CK data loads first
 
 ### Blockers/Concerns
 
@@ -93,6 +96,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-08T18:15:23Z
-Stopped at: Completed 54-01-PLAN.md
-Resume: Phase 54 Plan 01 complete. detections.cjs (mcp-hunt-intel/lib/detections.cjs) provides 12 exports: 4 format-specific parsers (parseSigmaRule, parseEscuRule, parseElasticRule, parseKqlRule), ensureDetectionsSchema, insertDetection, 4 directory indexers, searchDetections (FTS5 + BM25 + filters), populateDetectionsIfEmpty. Dependencies added: js-yaml@4.1.1, smol-toml@1.6.1. 38 new tests, 1842 total pass. Next: Phase 54 Plan 02 (MCP tools + CLI integration for detection search).
+Last session: 2026-04-08T18:29:01Z
+Stopped at: Completed 54-02-PLAN.md
+Resume: Phase 54 complete. openIntelDb now auto-creates detections + detections_fts tables and indexes 1378 bundled SigmaHQ core rules on first access. Env var paths (SIGMA_PATHS, SPLUNK_PATHS, ELASTIC_PATHS) add custom rule directories. tools.cjs coverage/gap modes find real detection data. 47 detections tests + 35 intel-db tests pass. Phase 54 (Detection Rule Ingestion) is fully complete -- all 2 plans done.
