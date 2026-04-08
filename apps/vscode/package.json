@@ -141,6 +141,11 @@
         "icon": "$(dashboard)"
       },
       {
+        "command": "thrunt-god.openProgramDashboard",
+        "title": "THRUNT: Open Program Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "thrunt-god.openEvidenceBoard",
         "title": "THRUNT: Open Evidence Board",
         "icon": "$(graph)"

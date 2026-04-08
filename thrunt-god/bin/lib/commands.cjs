@@ -3407,20 +3407,29 @@ function cmdCaseNew(cwd, name, options, raw) {
   }
 
   const root = planningRoot(cwd);
+
+  // Validate program STATE.md exists before creating case artifacts
+  const programState = path.join(root, 'STATE.md');
+  if (!fs.existsSync(programState)) {
+    output({ success: false, error: 'No program STATE.md found. Run "thrunt new-program" first.' }, raw);
+    return;
+  }
+
   const caseDir = path.join(root, 'cases', slug);
   fs.mkdirSync(caseDir, { recursive: true });
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Create HUNTMAP.md
+  // Create MISSION.md (required by VS Code store for case discovery)
+  const missionContent = `# ${name}\n\n**Created:** ${today}\n**Status:** Active\n\n## Signal\n\n_Describe the initial signal or hypothesis._\n`;
+  fs.writeFileSync(path.join(caseDir, 'MISSION.md'), missionContent, 'utf-8');
+
   const huntmapFm = `---\ntitle: ${name}\nstatus: active\ncreated: ${today}\n---\n\n`;
   const huntmapBody = `# Huntmap\n\n## Hypotheses\n\nSee HYPOTHESES.md\n`;
   fs.writeFileSync(path.join(caseDir, 'HUNTMAP.md'), huntmapFm + huntmapBody, 'utf-8');
 
-  // Create HYPOTHESES.md
   fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'), `# Hypotheses\n\n_No hypotheses yet._\n`, 'utf-8');
 
-  // Create case-level STATE.md
   const caseStateFm = `---\nstatus: active\nopened_at: ${today}\ntechnique_ids: []\n---\n\n`;
   const caseStateBody = `# Case: ${name}\n\nStatus: Active\n`;
   fs.writeFileSync(path.join(caseDir, 'STATE.md'), caseStateFm + caseStateBody, 'utf-8');
