@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: completed
-stopped_at: Completed 52-02-PLAN.md
-last_updated: "2026-04-08T15:06:42.770Z"
-last_activity: 2026-04-08 -- Phase 52 Plan 02 complete (command integration + case-search CLI)
+status: in_progress
+stopped_at: Completed 53-01-PLAN.md
+last_updated: "2026-04-08T16:03:48Z"
+last_activity: 2026-04-08 -- Phase 53 Plan 01 complete (intel.db data layer + groups data)
 progress:
   total_phases: 15
   completed_phases: 10
-  total_plans: 20
-  completed_plans: 20
+  total_plans: 21
+  completed_plans: 21
   percent: 100
 ---
 
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-07)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v3.0 Hunt Program Intelligence — Phase 52: Cross-Case Intelligence
+**Current focus:** v3.0 Hunt Program Intelligence — Phase 53: MCP Server & ATT&CK Tools
 
 ## Current Milestone: v3.0 Hunt Program Intelligence
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 
 ## Current Position
 
-Phase: 52 of 57 (Cross-Case Intelligence)
-Plan: 2 of 2 plans in phase
-Status: Phase Complete (2/2 plans complete)
-Last activity: 2026-04-08 -- Phase 52 Plan 02 complete (command integration + case-search CLI)
+Phase: 53 of 57 (MCP Server & ATT&CK Tools)
+Plan: 1 of 2 plans in phase
+Status: In Progress (1/2 plans complete)
+Last activity: 2026-04-08 -- Phase 53 Plan 01 complete (intel.db data layer + groups data)
 
-Progress: [██████████] 100% (v3.0 Phase 52: 2/2 plans)
+Progress: [█████-----] 50% (v3.0 Phase 53: 1/2 plans)
 
 ## Accumulated Context
 
@@ -73,6 +73,10 @@ Progress: [██████████] 100% (v3.0 Phase 52: 2/2 plans)
 - [Phase 52]: db.cjs require made lazy in commands.cjs (try/catch) for environments without better-sqlite3
 - [Phase 52]: cmdCaseNew FTS query OR-joins name tokens for broader matching (AND too restrictive)
 - [Phase 52]: Parent technique IDs expanded to sub-techniques via DB LIKE query for overlap matching
+- [Phase 53]: Regular FTS5 (not external content) for techniques_fts since intel.db data is write-once/immutable
+- [Phase 53]: FTS5 includes id column for direct join to techniques table without rowid
+- [Phase 53]: Sub-techniques inherit parent description, tactic, platforms, data_sources from bundled JSON
+- [Phase 53]: openIntelDb(opts) accepts dbDir/dbPath for test isolation (never touches ~/.thrunt/ in tests)
 
 ### Blockers/Concerns
 
@@ -80,6 +84,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-08T15:06:42.766Z
-Stopped at: Completed 52-02-PLAN.md
-Resume: Phase 52 complete. Both plans done. db.cjs module (Plan 01) + command integration + case-search CLI (Plan 02). 14 new tests, 2710 total pass. Cross-case intelligence fully operational: close->index->search/auto-search pipeline working end-to-end.
+Last session: 2026-04-08T16:03:48Z
+Stopped at: Completed 53-01-PLAN.md
+Resume: Phase 53 Plan 01 complete. intel.cjs data layer with openIntelDb, lookupTechnique, searchTechniques, lookupGroup, getGroupTechniques, getGroupSoftware, getTechniquesByTactic, getAllTactics. 16 groups, 10 software in mitre-attack-groups.json. 557 techniques (160 parent + 397 sub) populated into SQLite FTS5. 35 new tests, 1793 total pass. Next: Plan 02 (MCP server entry point + tool registrations).

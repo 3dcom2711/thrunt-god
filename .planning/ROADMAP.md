@@ -301,7 +301,7 @@ Plans:
 | 50. Program & Case Hierarchy | 3/3 | Complete    | 2026-04-08 |
 | 51. Program Dashboard & Extension Wiring | 2/2 | Complete    | 2026-04-08 |
 | 52. Cross-Case Intelligence | 2/2 | Complete    | 2026-04-08 |
-| 53. MCP Server & ATT&CK Tools | 0/2 | In progress | - |
+| 53. MCP Server & ATT&CK Tools | 1/2 | In progress | - |
 | 54. Detection Rule Ingestion | 0/TBD | Not started | - |
 | 55. Detection Coverage & Gap Analysis | 0/TBD | Not started | - |
 | 56. Knowledge Graph | 0/TBD | Not started | - |
