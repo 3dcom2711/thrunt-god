@@ -33,6 +33,7 @@ import {
 } from './huntOverviewPanel';
 import { EvidenceBoardPanel, EVIDENCE_BOARD_VIEW_TYPE } from './evidenceBoardPanel';
 import { QueryAnalysisPanel, QUERY_ANALYSIS_VIEW_TYPE } from './queryAnalysisPanel';
+import { ProgramDashboardPanel, PROGRAM_DASHBOARD_VIEW_TYPE } from './programDashboardPanel';
 import type { SessionDiff } from '../shared/hunt-overview';
 import { resolveArtifactType } from './watcher';
 
@@ -884,6 +885,14 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     })
   );
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(PROGRAM_DASHBOARD_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+        const store = await waitForStore();
+        ProgramDashboardPanel.restorePanel(context, store, panel);
+      },
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('thrunt-god.showInfo', () => {
@@ -1597,6 +1606,12 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.openProgramDashboard', () => {
+        ProgramDashboardPanel.createOrShow(context, store);
+      })
+    );
+
+    context.subscriptions.push(
       vscode.commands.registerCommand(
         'thrunt-god.scrollToSection',
         async (uri: vscode.Uri, lineNumber: number) => {
@@ -1733,3 +1748,7 @@ export {
   QUERY_ANALYSIS_VIEW_TYPE,
   QA_STATE_KEY,
 } from './queryAnalysisPanel';
+export {
+  ProgramDashboardPanel,
+  PROGRAM_DASHBOARD_VIEW_TYPE,
+} from './programDashboardPanel';

@@ -59,6 +59,7 @@ const webviewConfigs = [
   createWebviewConfig('webview/hunt-overview/index.tsx', 'dist/webview-hunt-overview.js'),
   createWebviewConfig('webview/evidence-board/index.tsx', 'dist/webview-evidence-board.js'),
   createWebviewConfig('webview/query-analysis/index.tsx', 'dist/webview-query-analysis.js'),
+  createWebviewConfig('webview/program-dashboard/index.tsx', 'dist/webview-program-dashboard.js'),
 ];
 
 /**
