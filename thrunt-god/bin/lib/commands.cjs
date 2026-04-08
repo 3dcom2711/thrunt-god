@@ -3420,8 +3420,29 @@ function cmdCaseNew(cwd, name, options, raw) {
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Create MISSION.md (required by VS Code store for case discovery)
-  const missionContent = `# ${name}\n\n**Created:** ${today}\n**Status:** Active\n\n## Signal\n\n_Describe the initial signal or hypothesis._\n`;
+  // Create MISSION.md (required by VS Code store for case discovery).
+  // parseMission requires bold metadata fields and ## Signal, ## Desired Outcome, ## Scope sections.
+  const missionContent = [
+    `# ${name}`,
+    '',
+    `**Mode:** case`,
+    `**Opened:** ${today}`,
+    `**Owner:** _unassigned_`,
+    `**Status:** Active`,
+    '',
+    '## Signal',
+    '',
+    '_Describe the initial signal or hypothesis._',
+    '',
+    '## Desired Outcome',
+    '',
+    '_What does success look like for this case?_',
+    '',
+    '## Scope',
+    '',
+    '_Define the boundaries of the investigation._',
+    '',
+  ].join('\n');
   fs.writeFileSync(path.join(caseDir, 'MISSION.md'), missionContent, 'utf-8');
 
   const huntmapFm = `---\ntitle: ${name}\nstatus: active\ncreated: ${today}\n---\n\n`;

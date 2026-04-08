@@ -15,10 +15,23 @@ function getDetections() {
 const INTEL_DB_DIR = path.join(os.homedir(), '.thrunt');
 const INTEL_DB_PATH = path.join(INTEL_DB_DIR, 'intel.db');
 
-// Resolve data files: prefer package-local data/, fall back to monorepo thrunt-god/data/
+// Resolve data files: prefer package-local data/, fall back to monorepo thrunt-god/data/.
+// If neither path contains the MITRE JSON, fail early with a clear message.
 const LOCAL_DATA = path.join(__dirname, '..', 'data');
 const MONOREPO_DATA = path.join(__dirname, '..', '..', '..', 'thrunt-god', 'data');
-const DATA_DIR = fs.existsSync(path.join(LOCAL_DATA, 'mitre-attack-enterprise.json')) ? LOCAL_DATA : MONOREPO_DATA;
+
+function resolveDataDir() {
+  if (fs.existsSync(path.join(LOCAL_DATA, 'mitre-attack-enterprise.json'))) return LOCAL_DATA;
+  if (fs.existsSync(path.join(MONOREPO_DATA, 'mitre-attack-enterprise.json'))) return MONOREPO_DATA;
+  throw new Error(
+    'MITRE ATT&CK data not found. Checked:\n' +
+    `  - ${LOCAL_DATA}\n` +
+    `  - ${MONOREPO_DATA}\n` +
+    'Ensure mitre-attack-enterprise.json and mitre-attack-groups.json are in apps/mcp/data/.'
+  );
+}
+
+const DATA_DIR = resolveDataDir();
 const TECHNIQUES_DATA = path.join(DATA_DIR, 'mitre-attack-enterprise.json');
 const GROUPS_DATA = path.join(DATA_DIR, 'mitre-attack-groups.json');
 
