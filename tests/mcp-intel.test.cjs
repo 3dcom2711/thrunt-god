@@ -329,6 +329,138 @@ describe('tool handlers with intel DB', () => {
     });
   });
 
+  // ── compare_detections ────────────────────────────────────────────────
+
+  describe('tools.cjs - handleCompareDetections', () => {
+    it('returns sources array with format, rule_id, title, severity for technique_id=T1059', async () => {
+      const { handleCompareDetections } = loadTools();
+      const result = await handleCompareDetections(db, { technique_id: 'T1059' });
+      assert.ok(!result.isError, 'should not be an error');
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.technique_id, 'T1059');
+      assert.ok(Array.isArray(data.sources), 'should have sources array');
+      assert.ok(typeof data.source_count === 'number', 'should have source_count');
+
+      if (data.sources.length > 0) {
+        const src = data.sources[0];
+        assert.ok('format' in src, 'source should have format');
+        assert.ok('rule_id' in src, 'source should have rule_id');
+        assert.ok('title' in src, 'source should have title');
+        assert.ok('severity' in src, 'source should have severity');
+      }
+    });
+
+    it('returns results from FTS-matched techniques for query="powershell"', async () => {
+      const { handleCompareDetections } = loadTools();
+      const result = await handleCompareDetections(db, { query: 'powershell' });
+      assert.ok(!result.isError, 'should not be an error');
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(data.technique_id, 'should resolve a technique from FTS');
+      assert.ok(Array.isArray(data.sources));
+    });
+
+    it('returns empty sources for nonexistent technique', async () => {
+      const { handleCompareDetections } = loadTools();
+      const result = await handleCompareDetections(db, { technique_id: 'T9999' });
+      assert.ok(!result.isError, 'should not be an error even for unknown technique');
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.source_count, 0);
+      assert.deepEqual(data.sources, []);
+    });
+
+    it('returns isError when neither technique_id nor query provided', async () => {
+      const { handleCompareDetections } = loadTools();
+      const result = await handleCompareDetections(db, {});
+      assert.equal(result.isError, true);
+    });
+  });
+
+  // ── suggest_detections ──────────────────────────────────────────────────
+
+  describe('tools.cjs - handleSuggestDetections', () => {
+    it('returns suggestions with similar_rules for an uncovered technique', async () => {
+      const { handleSuggestDetections } = loadTools();
+      // T1199 (Trusted Relationship) has no bundled detections
+      const result = await handleSuggestDetections(db, { technique_id: 'T1199' });
+      assert.ok(!result.isError, 'should not be an error');
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.technique_id, 'T1199');
+      assert.ok(data.technique_name, 'should have technique_name');
+      assert.ok('suggestion_basis' in data, 'should have suggestion_basis');
+      assert.ok(Array.isArray(data.similar_rules), 'should have similar_rules array');
+      assert.ok(Array.isArray(data.data_sources), 'should have data_sources array');
+    });
+
+    it('returns content with JSON containing technique_id, technique_name, suggestion_basis, similar_rules, data_sources', async () => {
+      const { handleSuggestDetections } = loadTools();
+      const result = await handleSuggestDetections(db, { technique_id: 'T1059' });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok('technique_id' in data);
+      assert.ok('technique_name' in data);
+      assert.ok('suggestion_basis' in data);
+      assert.ok('similar_rules' in data);
+      assert.ok('data_sources' in data);
+    });
+
+    it('returns isError for nonexistent technique_id', async () => {
+      const { handleSuggestDetections } = loadTools();
+      const result = await handleSuggestDetections(db, { technique_id: 'T9999' });
+      assert.equal(result.isError, true);
+      assert.ok(result.content[0].text.includes('not found'));
+    });
+  });
+
+  // ── analyze_coverage (profile mode) ─────────────────────────────────────
+
+  describe('tools.cjs - handleAnalyzeCoverage (profile mode)', () => {
+    it('returns coverage analysis with profile="ransomware" (no group_id)', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, { profile: 'ransomware' });
+      assert.ok(!result.isError, 'should not be an error');
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(typeof data.total_techniques === 'number');
+      assert.ok(typeof data.covered === 'number');
+      assert.ok(typeof data.uncovered === 'number');
+      assert.ok(typeof data.gap_percent === 'number');
+      assert.ok(Array.isArray(data.by_tactic));
+    });
+
+    it('includes profile_name field when using profile parameter', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, { profile: 'apt' });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.profile_name, 'apt');
+    });
+
+    it('group_id takes precedence when both group_id and profile provided', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, { group_id: 'G0007', profile: 'ransomware' });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.equal(data.group_id, 'G0007');
+      assert.ok(data.group_name);
+      // Should NOT have profile_name since group_id takes precedence
+      assert.ok(!data.profile_name, 'should not have profile_name when group_id is used');
+    });
+
+    it('returns isError when neither group_id nor profile provided', async () => {
+      const { handleAnalyzeCoverage } = loadTools();
+      const result = await handleAnalyzeCoverage(db, {});
+      assert.equal(result.isError, true);
+      assert.ok(result.content[0].text.includes('Available'));
+    });
+  });
+
   // ── analyze_coverage ─────────────────────────────────────────────────
 
   describe('analyze_coverage', () => {
@@ -439,6 +571,28 @@ describe('server.cjs stdout purity', () => {
     assert.doesNotThrow(() => {
       new Function('require', 'module', 'exports', '__dirname', '__filename', 'process', code);
     }, 'server.cjs should have valid JavaScript syntax');
+  });
+});
+
+// ── registerTools count ───────────────────────────────────────────────────
+
+describe('tools.cjs - registerTools count', () => {
+  it('registers exactly 7 tools on the server', () => {
+    const { registerTools } = loadTools();
+    const tmpDir = makeTempDir();
+    const { openIntelDb } = loadIntel();
+    const testDb = openIntelDb({ dbDir: tmpDir });
+
+    let toolCount = 0;
+    const mockServer = {
+      tool: () => { toolCount++; },
+    };
+
+    registerTools(mockServer, testDb);
+    testDb.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    assert.equal(toolCount, 7, `expected 7 tool registrations, got ${toolCount}`);
   });
 });
 
