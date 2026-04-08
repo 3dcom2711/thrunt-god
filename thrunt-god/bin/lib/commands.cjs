@@ -3490,7 +3490,7 @@ function cmdCaseNew(cwd, name, options, raw) {
               technique_id: result.technique_id,
               technique_name: result.technique_name,
               source_count: result.source_count,
-              sources: result.sources.map(s => s.source),
+              sources: result.sources.map(s => s.format),
             });
           }
         }
