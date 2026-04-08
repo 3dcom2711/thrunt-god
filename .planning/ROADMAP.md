@@ -260,8 +260,8 @@ Plans:
   4. ATT&CK STIX relationships (group-to-technique, campaign-to-software, software-to-technique) are automatically imported into the knowledge graph from intel.db on program initialization
 **Plans:** 2 plans
 Plans:
-- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
-- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
+- [ ] 56-01-PLAN.md — Knowledge graph data layer (knowledge.cjs): entity/relation schema, decision/learning logging, FTS search, STIX auto-population
+- [ ] 56-02-PLAN.md — Wire KG into openProgramDb lifecycle, register 3 MCP tools (query_knowledge, log_decision, log_learning)
 
 ### Phase 57: Agent Wiring & Workflow Integration
 **Goal**: Hunt agents invoke MCP tools natively, new-case initialization includes past-case and detection coverage lookups automatically, and pre-built prompts give hunters a running start for common scenarios
@@ -273,8 +273,8 @@ Plans:
   3. A hunter can select a pre-built MCP prompt (ransomware readiness, APT emulation, detection sprint, SOC investigation) and immediately get a structured starting context with relevant ATT&CK techniques, existing detection coverage, and past case references
 **Plans:** 2 plans
 Plans:
-- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
-- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
+- [ ] 57-01-PLAN.md — [To be planned]
+- [ ] 57-02-PLAN.md — [To be planned]
 
 ## Progress
 
@@ -304,6 +304,6 @@ Plans:
 | 52. Cross-Case Intelligence | 2/2 | Complete    | 2026-04-08 |
 | 53. MCP Server & ATT&CK Tools | 2/2 | Complete    | 2026-04-08 |
 | 54. Detection Rule Ingestion | 2/2 | Complete    | 2026-04-08 |
-| 55. Detection Coverage & Gap Analysis | 2/2 | Complete   | 2026-04-08 |
-| 56. Knowledge Graph | 0/TBD | Not started | - |
+| 55. Detection Coverage & Gap Analysis | 2/2 | Complete    | 2026-04-08 |
+| 56. Knowledge Graph | 0/2 | In progress | - |
 | 57. Agent Wiring & Workflow Integration | 0/TBD | Not started | - |
