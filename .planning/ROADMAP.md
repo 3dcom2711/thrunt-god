@@ -271,10 +271,10 @@ Plans:
   1. The query-writer, signal-triager, and hunt-planner agent frontmatter files list mcp__thrunt_hunt_intel__* tools so agents can call ATT&CK lookup, coverage analysis, and detection search without manual configuration
   2. Running `thrunt new-case` automatically queries past cases for similar signals and runs detection coverage for the case's stated technique focus — the hunter sees both results before writing their first hypothesis
   3. A hunter can select a pre-built MCP prompt (ransomware readiness, APT emulation, detection sprint, SOC investigation) and immediately get a structured starting context with relevant ATT&CK techniques, existing detection coverage, and past case references
-**Plans:** 2 plans
+**Plans:** 2/2 plans
 Plans:
-- [ ] 57-01-PLAN.md — [To be planned]
-- [ ] 57-02-PLAN.md — [To be planned]
+- [ ] 57-01-PLAN.md — Agent frontmatter MCP tool wiring + cmdCaseNew detection coverage auto-lookup
+- [ ] 57-02-PLAN.md — Pre-built MCP workflow prompts (ransomware, APT, detection sprint, SOC investigation)
 
 ## Progress
 
@@ -305,5 +305,5 @@ Plans:
 | 53. MCP Server & ATT&CK Tools | 2/2 | Complete    | 2026-04-08 |
 | 54. Detection Rule Ingestion | 2/2 | Complete    | 2026-04-08 |
 | 55. Detection Coverage & Gap Analysis | 2/2 | Complete    | 2026-04-08 |
-| 56. Knowledge Graph | 2/2 | Complete   | 2026-04-08 |
-| 57. Agent Wiring & Workflow Integration | 0/TBD | Not started | - |
+| 56. Knowledge Graph | 2/2 | Complete    | 2026-04-08 |
+| 57. Agent Wiring & Workflow Integration | 0/2 | In progress | - |
