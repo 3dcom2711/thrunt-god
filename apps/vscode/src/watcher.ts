@@ -2,6 +2,12 @@ import * as vscode from 'vscode';
 import { HUNT_DIRS } from './constants';
 import type { ArtifactType } from './types';
 
+/** Strip cases/<slug>/ prefix so resolveArtifactType sees flat-style paths */
+function stripCasePrefix(relative: string): string {
+  const m = /^cases\/[^/]+\/(.+)$/.exec(relative);
+  return m ? m[1] : relative;
+}
+
 function toArtifactRelativePath(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
 
@@ -9,15 +15,15 @@ function toArtifactRelativePath(filePath: string): string {
     const marker = `/${huntDir}/`;
     const markerIndex = normalized.lastIndexOf(marker);
     if (markerIndex >= 0) {
-      return normalized.slice(markerIndex + marker.length);
+      return stripCasePrefix(normalized.slice(markerIndex + marker.length));
     }
 
     if (normalized === huntDir || normalized.startsWith(`${huntDir}/`)) {
-      return normalized.slice(huntDir.length).replace(/^\/+/, '');
+      return stripCasePrefix(normalized.slice(huntDir.length).replace(/^\/+/, ''));
     }
   }
 
-  const fallback = normalized.replace(/^\/+/, '');
+  const fallback = stripCasePrefix(normalized.replace(/^\/+/, ''));
   const parts = fallback.split('/').filter(Boolean);
   const filename = parts[parts.length - 1] ?? '';
   const directContainer = parts[parts.length - 2] ?? '';

@@ -145,6 +145,55 @@ describe('resolveArtifactType', () => {
       null
     );
   });
+
+  // --- Case-nested artifact resolution (cases/<slug>/ prefix stripped) ---
+
+  it('resolves cases/<slug>/MISSION.md to mission type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/MISSION.md');
+    assert.deepEqual(result, { type: 'mission', id: 'MISSION' });
+  });
+
+  it('resolves cases/<slug>/QUERIES/QRY-*.md to query type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/QUERIES/QRY-001.md');
+    assert.deepEqual(result, { type: 'query', id: 'QRY-001' });
+  });
+
+  it('resolves cases/<slug>/RECEIPTS/RCT-*.md to receipt type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/RECEIPTS/RCT-001.md');
+    assert.deepEqual(result, { type: 'receipt', id: 'RCT-001' });
+  });
+
+  it('resolves cases/<slug>/HYPOTHESES.md to hypotheses type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/HYPOTHESES.md');
+    assert.deepEqual(result, { type: 'hypotheses', id: 'HYPOTHESES' });
+  });
+
+  it('resolves cases/<slug>/STATE.md to state type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/STATE.md');
+    assert.deepEqual(result, { type: 'state', id: 'STATE' });
+  });
+
+  it('resolves cases/<slug>/HUNTMAP.md to huntmap type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/HUNTMAP.md');
+    assert.deepEqual(result, { type: 'huntmap', id: 'HUNTMAP' });
+  });
+
+  it('resolves cases/<slug>/EVIDENCE_REVIEW.md to evidenceReview type', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/EVIDENCE_REVIEW.md');
+    assert.deepEqual(result, { type: 'evidenceReview', id: 'EVIDENCE_REVIEW' });
+  });
+
+  // --- Flat-path regression checks (ensure no regression from case prefix stripping) ---
+
+  it('still resolves flat .planning/MISSION.md after case prefix fix (regression)', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/MISSION.md');
+    assert.deepEqual(result, { type: 'mission', id: 'MISSION' });
+  });
+
+  it('still resolves flat .planning/QUERIES/QRY-*.md after case prefix fix (regression)', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/QUERIES/QRY-001.md');
+    assert.deepEqual(result, { type: 'query', id: 'QRY-001' });
+  });
 });
 
 // ---------------------------------------------------------------------------

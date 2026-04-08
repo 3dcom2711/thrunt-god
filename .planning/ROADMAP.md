@@ -184,7 +184,10 @@ Plans:
   1. Program STATE.md aggregates active/closed/stale case counts, overall technique coverage gaps, and a case timeline — readable without opening individual case directories
   2. The VS Code extension webview opens a program-level case overview panel showing each case's status, opened/closed date, and technique coverage metrics
   3. The extension's artifact watcher resolves huntmaps, receipts, and findings inside .planning/cases/<slug>/ subdirectories — decorations and sidebar entries appear for case artifacts
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ### Phase 52: Cross-Case Intelligence
 **Goal**: Hunters starting a new case automatically see relevant past cases; hunters can explicitly search the full case archive
@@ -195,7 +198,10 @@ Plans:
   2. Opening a new case with `thrunt new-case` automatically queries past cases and surfaces any matches for similar signals, hypotheses, or techniques before the hunter writes their first query
   3. Running `thrunt-tools case-search <query>` returns matching past cases with case name, matched text in context, technique overlap, and outcome summary — optionally filtered by program
   4. Search results include enough context that a hunter can decide whether a past case is relevant without opening it
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ### Phase 53: MCP Server & ATT&CK Tools
 **Goal**: The @thrunt/mcp-hunt-intel MCP server is running and agents can query ATT&CK technique data, threat groups, Navigator layers, and coverage gaps through it
@@ -208,7 +214,10 @@ Plans:
   4. An agent can generate an ATT&CK Navigator v4.5 layer file for a custom technique set, a coverage snapshot, a specific threat group, or a gap analysis
   5. An agent can request a per-tactic coverage breakdown and identify which techniques used by a named threat group have no detection coverage
   6. The global ~/.thrunt/intel.db is populated with ATT&CK STIX data on first run and shared safely between CLI and MCP server via WAL mode and busy_timeout
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ### Phase 54: Detection Rule Ingestion
 **Goal**: Detection rules from Sigma, Splunk ESCU, Elastic, and KQL sources are parsed, normalized, and searchable in a unified table
@@ -221,7 +230,10 @@ Plans:
   4. A KQL markdown file is parsed and produces a record with detection query, Microsoft table references, and MITRE tags
   5. All parsed rules land in a unified detections table with FTS5 external content, searchable by technique ID, tactic, severity, source format, or process name
   6. Bundled SigmaHQ core rules are indexed on first run; setting SIGMA_PATHS, SPLUNK_PATHS, or ELASTIC_PATHS environment variables causes those custom rule directories to be indexed in addition to bundled rules
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ### Phase 55: Detection Coverage & Gap Analysis
 **Goal**: Hunters can compare detection coverage across sources, identify gaps against named threat profiles, and receive concrete suggestions for uncovered techniques
@@ -231,7 +243,10 @@ Plans:
   1. Given a technique ID or topic, a hunter can see which detection sources (Sigma, ESCU, Elastic, KQL) have coverage and how those rules differ
   2. Given a named threat profile (ransomware, APT, initial-access, persistence, credential-access, defense-evasion), a hunter can see which techniques in that profile have no detection and which have partial coverage
   3. For any uncovered technique, the system suggests detections based on available data sources and patterns extracted from existing rules in the same tactic family
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ### Phase 56: Knowledge Graph
 **Goal**: Hunt decisions, learnings, and threat relationships persist across sessions as a queryable knowledge graph that grows with every hunt
@@ -242,7 +257,10 @@ Plans:
   2. When a hunter makes a decision during a hunt (e.g., choosing a query approach, ruling out a hypothesis), that decision is logged with context and reasoning and is retrievable in future hunts on the same topic
   3. Learnings and tribal knowledge patterns written during a hunt are persisted and surfaced when a new hunt touches the same techniques or threat actors
   4. ATT&CK STIX relationships (group-to-technique, campaign-to-software, software-to-technique) are automatically imported into the knowledge graph from intel.db on program initialization
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ### Phase 57: Agent Wiring & Workflow Integration
 **Goal**: Hunt agents invoke MCP tools natively, new-case initialization includes past-case and detection coverage lookups automatically, and pre-built prompts give hunters a running start for common scenarios
@@ -252,7 +270,10 @@ Plans:
   1. The query-writer, signal-triager, and hunt-planner agent frontmatter files list mcp__thrunt_hunt_intel__* tools so agents can call ATT&CK lookup, coverage analysis, and detection search without manual configuration
   2. Running `thrunt new-case` automatically queries past cases for similar signals and runs detection coverage for the case's stated technique focus — the hunter sees both results before writing their first hypothesis
   3. A hunter can select a pre-built MCP prompt (ransomware readiness, APT emulation, detection sprint, SOC investigation) and immediately get a structured starting context with relevant ATT&CK techniques, existing detection coverage, and past case references
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
+- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
 
 ## Progress
 
@@ -277,8 +298,8 @@ Plans:
 | 47. Contract Test Suite & Plugin Lifecycle | 2/2 | Complete | 2026-03-31 |
 | 48. Built-in Connector Migration | 2/2 | Complete | 2026-03-31 |
 | 49. Reusable CI & Ecosystem Tooling | 2/2 | Complete | 2026-03-31 |
-| 50. Program & Case Hierarchy | 3/3 | Complete   | 2026-04-08 |
-| 51. Program Dashboard & Extension Wiring | 0/TBD | Not started | - |
+| 50. Program & Case Hierarchy | 3/3 | Complete    | 2026-04-08 |
+| 51. Program Dashboard & Extension Wiring | 0/2 | Planned | - |
 | 52. Cross-Case Intelligence | 0/TBD | Not started | - |
 | 53. MCP Server & ATT&CK Tools | 0/TBD | Not started | - |
 | 54. Detection Rule Ingestion | 0/TBD | Not started | - |
