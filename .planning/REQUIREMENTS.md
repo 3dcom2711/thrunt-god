@@ -1,0 +1,145 @@
+# Requirements: THRUNT GOD v3.0
+
+**Defined:** 2026-04-07
+**Core Value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
+
+## v3.0 Requirements
+
+Requirements for Hunt Program Intelligence release. Each maps to roadmap phases.
+
+### Hierarchy
+
+- [x] **HIER-01**: Program created via new-program establishes shared context (MISSION, STATE, ENVIRONMENT) at .planning/ root
+- [x] **HIER-02**: Cases created via new-case live in isolated .planning/cases/<slug>/ directories with own huntmap, hypotheses, queries, receipts
+- [x] **HIER-03**: Program STATE.md tracks case roster with status (active/closed/stale), opened/closed dates, and technique coverage
+- [x] **HIER-04**: All existing modules (huntmap, evidence, phase, state, validate) resolve artifacts correctly inside case subdirectories via refactored planningPaths
+- [x] **HIER-05**: Existing flat .planning/ hunts can be migrated into cases/ format via thrunt-tools migrate-case command
+
+### Intelligence
+
+- [ ] **INTEL-01**: Past case artifacts (findings, hypotheses, techniques, IOCs, outcomes) are indexed into SQLite+FTS5 on case close
+- [ ] **INTEL-02**: new-case auto-searches past cases for similar signals, hypotheses, and techniques, presenting matches to the hunter
+- [ ] **INTEL-03**: thrunt-tools case-search command enables explicit full-text search across all past cases with program filter
+- [ ] **INTEL-04**: Case search results include case name, match context, technique overlap, and outcome summary
+
+### MCP Server
+
+- [ ] **MCP-01**: @thrunt/mcp-hunt-intel MCP server runs via stdio transport with tool timeout SLA and stdout purity enforcement
+- [ ] **MCP-02**: ATT&CK technique lookup by ID, full-text search, filter by tactic and platform
+- [ ] **MCP-03**: ATT&CK threat group lookup, group-to-technique mapping, software/malware correlation
+- [ ] **MCP-04**: ATT&CK Navigator v4.5 layer generation (custom, coverage, group, gap layers)
+- [ ] **MCP-05**: Coverage analysis with per-tactic breakdown, gap identification against threat groups
+- [ ] **MCP-06**: Global intel.db at ~/.thrunt/ with ATT&CK STIX data indexed into SQLite+FTS5, WAL mode, busy_timeout for CLI coexistence
+
+### Detection
+
+- [ ] **DET-01**: Sigma YAML parser extracts id, title, tags (MITRE technique IDs), level, logsource, detection logic, falsepositives
+- [ ] **DET-02**: Splunk ESCU YAML parser extracts detection metadata, analytic stories, data models
+- [ ] **DET-03**: Elastic TOML parser extracts rule metadata, query, MITRE mappings
+- [ ] **DET-04**: KQL markdown parser extracts detection queries, Microsoft table references, MITRE tags
+- [ ] **DET-05**: Unified detections table with FTS5 external content tables, searchable by technique/tactic/severity/source/process name
+- [ ] **DET-06**: Bundled SigmaHQ core rules + configurable SIGMA_PATHS/SPLUNK_PATHS/ELASTIC_PATHS env vars for custom rule directories
+- [ ] **DET-07**: Cross-source detection coverage comparison for any technique or topic
+- [ ] **DET-08**: Gap identification against threat profiles (ransomware, APT, initial-access, persistence, credential-access, defense-evasion)
+- [ ] **DET-09**: Detection suggestions for uncovered techniques based on available data sources
+
+### Knowledge
+
+- [ ] **KNOW-01**: Knowledge graph with entities (threat_actor, technique, detection, campaign, tool, vulnerability, data_source) and typed relations stored in program.db
+- [ ] **KNOW-02**: Decision logging captures why choices were made during hunts with context and reasoning
+- [ ] **KNOW-03**: Learnings and patterns persist across hunt sessions as reusable tribal knowledge
+- [ ] **KNOW-04**: Knowledge graph auto-populated from ATT&CK STIX data (groups, campaigns, software relationships)
+
+### Dashboard
+
+- [ ] **DASH-01**: Program-level case status rollup in STATE.md aggregating active/closed/stale cases with technique coverage gaps
+- [ ] **DASH-02**: VS Code extension webview showing program-level case overview with status, timeline, and coverage metrics
+- [ ] **DASH-03**: Extension artifact watcher correctly resolves case artifacts in .planning/cases/<slug>/ subdirectories
+
+### Wiring
+
+- [ ] **WIRE-01**: Hunt agents (query-writer, signal-triager, hunt-planner) have mcp__thrunt_hunt_intel__* tools in their frontmatter
+- [ ] **WIRE-02**: new-case workflow auto-searches past cases and detection coverage on case initialization
+- [ ] **WIRE-03**: Pre-built MCP prompts for common workflows (ransomware readiness, APT emulation, detection sprint, SOC investigation)
+
+## v3.1 Requirements
+
+Deferred to future release. Tracked but not in current roadmap.
+
+### Detection Engineering
+
+- **DENG-01**: Detection template generation from existing rule patterns
+- **DENG-02**: Risk-Based Alerting (RBA) structure generation for Splunk
+- **DENG-03**: Detection quality scoring and maturity assessment
+
+### Advanced Intelligence
+
+- **AINT-01**: Semantic/vector search across case artifacts (beyond keyword FTS5)
+- **AINT-02**: Automated technique clustering and threat pattern recognition
+- **AINT-03**: Cross-program intelligence sharing (multi-team environments)
+
+### MCP Extensions
+
+- **MCPX-01**: MCP resource subscriptions for live updates on index changes
+- **MCPX-02**: Dynamic table creation at runtime for ad-hoc analysis storage
+- **MCPX-03**: Sublime Security detection rule parser (5th format)
+- **MCPX-04**: MCP sampling integration for LLM-enhanced contextual analysis
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Vector/semantic search | FTS5 keyword search is table stakes and sufficient for v3.0; semantic deferred to v3.1 |
+| Real-time NATS streaming | No supporting infrastructure; file-based indexing sufficient |
+| Cross-language query translation | Too error-prone; pack-based retargeting only (v2.1 decision) |
+| Multi-team knowledge sharing | Single-program scope for v3.0; cross-program deferred to v3.1 |
+| Sublime Security parser | Lower priority 5th format; Sigma/ESCU/Elastic/KQL cover primary use cases |
+| MCP client in CLI | CLI uses thrunt-tools subprocess bridge; agents call MCP tools natively |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| HIER-01 | Phase 50 | Complete |
+| HIER-02 | Phase 50 | Complete |
+| HIER-03 | Phase 50 | Complete |
+| HIER-04 | Phase 50 | Complete |
+| HIER-05 | Phase 50 | Complete |
+| INTEL-01 | Phase 52 | Pending |
+| INTEL-02 | Phase 52 | Pending |
+| INTEL-03 | Phase 52 | Pending |
+| INTEL-04 | Phase 52 | Pending |
+| MCP-01 | Phase 53 | Pending |
+| MCP-02 | Phase 53 | Pending |
+| MCP-03 | Phase 53 | Pending |
+| MCP-04 | Phase 53 | Pending |
+| MCP-05 | Phase 53 | Pending |
+| MCP-06 | Phase 53 | Pending |
+| DET-01 | Phase 54 | Pending |
+| DET-02 | Phase 54 | Pending |
+| DET-03 | Phase 54 | Pending |
+| DET-04 | Phase 54 | Pending |
+| DET-05 | Phase 54 | Pending |
+| DET-06 | Phase 54 | Pending |
+| DET-07 | Phase 55 | Pending |
+| DET-08 | Phase 55 | Pending |
+| DET-09 | Phase 55 | Pending |
+| KNOW-01 | Phase 56 | Pending |
+| KNOW-02 | Phase 56 | Pending |
+| KNOW-03 | Phase 56 | Pending |
+| KNOW-04 | Phase 56 | Pending |
+| DASH-01 | Phase 51 | Pending |
+| DASH-02 | Phase 51 | Pending |
+| DASH-03 | Phase 51 | Pending |
+| WIRE-01 | Phase 57 | Pending |
+| WIRE-02 | Phase 57 | Pending |
+| WIRE-03 | Phase 57 | Pending |
+
+**Coverage:**
+- v3.0 requirements: 34 total
+- Mapped to phases: 34
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-04-07*
+*Last updated: 2026-04-07 after initial definition*
