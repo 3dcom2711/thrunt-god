@@ -17,6 +17,14 @@ const {
   getThreatProfile,
   listThreatProfiles,
 } = require('./coverage.cjs');
+const {
+  searchEntities,
+  getRelations,
+  logDecision,
+  getDecisions,
+  logLearning,
+  getLearnings,
+} = require('./knowledge.cjs');
 
 // ─── Timeout wrapper ───────────────────────────────────────────────────────
 
@@ -404,6 +412,72 @@ async function handleAnalyzeCoverage(db, args) {
   };
 }
 
+// ─── Knowledge Graph Tool Handlers (Phase 56) ────────────────────────────
+
+/**
+ * Handle query_knowledge tool call.
+ * Searches entities by text and includes related entities for each match.
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ query: string, type?: string, limit?: number }} args
+ * @returns {object} MCP tool response
+ */
+async function handleQueryKnowledge(db, args) {
+  const { query, type, limit = 10 } = args;
+  const entities = searchEntities(db, query, { type, limit });
+
+  if (entities.length === 0) {
+    return {
+      content: [{ type: 'text', text: 'No knowledge graph entities match query' }],
+    };
+  }
+
+  // Enrich each entity with its relations (up to 5 per entity)
+  const enriched = entities.map(entity => {
+    const relations = getRelations(db, entity.id, { limit: 5 });
+    return { ...entity, relations };
+  });
+
+  return {
+    content: [{ type: 'text', text: JSON.stringify(enriched, null, 2) }],
+  };
+}
+
+/**
+ * Handle log_decision tool call.
+ * Logs a decision and returns recent decisions for the same technique.
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ case_slug: string, technique_id: string, decision: string, reasoning?: string, context?: string }} args
+ * @returns {object} MCP tool response
+ */
+async function handleLogDecision(db, args) {
+  const { case_slug, technique_id, decision, reasoning, context } = args;
+  logDecision(db, { case_slug, technique_id, decision, reasoning, context });
+
+  const related_decisions = getDecisions(db, { technique_id, limit: 5 });
+
+  return {
+    content: [{ type: 'text', text: JSON.stringify({ logged: true, technique_id, related_decisions }, null, 2) }],
+  };
+}
+
+/**
+ * Handle log_learning tool call.
+ * Logs a learning and returns recent learnings on the same topic.
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ topic: string, pattern: string, detail?: string, technique_ids?: string, case_slug?: string }} args
+ * @returns {object} MCP tool response
+ */
+async function handleLogLearning(db, args) {
+  const { topic, pattern, detail, technique_ids, case_slug } = args;
+  logLearning(db, { topic, pattern, detail, technique_ids, case_slug });
+
+  const related_learnings = getLearnings(db, { topic, limit: 5 });
+
+  return {
+    content: [{ type: 'text', text: JSON.stringify({ logged: true, topic, related_learnings }, null, 2) }],
+  };
+}
+
 // ─── Tool Registration ─────────────────────────────────────────────────────
 
 /**
@@ -493,6 +567,46 @@ function registerTools(server, db) {
     },
     withTimeout(async (args) => handleSuggestDetections(db, args))
   );
+
+  // Tool 8: query_knowledge (Phase 56)
+  server.tool(
+    'query_knowledge',
+    'Search the hunt knowledge graph for entities (threat actors, techniques, tools, campaigns, vulnerabilities, data sources) and their relationships. Returns matching entities with related connections.',
+    {
+      query: z.string().min(1),
+      type: z.enum(['threat_actor', 'technique', 'detection', 'campaign', 'tool', 'vulnerability', 'data_source']).optional(),
+      limit: z.number().int().min(1).max(50).default(10),
+    },
+    withTimeout(async (args) => handleQueryKnowledge(db, args))
+  );
+
+  // Tool 9: log_decision (Phase 56)
+  server.tool(
+    'log_decision',
+    'Log a hunt decision with reasoning for future reference. Decisions are tagged by technique and case, enabling institutional memory across hunt sessions.',
+    {
+      case_slug: z.string(),
+      technique_id: z.string(),
+      decision: z.string(),
+      reasoning: z.string().optional(),
+      context: z.string().optional(),
+    },
+    withTimeout(async (args) => handleLogDecision(db, args))
+  );
+
+  // Tool 10: log_learning (Phase 56)
+  server.tool(
+    'log_learning',
+    'Log a hunt learning or pattern for future reference. Learnings are tagged by topic and technique, surfacing when future hunts touch the same areas.',
+    {
+      topic: z.string(),
+      pattern: z.string(),
+      detail: z.string().optional(),
+      technique_ids: z.string().optional().describe('Comma-separated ATT&CK technique IDs'),
+      case_slug: z.string().optional(),
+    },
+    withTimeout(async (args) => handleLogLearning(db, args))
+  );
 }
 
 // ─── Exports ───────────────────────────────────────────────────────────────
@@ -507,5 +621,8 @@ module.exports = {
   handleAnalyzeCoverage,
   handleCompareDetections,
   handleSuggestDetections,
+  handleQueryKnowledge,
+  handleLogDecision,
+  handleLogLearning,
   withTimeout,
 };
