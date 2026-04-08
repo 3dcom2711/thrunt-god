@@ -152,7 +152,7 @@ Plans:
 - [x] **Phase 50: Program & Case Hierarchy** - Refactor planningPaths and all artifact-resolving modules; new-program and new-case commands; case migration (completed 2026-04-08)
 - [x] **Phase 51: Program Dashboard & Extension Wiring** - STATE.md case rollup, VS Code webview for program overview, extension artifact watcher for cases/ (completed 2026-04-08)
 - [x] **Phase 52: Cross-Case Intelligence** - SQLite+FTS5 case index, auto-search on new-case, case-search CLI command (completed 2026-04-08)
-- [ ] **Phase 53: MCP Server & ATT&CK Tools** - @thrunt/mcp-hunt-intel stdio server, technique/group/software lookup, Navigator layer generation, coverage analysis
+- [x] **Phase 53: MCP Server & ATT&CK Tools** - @thrunt/mcp-hunt-intel stdio server, technique/group/software lookup, Navigator layer generation, coverage analysis (completed 2026-04-08)
 - [ ] **Phase 54: Detection Rule Ingestion** - Multi-format parsers (Sigma, ESCU, Elastic TOML, KQL markdown), unified detections table, bundled SigmaHQ rules
 - [ ] **Phase 55: Detection Coverage & Gap Analysis** - Cross-source coverage comparison, gap identification against threat profiles, detection suggestions
 - [ ] **Phase 56: Knowledge Graph** - Persistent entity/relation graph in program.db, decision logging, institutional memory, ATT&CK STIX auto-population
@@ -232,8 +232,9 @@ Plans:
   6. Bundled SigmaHQ core rules are indexed on first run; setting SIGMA_PATHS, SPLUNK_PATHS, or ELASTIC_PATHS environment variables causes those custom rule directories to be indexed in addition to bundled rules
 **Plans:** 2 plans
 Plans:
-- [ ] 51-01-PLAN.md — Watcher artifact fix for cases/ prefix + CLI cmdProgramRollup for STATE.md rollup
-- [ ] 51-02-PLAN.md — VS Code program dashboard webview panel (shared types, panel provider, store method, Preact UI)
+- [ ] 54-01-PLAN.md — Four format-specific parsers (Sigma, ESCU, Elastic, KQL), detections schema, directory indexers, FTS search, test fixtures
+- [ ] 54-02-PLAN.md — Wire detections into openIntelDb lifecycle, bundle SigmaHQ core rules, env var path handling, integration tests
+
 
 ### Phase 55: Detection Coverage & Gap Analysis
 **Goal**: Hunters can compare detection coverage across sources, identify gaps against named threat profiles, and receive concrete suggestions for uncovered techniques
