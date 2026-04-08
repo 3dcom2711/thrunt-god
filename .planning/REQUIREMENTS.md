@@ -58,8 +58,8 @@ Requirements for Hunt Program Intelligence release. Each maps to roadmap phases.
 
 ### Wiring
 
-- [ ] **WIRE-01**: Hunt agents (query-writer, signal-triager, hunt-planner) have mcp__thrunt_hunt_intel__* tools in their frontmatter
-- [ ] **WIRE-02**: new-case workflow auto-searches past cases and detection coverage on case initialization
+- [x] **WIRE-01**: Hunt agents (query-writer, signal-triager, hunt-planner) have mcp__thrunt_hunt_intel__* tools in their frontmatter
+- [x] **WIRE-02**: new-case workflow auto-searches past cases and detection coverage on case initialization
 - [ ] **WIRE-03**: Pre-built MCP prompts for common workflows (ransomware readiness, APT emulation, detection sprint, SOC investigation)
 
 ## v3.1 Requirements
@@ -131,8 +131,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | DASH-01 | Phase 51 | Complete |
 | DASH-02 | Phase 51 | Complete |
 | DASH-03 | Phase 51 | Complete |
-| WIRE-01 | Phase 57 | Pending |
-| WIRE-02 | Phase 57 | Pending |
+| WIRE-01 | Phase 57 | Complete |
+| WIRE-02 | Phase 57 | Complete |
 | WIRE-03 | Phase 57 | Pending |
 
 **Coverage:**

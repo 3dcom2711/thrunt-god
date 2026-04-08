@@ -156,7 +156,7 @@ Plans:
 - [x] **Phase 54: Detection Rule Ingestion** - Multi-format parsers (Sigma, ESCU, Elastic TOML, KQL markdown), unified detections table, bundled SigmaHQ rules (completed 2026-04-08)
 - [x] **Phase 55: Detection Coverage & Gap Analysis** - Cross-source coverage comparison, gap identification against threat profiles, detection suggestions (completed 2026-04-08)
 - [x] **Phase 56: Knowledge Graph** - Persistent entity/relation graph in program.db, decision logging, institutional memory, ATT&CK STIX auto-population (completed 2026-04-08)
-- [ ] **Phase 57: Agent Wiring & Workflow Integration** - MCP tools in agent frontmatter, new-case auto-workflow, pre-built MCP prompts
+- [x] **Phase 57: Agent Wiring & Workflow Integration** - MCP tools in agent frontmatter, new-case auto-workflow, pre-built MCP prompts (completed 2026-04-08)
 
 ## Phase Details
 
@@ -271,7 +271,7 @@ Plans:
   1. The query-writer, signal-triager, and hunt-planner agent frontmatter files list mcp__thrunt_hunt_intel__* tools so agents can call ATT&CK lookup, coverage analysis, and detection search without manual configuration
   2. Running `thrunt new-case` automatically queries past cases for similar signals and runs detection coverage for the case's stated technique focus — the hunter sees both results before writing their first hypothesis
   3. A hunter can select a pre-built MCP prompt (ransomware readiness, APT emulation, detection sprint, SOC investigation) and immediately get a structured starting context with relevant ATT&CK techniques, existing detection coverage, and past case references
-**Plans:** 2/2 plans
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 57-01-PLAN.md — Agent frontmatter MCP tool wiring + cmdCaseNew detection coverage auto-lookup
 - [ ] 57-02-PLAN.md — Pre-built MCP workflow prompts (ransomware, APT, detection sprint, SOC investigation)
@@ -306,4 +306,4 @@ Plans:
 | 54. Detection Rule Ingestion | 2/2 | Complete    | 2026-04-08 |
 | 55. Detection Coverage & Gap Analysis | 2/2 | Complete    | 2026-04-08 |
 | 56. Knowledge Graph | 2/2 | Complete    | 2026-04-08 |
-| 57. Agent Wiring & Workflow Integration | 0/2 | In progress | - |
+| 57. Agent Wiring & Workflow Integration | 2/2 | Complete   | 2026-04-08 |
