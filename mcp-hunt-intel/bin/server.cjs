@@ -8,6 +8,7 @@ const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { openIntelDb } = require('../lib/intel.cjs');
 const { registerTools } = require('../lib/tools.cjs');
+const { registerPrompts } = require('../lib/prompts.cjs');
 
 const server = new McpServer({
   name: 'mcp-hunt-intel',
@@ -27,6 +28,10 @@ log('Intel database ready');
 // Register all tools
 registerTools(server, db);
 log('Tools registered');
+
+// Register pre-built workflow prompts
+registerPrompts(server, db);
+log('Prompts registered');
 
 // Connect via stdio transport
 const transport = new StdioServerTransport();
