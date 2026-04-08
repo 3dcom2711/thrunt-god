@@ -1206,6 +1206,16 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
+    case 'program': {
+      const subcommand = args[1];
+      if (subcommand === 'rollup') {
+        commands.cmdProgramRollup(cwd, raw);
+      } else {
+        error('Unknown program subcommand. Available: rollup');
+      }
+      break;
+    }
+
     default:
       error(`Unknown command: ${command}`);
   }

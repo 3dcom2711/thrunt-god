@@ -1833,3 +1833,141 @@ describe('cmdMigrateCase', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'HUNTMAP.md')), 'HUNTMAP.md should remain at root after failed migration');
   });
 });
+
+describe('cmdProgramRollup', () => {
+  const { createTempGitProject } = require('./helpers.cjs');
+  let tmpDir;
+
+  function setupProgramState(cwd, rosterEntries = []) {
+    const planDir = path.join(cwd, '.planning');
+    const rosterYaml = rosterEntries.length === 0
+      ? 'case_roster: []'
+      : 'case_roster:\n' + rosterEntries.map(e => {
+          let yaml = `  - slug: ${e.slug}\n    name: ${e.name}\n    status: ${e.status}\n    opened_at: "${e.opened_at}"`;
+          if (e.closed_at) yaml += `\n    closed_at: "${e.closed_at}"`;
+          if (e.technique_count) yaml += `\n    technique_count: "${e.technique_count}"`;
+          if (e.last_activity) yaml += `\n    last_activity: "${e.last_activity}"`;
+          return yaml;
+        }).join('\n');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      `---\nthrunt_state_version: 1.0\nstatus: active\n${rosterYaml}\n---\n\n# Program State\n`);
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+  }
+
+  function setupCaseState(cwd, slug, techniqueIds = []) {
+    const caseDir = path.join(cwd, '.planning', 'cases', slug);
+    fs.mkdirSync(caseDir, { recursive: true });
+    const techYaml = techniqueIds.length === 0
+      ? 'technique_ids: []'
+      : 'technique_ids: [' + techniqueIds.join(', ') + ']';
+    fs.writeFileSync(path.join(caseDir, 'STATE.md'),
+      `---\nstatus: active\nopened_at: "2026-04-01"\n${techYaml}\n---\n\n# Case: ${slug}\n`);
+  }
+
+  beforeEach(() => {
+    tmpDir = createTempGitProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('programRollup: empty roster generates 0 counts', () => {
+    setupProgramState(tmpDir, []);
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.success, true);
+    assert.strictEqual(parsed.active, 0);
+    assert.strictEqual(parsed.closed, 0);
+    assert.strictEqual(parsed.stale, 0);
+    assert.strictEqual(parsed.techniques, 0);
+
+    // Verify STATE.md body contains Case Summary
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('## Case Summary'), 'should contain ## Case Summary');
+    assert.ok(stateContent.includes('0 active, 0 closed, 0 stale'), 'should show zero counts');
+  });
+
+  test('programRollup: 2 cases (1 active, 1 closed) produces correct counts and table', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'case-alpha', name: 'Alpha', status: 'active', opened_at: '2026-04-01', technique_count: '2' },
+      { slug: 'case-beta', name: 'Beta', status: 'closed', opened_at: '2026-03-15', closed_at: '2026-04-05', technique_count: '1' },
+    ]);
+    setupCaseState(tmpDir, 'case-alpha', ['T1059.001', 'T1053.005']);
+    setupCaseState(tmpDir, 'case-beta', ['T1059.001']);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.active, 1);
+    assert.strictEqual(parsed.closed, 1);
+    assert.strictEqual(parsed.stale, 0);
+    assert.strictEqual(parsed.techniques, 2);
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('case-alpha'), 'table should include case-alpha');
+    assert.ok(stateContent.includes('case-beta'), 'table should include case-beta');
+    assert.ok(stateContent.includes('| Slug |'), 'should have table header');
+  });
+
+  test('programRollup: technique_ids from case STATE.md are aggregated as unique set', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'case-1', name: 'One', status: 'active', opened_at: '2026-04-01' },
+      { slug: 'case-2', name: 'Two', status: 'active', opened_at: '2026-04-02' },
+    ]);
+    // Overlapping technique: T1059.001 appears in both
+    setupCaseState(tmpDir, 'case-1', ['T1059.001', 'T1053.005']);
+    setupCaseState(tmpDir, 'case-2', ['T1059.001', 'T1078.004']);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.techniques, 3, 'unique technique count should be 3');
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('Techniques covered:'), 'should list covered techniques');
+    assert.ok(stateContent.includes('T1053.005'), 'should include T1053.005');
+    assert.ok(stateContent.includes('T1059.001'), 'should include T1059.001');
+    assert.ok(stateContent.includes('T1078.004'), 'should include T1078.004');
+  });
+
+  test('programRollup: idempotent - running twice does not duplicate Case Summary', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'case-x', name: 'Xray', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    setupCaseState(tmpDir, 'case-x');
+
+    // Run twice
+    const result1 = runThruntTools('program rollup', tmpDir);
+    assert.ok(result1.success, `First run failed: ${result1.error}`);
+    const result2 = runThruntTools('program rollup', tmpDir);
+    assert.ok(result2.success, `Second run failed: ${result2.error}`);
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    const matches = stateContent.match(/## Case Summary/g);
+    assert.strictEqual(matches.length, 1, 'should have exactly one ## Case Summary section after two runs');
+  });
+
+  test('programRollup: stale detection - case opened 30 days ago with no activity shows as stale', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setupProgramState(tmpDir, [
+      { slug: 'old-case', name: 'Old Case', status: 'active', opened_at: thirtyDaysAgo },
+    ]);
+    setupCaseState(tmpDir, 'old-case');
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.stale, 1, 'should detect 1 stale case');
+    assert.strictEqual(parsed.active, 0, 'stale cases should not count as active');
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('stale'), 'STATE.md should show stale status in table');
+  });
+});
