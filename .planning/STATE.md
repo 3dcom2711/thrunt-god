@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: executing
-stopped_at: Completed 55-01-PLAN.md
-last_updated: "2026-04-08T19:14:34.371Z"
-last_activity: 2026-04-08 -- Phase 55 Plan 01 complete (coverage.cjs data layer with threat profiles + comparison + suggestions)
+status: completed
+stopped_at: Completed 55-02-PLAN.md
+last_updated: "2026-04-08T19:21:00.696Z"
+last_activity: 2026-04-08 -- Phase 55 Plan 02 complete (compare_detections + suggest_detections MCP tools, analyze_coverage profile mode)
 progress:
   total_phases: 15
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 26
-  completed_plans: 25
-  percent: 96
+  completed_plans: 26
+  percent: 100
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 ## Current Position
 
 Phase: 55 of 57 (Detection Coverage & Gap Analysis)
-Plan: 1 of 2 plans in phase
-Status: In Progress (1/2 plans complete)
-Last activity: 2026-04-08 -- Phase 55 Plan 01 complete (coverage.cjs data layer with threat profiles + comparison + suggestions)
+Plan: 2 of 2 plans in phase
+Status: Complete (2/2 plans complete)
+Last activity: 2026-04-08 -- Phase 55 Plan 02 complete (compare_detections + suggest_detections MCP tools, analyze_coverage profile mode)
 
-Progress: [██████████] 96% (v3.0 Phase 55: 1/2 plans)
+Progress: [██████████] 100% (v3.0 Phase 55: 2/2 plans)
 
 ## Accumulated Context
 
@@ -93,6 +93,8 @@ Progress: [██████████] 96% (v3.0 Phase 55: 1/2 plans)
 - [Phase 55]: compareDetections uses LIKE query on technique_ids column for flexible sub-technique matching
 - [Phase 55]: suggestDetections finds sibling techniques in same tactic via getTechniquesByTactic, limits to 10 similar rules
 - [Phase 55]: Free-text input to compareDetections uses techniques_fts for FTS lookup then compares first match
+- [Phase 55]: handleCompareDetections accepts technique_id or query, delegates to coverage.cjs compareDetections
+- [Phase 55]: analyze_coverage uses resultMeta spread for group vs profile mode, group_id takes precedence when both provided
 
 ### Blockers/Concerns
 
@@ -100,6 +102,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-08T19:14:28.788Z
-Stopped at: Completed 55-01-PLAN.md
+Last session: 2026-04-08T19:21:00.693Z
+Stopped at: Completed 55-02-PLAN.md
 Resume: Phase 55 Plan 01 complete. coverage.cjs exports 5 functions: THREAT_PROFILES (6 profiles), getThreatProfile, listThreatProfiles, compareDetections (per-source breakdown), suggestDetections (tactic-family suggestions). 21 tests pass. Ready for 55-02 to wire MCP tools (compare_detections, suggest_detections).

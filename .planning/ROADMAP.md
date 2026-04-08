@@ -154,7 +154,7 @@ Plans:
 - [x] **Phase 52: Cross-Case Intelligence** - SQLite+FTS5 case index, auto-search on new-case, case-search CLI command (completed 2026-04-08)
 - [x] **Phase 53: MCP Server & ATT&CK Tools** - @thrunt/mcp-hunt-intel stdio server, technique/group/software lookup, Navigator layer generation, coverage analysis (completed 2026-04-08)
 - [x] **Phase 54: Detection Rule Ingestion** - Multi-format parsers (Sigma, ESCU, Elastic TOML, KQL markdown), unified detections table, bundled SigmaHQ rules (completed 2026-04-08)
-- [ ] **Phase 55: Detection Coverage & Gap Analysis** - Cross-source coverage comparison, gap identification against threat profiles, detection suggestions
+- [x] **Phase 55: Detection Coverage & Gap Analysis** - Cross-source coverage comparison, gap identification against threat profiles, detection suggestions (completed 2026-04-08)
 - [ ] **Phase 56: Knowledge Graph** - Persistent entity/relation graph in program.db, decision logging, institutional memory, ATT&CK STIX auto-population
 - [ ] **Phase 57: Agent Wiring & Workflow Integration** - MCP tools in agent frontmatter, new-case auto-workflow, pre-built MCP prompts
 
@@ -244,7 +244,7 @@ Plans:
   1. Given a technique ID or topic, a hunter can see which detection sources (Sigma, ESCU, Elastic, KQL) have coverage and how those rules differ
   2. Given a named threat profile (ransomware, APT, initial-access, persistence, credential-access, defense-evasion), a hunter can see which techniques in that profile have no detection and which have partial coverage
   3. For any uncovered technique, the system suggests detections based on available data sources and patterns extracted from existing rules in the same tactic family
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 55-01-PLAN.md — coverage.cjs module with cross-source comparison, threat profiles, and detection suggestions
 - [ ] 55-02-PLAN.md — Wire compare_detections and suggest_detections MCP tools, extend analyze_coverage with profile parameter
@@ -304,6 +304,6 @@ Plans:
 | 52. Cross-Case Intelligence | 2/2 | Complete    | 2026-04-08 |
 | 53. MCP Server & ATT&CK Tools | 2/2 | Complete    | 2026-04-08 |
 | 54. Detection Rule Ingestion | 2/2 | Complete    | 2026-04-08 |
-| 55. Detection Coverage & Gap Analysis | 1/2 | In Progress|  |
+| 55. Detection Coverage & Gap Analysis | 2/2 | Complete   | 2026-04-08 |
 | 56. Knowledge Graph | 0/TBD | Not started | - |
 | 57. Agent Wiring & Workflow Integration | 0/TBD | Not started | - |
