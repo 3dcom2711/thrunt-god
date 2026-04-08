@@ -32,6 +32,9 @@ const {
   detectSubRepos,
   planningPaths,
   planningDir,
+  getActiveCase,
+  setActiveCase,
+  resolveHuntContext,
 } = require('../thrunt-god/bin/lib/core.cjs');
 
 // ─── loadConfig ────────────────────────────────────────────────────────────────
@@ -282,6 +285,85 @@ describe('planningPaths case-scoped resolution', () => {
       planningDir(tmpDir, 'alpha'),
       path.join(tmpDir, '.planning', 'workstreams', 'alpha')
     );
+  });
+});
+
+// ─── getActiveCase / setActiveCase / resolveHuntContext ──────────────────────
+
+describe('getActiveCase / setActiveCase / resolveHuntContext', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('getActiveCase returns null when .active-case file does not exist', () => {
+    assert.strictEqual(getActiveCase(tmpDir), null);
+  });
+
+  test('getActiveCase returns slug when .active-case contains valid slug and cases/slug/ directory exists', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'cases', 'alpha-apt'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'alpha-apt\n', 'utf-8');
+    assert.strictEqual(getActiveCase(tmpDir), 'alpha-apt');
+  });
+
+  test('getActiveCase returns null when .active-case contains slug but cases/slug/ directory does NOT exist', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'nonexistent\n', 'utf-8');
+    assert.strictEqual(getActiveCase(tmpDir), null);
+  });
+
+  test('getActiveCase returns null when .active-case contains invalid characters', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), '../etc\n', 'utf-8');
+    assert.strictEqual(getActiveCase(tmpDir), null);
+  });
+
+  test('setActiveCase(cwd, "alpha-apt") creates .planning/.active-case with content "alpha-apt\\n"', () => {
+    setActiveCase(tmpDir, 'alpha-apt');
+    const content = fs.readFileSync(path.join(tmpDir, '.planning', '.active-case'), 'utf-8');
+    assert.strictEqual(content, 'alpha-apt\n');
+  });
+
+  test('setActiveCase(cwd, null) removes .planning/.active-case file', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'alpha-apt\n', 'utf-8');
+    setActiveCase(tmpDir, null);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', '.active-case')));
+  });
+
+  test('setActiveCase(cwd, "../escape") throws Error with message containing "Invalid case slug"', () => {
+    assert.throws(
+      () => setActiveCase(tmpDir, '../escape'),
+      (err) => err instanceof Error && err.message.includes('Invalid case slug')
+    );
+  });
+
+  test('resolveHuntContext returns { workstream: null, case: null } when no pointers exist', () => {
+    const ctx = resolveHuntContext(tmpDir);
+    assert.strictEqual(ctx.workstream, null);
+    assert.strictEqual(ctx.case, null);
+  });
+
+  test('resolveHuntContext returns { workstream: null, case: "alpha-apt" } when only .active-case exists', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'cases', 'alpha-apt'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'alpha-apt\n', 'utf-8');
+    const ctx = resolveHuntContext(tmpDir);
+    assert.strictEqual(ctx.workstream, null);
+    assert.strictEqual(ctx.case, 'alpha-apt');
+  });
+
+  test('planningDir auto-resolves THRUNT_CASE env var when no explicit case argument is provided', () => {
+    const orig = process.env.THRUNT_CASE;
+    try {
+      process.env.THRUNT_CASE = 'env-case';
+      const result = planningDir(tmpDir);
+      assert.strictEqual(result, path.join(tmpDir, '.planning', 'cases', 'env-case'));
+    } finally {
+      if (orig === undefined) delete process.env.THRUNT_CASE;
+      else process.env.THRUNT_CASE = orig;
+    }
   });
 });
 
