@@ -200,10 +200,11 @@ describe('compareDetections', () => {
 
   it('returns sources=[] and source_count=0 for technique with no detections', () => {
     const { compareDetections } = loadCoverage();
-    const result = compareDetections(db, 'T1190');
+    // Use a technique ID that has no bundled detections and no test detections
+    const result = compareDetections(db, 'T1199');
 
     assert.ok(result, 'should return a result even for uncovered technique');
-    assert.equal(result.technique_id, 'T1190');
+    assert.equal(result.technique_id, 'T1199');
     assert.deepEqual(result.sources, []);
     assert.equal(result.source_count, 0);
   });
