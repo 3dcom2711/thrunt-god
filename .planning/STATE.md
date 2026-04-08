@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: completed
-stopped_at: Completed 55-02-PLAN.md
-last_updated: "2026-04-08T19:21:00.696Z"
-last_activity: 2026-04-08 -- Phase 55 Plan 02 complete (compare_detections + suggest_detections MCP tools, analyze_coverage profile mode)
+status: executing
+stopped_at: Completed 56-01-PLAN.md
+last_updated: "2026-04-08T19:45:37.914Z"
+last_activity: 2026-04-08 -- Phase 56 Plan 01 complete (knowledge.cjs data layer with 12 exports, 39 tests)
 progress:
   total_phases: 15
   completed_phases: 13
-  total_plans: 26
-  completed_plans: 26
-  percent: 100
+  total_plans: 28
+  completed_plans: 27
+  percent: 96
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-07)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v3.0 Hunt Program Intelligence — Phase 55: Detection Coverage & Gap Analysis
+**Current focus:** v3.0 Hunt Program Intelligence — Phase 56: Knowledge Graph
 
 ## Current Milestone: v3.0 Hunt Program Intelligence
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 
 ## Current Position
 
-Phase: 55 of 57 (Detection Coverage & Gap Analysis)
-Plan: 2 of 2 plans in phase
-Status: Complete (2/2 plans complete)
-Last activity: 2026-04-08 -- Phase 55 Plan 02 complete (compare_detections + suggest_detections MCP tools, analyze_coverage profile mode)
+Phase: 56 of 57 (Knowledge Graph)
+Plan: 1 of 2 plans in phase
+Status: In Progress (1/2 plans complete)
+Last activity: 2026-04-08 -- Phase 56 Plan 01 complete (knowledge.cjs data layer with 12 exports, 39 tests)
 
-Progress: [██████████] 100% (v3.0 Phase 55: 2/2 plans)
+Progress: [██████████] 96% (v3.0 Phase 56: 1/2 plans)
 
 ## Accumulated Context
 
@@ -95,6 +95,11 @@ Progress: [██████████] 100% (v3.0 Phase 55: 2/2 plans)
 - [Phase 55]: Free-text input to compareDetections uses techniques_fts for FTS lookup then compares first match
 - [Phase 55]: handleCompareDetections accepts technique_id or query, delegates to coverage.cjs compareDetections
 - [Phase 55]: analyze_coverage uses resultMeta spread for group vs profile mode, group_id takes precedence when both provided
+- [Phase 56]: Entity ID generation uses deterministic type--slugified-name scheme for natural deduplication
+- [Phase 56]: FTS5 upsert cleanup: delete old FTS row by rowid before INSERT OR REPLACE to prevent stale entries
+- [Phase 56]: STIX import deletes all att&ck-stix relations before re-inserting for clean idempotent re-imports
+- [Phase 56]: addEntityDirect internal helper avoids nested transactions during STIX bulk import
+- [Phase 56]: Entity ID generation uses deterministic type--slugified-name scheme for natural deduplication
 
 ### Blockers/Concerns
 
@@ -102,6 +107,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-08T19:21:00.693Z
-Stopped at: Completed 55-02-PLAN.md
-Resume: Phase 55 Plan 01 complete. coverage.cjs exports 5 functions: THREAT_PROFILES (6 profiles), getThreatProfile, listThreatProfiles, compareDetections (per-source breakdown), suggestDetections (tactic-family suggestions). 21 tests pass. Ready for 55-02 to wire MCP tools (compare_detections, suggest_detections).
+Last session: 2026-04-08T19:45:32.788Z
+Stopped at: Completed 56-01-PLAN.md
+Resume: Phase 56 Plan 01 complete. knowledge.cjs exports 12 functions: ensureKnowledgeSchema, addEntity, getEntity, findEntities, addRelation, getRelations, searchEntities, logDecision, getDecisions, logLearning, getLearnings, importStixFromIntel. 39 tests pass. Ready for 56-02 to wire MCP tools for knowledge graph queries.

@@ -45,10 +45,10 @@ Requirements for Hunt Program Intelligence release. Each maps to roadmap phases.
 
 ### Knowledge
 
-- [ ] **KNOW-01**: Knowledge graph with entities (threat_actor, technique, detection, campaign, tool, vulnerability, data_source) and typed relations stored in program.db
-- [ ] **KNOW-02**: Decision logging captures why choices were made during hunts with context and reasoning
-- [ ] **KNOW-03**: Learnings and patterns persist across hunt sessions as reusable tribal knowledge
-- [ ] **KNOW-04**: Knowledge graph auto-populated from ATT&CK STIX data (groups, campaigns, software relationships)
+- [x] **KNOW-01**: Knowledge graph with entities (threat_actor, technique, detection, campaign, tool, vulnerability, data_source) and typed relations stored in program.db
+- [x] **KNOW-02**: Decision logging captures why choices were made during hunts with context and reasoning
+- [x] **KNOW-03**: Learnings and patterns persist across hunt sessions as reusable tribal knowledge
+- [x] **KNOW-04**: Knowledge graph auto-populated from ATT&CK STIX data (groups, campaigns, software relationships)
 
 ### Dashboard
 
@@ -124,10 +124,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | DET-07 | Phase 55 | Complete |
 | DET-08 | Phase 55 | Complete |
 | DET-09 | Phase 55 | Complete |
-| KNOW-01 | Phase 56 | Pending |
-| KNOW-02 | Phase 56 | Pending |
-| KNOW-03 | Phase 56 | Pending |
-| KNOW-04 | Phase 56 | Pending |
+| KNOW-01 | Phase 56 | Complete |
+| KNOW-02 | Phase 56 | Complete |
+| KNOW-03 | Phase 56 | Complete |
+| KNOW-04 | Phase 56 | Complete |
 | DASH-01 | Phase 51 | Complete |
 | DASH-02 | Phase 51 | Complete |
 | DASH-03 | Phase 51 | Complete |

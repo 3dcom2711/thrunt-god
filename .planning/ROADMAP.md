@@ -258,7 +258,7 @@ Plans:
   2. When a hunter makes a decision during a hunt (e.g., choosing a query approach, ruling out a hypothesis), that decision is logged with context and reasoning and is retrievable in future hunts on the same topic
   3. Learnings and tribal knowledge patterns written during a hunt are persisted and surfaced when a new hunt touches the same techniques or threat actors
   4. ATT&CK STIX relationships (group-to-technique, campaign-to-software, software-to-technique) are automatically imported into the knowledge graph from intel.db on program initialization
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 56-01-PLAN.md — Knowledge graph data layer (knowledge.cjs): entity/relation schema, decision/learning logging, FTS search, STIX auto-population
 - [ ] 56-02-PLAN.md — Wire KG into openProgramDb lifecycle, register 3 MCP tools (query_knowledge, log_decision, log_learning)
@@ -305,5 +305,5 @@ Plans:
 | 53. MCP Server & ATT&CK Tools | 2/2 | Complete    | 2026-04-08 |
 | 54. Detection Rule Ingestion | 2/2 | Complete    | 2026-04-08 |
 | 55. Detection Coverage & Gap Analysis | 2/2 | Complete    | 2026-04-08 |
-| 56. Knowledge Graph | 0/2 | In progress | - |
+| 56. Knowledge Graph | 1/2 | In Progress|  |
 | 57. Agent Wiring & Workflow Integration | 0/TBD | Not started | - |
