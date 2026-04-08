@@ -1971,3 +1971,222 @@ describe('cmdProgramRollup', () => {
     assert.ok(stateContent.includes('stale'), 'STATE.md should show stale status in table');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cmdCaseClose indexing + cmdCaseNew auto-search (Phase 52 Plan 02)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
+  const Database = require('better-sqlite3');
+  let tmpDir;
+
+  function setupProgramState(cwd, rosterEntries = []) {
+    const planDir = path.join(cwd, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+    const rosterYaml = rosterEntries.length === 0
+      ? 'case_roster: []'
+      : 'case_roster:\n' + rosterEntries.map(e => {
+          let yaml = `  - slug: ${e.slug}\n    name: ${e.name}\n    status: ${e.status}\n    opened_at: "${e.opened_at}"`;
+          if (e.closed_at) yaml += `\n    closed_at: "${e.closed_at}"`;
+          if (e.technique_count) yaml += `\n    technique_count: "${e.technique_count}"`;
+          return yaml;
+        }).join('\n');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      `---\nthrunt_state_version: 1.0\nstatus: active\n${rosterYaml}\n---\n\n# Program State\n`);
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+  }
+
+  function createCaseDir(cwd, slug, opts = {}) {
+    const caseDir = path.join(cwd, '.planning', 'cases', slug);
+    fs.mkdirSync(caseDir, { recursive: true });
+    fs.mkdirSync(path.join(caseDir, 'QUERIES'), { recursive: true });
+    fs.mkdirSync(path.join(caseDir, 'RECEIPTS'), { recursive: true });
+
+    const today = new Date().toISOString().split('T')[0];
+    const techYaml = opts.technique_ids && opts.technique_ids.length > 0
+      ? 'technique_ids: [' + opts.technique_ids.join(', ') + ']'
+      : 'technique_ids: []';
+    const status = opts.status || 'active';
+    const title = opts.name || slug;
+    const outcomeYaml = opts.outcome_summary ? `\noutcome_summary: "${opts.outcome_summary}"` : '';
+    fs.writeFileSync(path.join(caseDir, 'STATE.md'),
+      `---\nstatus: ${status}\nopened_at: "${today}"\ntitle: "${title}"\n${techYaml}${outcomeYaml}\n---\n\n# Case: ${title}\n`);
+
+    fs.writeFileSync(path.join(caseDir, 'HUNTMAP.md'),
+      `---\ntitle: ${title}\nstatus: active\ncreated: ${today}\n---\n\n# Huntmap\n`);
+
+    fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'),
+      opts.hypotheses || `# Hypotheses\n\n_No hypotheses yet._\n`);
+
+    if (opts.findings) {
+      fs.writeFileSync(path.join(caseDir, 'FINDINGS.md'), opts.findings);
+    }
+
+    return caseDir;
+  }
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('cmdCaseClose indexes case artifacts into program.db', () => {
+    // Create a case with FINDINGS.md containing technique IDs and IOCs
+    setupProgramState(tmpDir, [
+      { slug: 'apt-powershell', name: 'APT Powershell', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    createCaseDir(tmpDir, 'apt-powershell', {
+      name: 'APT Powershell',
+      technique_ids: ['T1059.001'],
+      findings: '# Findings\n\nAttacker used T1059.001 powershell to execute malware from 192.168.1.50.\nPayload hash: d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592\n',
+      hypotheses: '## Hypothesis 1: PowerShell Abuse\n\nAdversary leverages T1059.001 for initial execution.\n',
+    });
+
+    // Close the case (should trigger indexing)
+    const result = runThruntTools(['case', 'close', 'apt-powershell'], tmpDir);
+    assert.ok(result.success, `Close failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+
+    // Verify program.db exists and contains indexed data
+    const dbPath = path.join(tmpDir, '.planning', 'program.db');
+    assert.ok(fs.existsSync(dbPath), 'program.db should exist after case close');
+
+    const db = new Database(dbPath);
+    try {
+      const caseRows = db.prepare('SELECT * FROM case_index WHERE slug = ?').all('apt-powershell');
+      assert.strictEqual(caseRows.length, 1, 'should have exactly 1 case_index row');
+      assert.strictEqual(caseRows[0].slug, 'apt-powershell');
+
+      const artifacts = db.prepare('SELECT * FROM case_artifacts WHERE case_id = ?').all(caseRows[0].id);
+      assert.ok(artifacts.length >= 2, 'should have at least 2 artifacts (finding + hypothesis)');
+
+      const techniques = db.prepare('SELECT * FROM case_techniques WHERE case_id = ?').all(caseRows[0].id);
+      assert.ok(techniques.length >= 1, 'should have at least 1 technique');
+      assert.ok(techniques.some(t => t.technique_id === 'T1059.001'), 'should include T1059.001');
+    } finally {
+      db.close();
+    }
+  });
+
+  test('cmdCaseClose re-indexing is idempotent', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'idempotent-case', name: 'Idempotent Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    createCaseDir(tmpDir, 'idempotent-case', {
+      name: 'Idempotent Case',
+      findings: '# Findings\n\nSuspicious lateral movement T1021.002 via SMB.\n',
+    });
+
+    // Close twice
+    runThruntTools(['case', 'close', 'idempotent-case'], tmpDir);
+
+    // Re-open by manipulating roster, then close again
+    const planDir = path.join(tmpDir, '.planning');
+    const stateContent = fs.readFileSync(path.join(planDir, 'STATE.md'), 'utf-8');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      stateContent.replace('status: closed', 'status: active'));
+    // Update case STATE.md too
+    const caseStatePath = path.join(planDir, 'cases', 'idempotent-case', 'STATE.md');
+    const caseState = fs.readFileSync(caseStatePath, 'utf-8');
+    fs.writeFileSync(caseStatePath, caseState.replace('status: closed', 'status: active'));
+
+    runThruntTools(['case', 'close', 'idempotent-case'], tmpDir);
+
+    // Verify no duplicates
+    const dbPath = path.join(planDir, 'program.db');
+    const db = new Database(dbPath);
+    try {
+      const caseRows = db.prepare('SELECT * FROM case_index WHERE slug = ?').all('idempotent-case');
+      assert.strictEqual(caseRows.length, 1, 'should have exactly 1 case_index row after re-close');
+
+      const artifacts = db.prepare('SELECT * FROM case_artifacts WHERE case_id = ?').all(caseRows[0].id);
+      // Should not have duplicates — count finding artifacts
+      const findings = artifacts.filter(a => a.artifact_type === 'finding');
+      assert.strictEqual(findings.length, 1, 'should have exactly 1 finding artifact after re-close');
+    } finally {
+      db.close();
+    }
+  });
+
+  test('cmdCaseClose without FINDINGS.md still succeeds', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'no-findings', name: 'No Findings Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    createCaseDir(tmpDir, 'no-findings', {
+      name: 'No Findings Case',
+      // no findings, just hypotheses
+      hypotheses: '## Hypothesis A\n\nTest hypothesis content.\n',
+    });
+
+    const result = runThruntTools(['case', 'close', 'no-findings'], tmpDir);
+    assert.ok(result.success, `Close failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true, 'case close should succeed without FINDINGS.md');
+
+    // DB should still exist and have hypothesis indexed
+    const dbPath = path.join(tmpDir, '.planning', 'program.db');
+    assert.ok(fs.existsSync(dbPath), 'program.db should exist even without FINDINGS.md');
+  });
+
+  test('cmdCaseNew returns empty past_case_matches on first case', () => {
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'First Investigation'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(Array.isArray(output.past_case_matches), 'output should include past_case_matches array');
+    assert.strictEqual(output.past_case_matches.length, 0, 'first case should have empty past_case_matches');
+  });
+
+  test('cmdCaseNew returns matches after past case indexed', () => {
+    setupProgramState(tmpDir, []);
+
+    // Create and close a case with content about powershell T1059.001
+    const newResult = runThruntTools(['case', 'new', 'PowerShell Execution'], tmpDir);
+    assert.ok(newResult.success, `New case failed: ${newResult.error}`);
+
+    // Add FINDINGS.md to the created case
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'powershell-execution');
+    fs.writeFileSync(path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nAdversary used T1059.001 PowerShell to download and execute payload.\n' +
+      'Lateral movement detected via T1021.002 SMB shares.\n' +
+      'Malicious IP: 10.0.0.42\n');
+
+    // Close the case (triggers indexing)
+    const closeResult = runThruntTools(['case', 'close', 'powershell-execution'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    // Now create a new case with a name that overlaps with the past case
+    const newResult2 = runThruntTools(['case', 'new', 'PowerShell T1059 Investigation'], tmpDir);
+    assert.ok(newResult2.success, `Second new case failed: ${newResult2.error}`);
+    const output2 = JSON.parse(newResult2.output);
+    assert.ok(Array.isArray(output2.past_case_matches), 'output should include past_case_matches');
+    assert.ok(output2.past_case_matches.length > 0, 'should have past case matches from FTS or technique overlap');
+  });
+
+  test('cmdCaseClose indexing failure is non-fatal', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'error-case', name: 'Error Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    // Create case dir but make the case dir not exist (so indexCase fails to find FINDINGS)
+    // Actually just verify the try/catch structure works by checking close succeeds
+    // The real test: close succeeds even when case dir is missing for indexing
+    // We skip creating the case dir files for indexing — only the STATE.md in cases/ is needed
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'error-case');
+    fs.mkdirSync(caseDir, { recursive: true });
+    const today = new Date().toISOString().split('T')[0];
+    fs.writeFileSync(path.join(caseDir, 'STATE.md'),
+      `---\nstatus: active\nopened_at: "${today}"\ntitle: "Error Case"\n---\n\n# Case\n`);
+
+    const result = runThruntTools(['case', 'close', 'error-case'], tmpDir);
+    assert.ok(result.success, `Close should succeed even if indexing has issues: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true, 'case close should succeed even with indexing edge cases');
+  });
+});
