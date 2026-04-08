@@ -1419,5 +1419,169 @@ describe('findProjectRoot integration via --cwd', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// cmdInitNewCase
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdInitNewCase', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('returns error when no program exists (no STATE.md)', () => {
+    // No STATE.md in .planning/ -> error
+    const result = runThruntTools('init new-case', tmpDir);
+    assert.ok(result.success, `Command should succeed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.program_exists, false, 'program_exists should be false');
+    assert.ok(output.error, 'should have error message');
+  });
+
+  test('returns context with program_exists true when program exists', () => {
+    // Create program STATE.md
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      '---\nthrunt_state_version: 1.0\nstatus: executing\ncase_roster: []\n---\n\n# Hunt State\n\n**Status:** Executing\n'
+    );
+
+    const result = runThruntTools('init new-case', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.program_exists, true, 'program_exists should be true');
+    assert.ok(output.cases_dir, 'should have cases_dir');
+    assert.ok(Array.isArray(output.existing_cases), 'should have existing_cases array');
+  });
+
+  test('lists existing cases in existing_cases array', () => {
+    // Create program STATE.md and a case directory
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      '---\nthrunt_state_version: 1.0\nstatus: executing\ncase_roster: []\n---\n\n# Hunt State\n\n**Status:** Executing\n'
+    );
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'cases', 'existing-case'), { recursive: true });
+
+    const result = runThruntTools('init new-case', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.ok(output.existing_cases.includes('existing-case'), 'should list existing case');
+    assert.strictEqual(output.case_count, 1, 'should have 1 case');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// case commands (new, list, close, status)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('case commands', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    // Create a program STATE.md with case_roster in frontmatter
+    const stateContent = `---
+thrunt_state_version: 1.0
+status: executing
+case_roster: []
+---
+
+# Hunt State
+
+**Status:** Executing
+`;
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), stateContent);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('case new creates case directory with expected files', () => {
+    const result = runThruntTools(['case', 'new', 'Alpha Investigation'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.strictEqual(output.slug, 'alpha-investigation');
+
+    // Check directory structure
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'alpha-investigation');
+    assert.ok(fs.existsSync(caseDir), 'case directory should exist');
+    assert.ok(fs.existsSync(path.join(caseDir, 'HUNTMAP.md')), 'HUNTMAP.md should exist');
+    assert.ok(fs.existsSync(path.join(caseDir, 'HYPOTHESES.md')), 'HYPOTHESES.md should exist');
+    assert.ok(fs.existsSync(path.join(caseDir, 'STATE.md')), 'STATE.md should exist');
+    assert.ok(fs.existsSync(path.join(caseDir, 'QUERIES')), 'QUERIES/ should exist');
+    assert.ok(fs.existsSync(path.join(caseDir, 'RECEIPTS')), 'RECEIPTS/ should exist');
+  });
+
+  test('case new adds entry to program STATE.md case_roster', () => {
+    const result = runThruntTools(['case', 'new', 'Beta Case'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    // Read program STATE.md and check roster
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('beta-case'), 'roster should contain case slug');
+  });
+
+  test('case new sets .active-case pointer', () => {
+    runThruntTools(['case', 'new', 'Gamma Case'], tmpDir);
+    const activeCasePath = path.join(tmpDir, '.planning', '.active-case');
+    assert.ok(fs.existsSync(activeCasePath), '.active-case should exist');
+    const slug = fs.readFileSync(activeCasePath, 'utf-8').trim();
+    assert.strictEqual(slug, 'gamma-case');
+  });
+
+  test('case new rejects duplicate slugs', () => {
+    runThruntTools(['case', 'new', 'Delta'], tmpDir);
+    const result = runThruntTools(['case', 'new', 'Delta'], tmpDir);
+    // Should fail (process exit 1) or return error in output
+    const output = result.success ? JSON.parse(result.output) : null;
+    if (output) {
+      assert.ok(output.error || output.success === false, 'should indicate error for duplicate slug');
+    } else {
+      assert.ok(result.error, 'should fail on duplicate slug');
+    }
+  });
+
+  test('case list returns array of cases', () => {
+    runThruntTools(['case', 'new', 'List Test One'], tmpDir);
+    runThruntTools(['case', 'new', 'List Test Two'], tmpDir);
+
+    const result = runThruntTools(['case', 'list'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.total, 2, 'should have 2 cases');
+    assert.strictEqual(output.active, 2, 'should have 2 active cases');
+    assert.ok(Array.isArray(output.cases), 'cases should be array');
+  });
+
+  test('case close updates status to closed', () => {
+    runThruntTools(['case', 'new', 'Close Test'], tmpDir);
+    const closeResult = runThruntTools(['case', 'close', 'close-test'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+    const output = JSON.parse(closeResult.output);
+    assert.strictEqual(output.success, true);
+
+    // Verify roster update
+    const listResult = runThruntTools(['case', 'list'], tmpDir);
+    const listOutput = JSON.parse(listResult.output);
+    assert.strictEqual(listOutput.closed, 1, 'should have 1 closed case');
+    assert.strictEqual(listOutput.active, 0, 'should have 0 active cases');
+  });
+
+  test('case status returns case details', () => {
+    runThruntTools(['case', 'new', 'Status Test'], tmpDir);
+    const result = runThruntTools(['case', 'status', 'status-test'], tmpDir);
+    assert.ok(result.success, `Status failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.slug, 'status-test');
+    assert.strictEqual(output.status, 'active');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // huntmap analyze command
 // ─────────────────────────────────────────────────────────────────────────────
