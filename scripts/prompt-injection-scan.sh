@@ -106,10 +106,10 @@ is_allowlisted() {
       return 0
     fi
     # Directory prefix match (allowlist entries ending in /)
-    if [[ "$candidate" == */ && "$normalized" == "$candidate"* ]]; then
+    if [[ "$allowed" == */ && "$normalized" == "$candidate"* ]]; then
       return 0
     fi
-    if [[ "$candidate" == */ && "$normalized" = /* && "$normalized" == "$repo_root/$candidate"* ]]; then
+    if [[ "$allowed" == */ && "$normalized" = /* && "$normalized" == "$repo_root/$candidate"* ]]; then
       return 0
     fi
   done
