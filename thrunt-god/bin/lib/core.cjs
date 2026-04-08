@@ -589,17 +589,37 @@ function withPlanningLock(cwd, fn) {
 }
 
 /**
- * Get the .planning directory path, workstream-aware.
- * When a workstream is active (via explicit ws arg or THRUNT_WORKSTREAM env var),
- * returns `.planning/workstreams/{ws}/`. Otherwise returns `.planning/`.
+ * Get the .planning directory path, workstream- and case-aware.
+ * Accepts either a string (workstream name, backward compat) or an options object
+ * with `{ workstream, case }` properties. Case takes precedence over workstream.
  *
  * @param {string} cwd - project root
- * @param {string} [ws] - explicit workstream name; if omitted, checks THRUNT_WORKSTREAM env var
+ * @param {string|{workstream?: string, case?: string}} [wsOrOpts] - workstream name or options object
  */
-function planningDir(cwd, ws) {
-  if (ws === undefined) ws = process.env.THRUNT_WORKSTREAM || null;
-  if (!ws) return path.join(cwd, PLANNING_DIR_NAME);
-  return path.join(cwd, PLANNING_DIR_NAME, 'workstreams', ws);
+function planningDir(cwd, wsOrOpts) {
+  let ws = null;
+  let caseSlug = null;
+
+  if (typeof wsOrOpts === 'string') {
+    // Backward compat: planningDir(cwd, 'alpha')
+    ws = wsOrOpts;
+  } else if (wsOrOpts && typeof wsOrOpts === 'object') {
+    ws = wsOrOpts.workstream || null;
+    caseSlug = wsOrOpts.case || null;
+  }
+
+  // Env var fallbacks (only when no explicit args provided)
+  if (!caseSlug && !ws) {
+    caseSlug = process.env.THRUNT_CASE || null;
+  }
+  if (!caseSlug && !ws) {
+    ws = process.env.THRUNT_WORKSTREAM || null;
+  }
+
+  // Case takes precedence over workstream
+  if (caseSlug) return path.join(cwd, PLANNING_DIR_NAME, 'cases', caseSlug);
+  if (ws) return path.join(cwd, PLANNING_DIR_NAME, 'workstreams', ws);
+  return path.join(cwd, PLANNING_DIR_NAME);
 }
 
 /** Always returns the root planning path, ignoring workstreams. For shared resources. */
@@ -607,18 +627,22 @@ function planningRoot(cwd) {
   return path.join(cwd, PLANNING_DIR_NAME);
 }
 
-/** Get common .planning file paths, workstream-aware. */
-function planningPaths(cwd, ws) {
-  const base = planningDir(cwd, ws);
+/** Get common .planning file paths, workstream- and case-aware. */
+function planningPaths(cwd, wsOrOpts) {
+  const base = planningDir(cwd, wsOrOpts);
   const root = planningRoot(cwd);
   return {
     planning: base,
 
-    // Shared root-level artifacts
+    // Shared root-level artifacts (always program root)
     mission: path.join(root, 'MISSION.md'),
     config: path.join(root, 'config.json'),
     environment: path.join(root, 'environment'),
     environmentMap: path.join(root, 'environment', 'ENVIRONMENT.md'),
+
+    // Program-level pointers (always program root)
+    programState: path.join(root, 'STATE.md'),
+    cases: path.join(root, 'cases'),
 
     // Scoped state / planning artifacts
     state: path.join(base, 'STATE.md'),
