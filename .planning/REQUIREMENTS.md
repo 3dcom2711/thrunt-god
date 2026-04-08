@@ -33,11 +33,11 @@ Requirements for Hunt Program Intelligence release. Each maps to roadmap phases.
 
 ### Detection
 
-- [ ] **DET-01**: Sigma YAML parser extracts id, title, tags (MITRE technique IDs), level, logsource, detection logic, falsepositives
-- [ ] **DET-02**: Splunk ESCU YAML parser extracts detection metadata, analytic stories, data models
-- [ ] **DET-03**: Elastic TOML parser extracts rule metadata, query, MITRE mappings
-- [ ] **DET-04**: KQL markdown parser extracts detection queries, Microsoft table references, MITRE tags
-- [ ] **DET-05**: Unified detections table with FTS5 external content tables, searchable by technique/tactic/severity/source/process name
+- [x] **DET-01**: Sigma YAML parser extracts id, title, tags (MITRE technique IDs), level, logsource, detection logic, falsepositives
+- [x] **DET-02**: Splunk ESCU YAML parser extracts detection metadata, analytic stories, data models
+- [x] **DET-03**: Elastic TOML parser extracts rule metadata, query, MITRE mappings
+- [x] **DET-04**: KQL markdown parser extracts detection queries, Microsoft table references, MITRE tags
+- [x] **DET-05**: Unified detections table with FTS5 external content tables, searchable by technique/tactic/severity/source/process name
 - [ ] **DET-06**: Bundled SigmaHQ core rules + configurable SIGMA_PATHS/SPLUNK_PATHS/ELASTIC_PATHS env vars for custom rule directories
 - [ ] **DET-07**: Cross-source detection coverage comparison for any technique or topic
 - [ ] **DET-08**: Gap identification against threat profiles (ransomware, APT, initial-access, persistence, credential-access, defense-evasion)
@@ -115,11 +115,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | MCP-04 | Phase 53 | Complete |
 | MCP-05 | Phase 53 | Complete |
 | MCP-06 | Phase 53 | Complete |
-| DET-01 | Phase 54 | Pending |
-| DET-02 | Phase 54 | Pending |
-| DET-03 | Phase 54 | Pending |
-| DET-04 | Phase 54 | Pending |
-| DET-05 | Phase 54 | Pending |
+| DET-01 | Phase 54 | Complete |
+| DET-02 | Phase 54 | Complete |
+| DET-03 | Phase 54 | Complete |
+| DET-04 | Phase 54 | Complete |
+| DET-05 | Phase 54 | Complete |
 | DET-06 | Phase 54 | Pending |
 | DET-07 | Phase 55 | Pending |
 | DET-08 | Phase 55 | Pending |

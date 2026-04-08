@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Advanced Hunt Features
-status: in_progress
-stopped_at: Completed 53-02-PLAN.md
-last_updated: "2026-04-08T16:23:50Z"
-last_activity: 2026-04-08 -- Phase 53 Plan 02 complete (MCP server + 5 ATT&CK tools + Navigator layer builder)
+status: in-progress
+stopped_at: Completed 54-01-PLAN.md
+last_updated: "2026-04-08T18:26:28.000Z"
+last_activity: 2026-04-08 -- Phase 54 Plan 01 complete (detection rule parsers + schema + indexers + FTS search)
 progress:
   total_phases: 15
-  completed_phases: 10
-  total_plans: 21
-  completed_plans: 22
-  percent: 100
+  completed_phases: 11
+  total_plans: 24
+  completed_plans: 23
+  percent: 96
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-07)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v3.0 Hunt Program Intelligence — Phase 53: MCP Server & ATT&CK Tools
+**Current focus:** v3.0 Hunt Program Intelligence — Phase 54: Detection Rule Ingestion
 
 ## Current Milestone: v3.0 Hunt Program Intelligence
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-04-07)
 
 ## Current Position
 
-Phase: 53 of 57 (MCP Server & ATT&CK Tools)
-Plan: 2 of 2 plans in phase
-Status: Complete (2/2 plans complete)
-Last activity: 2026-04-08 -- Phase 53 Plan 02 complete (MCP server + 5 ATT&CK tools + Navigator layer builder)
+Phase: 54 of 57 (Detection Rule Ingestion)
+Plan: 1 of 2 plans in phase
+Status: In Progress (1/2 plans complete)
+Last activity: 2026-04-08 -- Phase 54 Plan 01 complete (detection rule parsers + schema + indexers + FTS search)
 
-Progress: [██████████] 100% (v3.0 Phase 53: 2/2 plans)
+Progress: [█████████░] 96% (v3.0 Phase 54: 1/2 plans)
 
 ## Accumulated Context
 
@@ -81,6 +81,11 @@ Progress: [██████████] 100% (v3.0 Phase 53: 2/2 plans)
 - [Phase 53]: Tool handler functions exported from tools.cjs for direct unit testing
 - [Phase 53]: generate_layer coverage/gap modes use try/catch on detections table for Phase 54 graceful degradation
 - [Phase 53]: lookup_group supports both ID (G0007) and name/alias (APT28) via LIKE fallback
+- [Phase 54]: Regular FTS5 (not external content) for detections_fts -- consistent with techniques_fts from Phase 53
+- [Phase 54]: FTS search joins on rowid between detections and detections_fts for BM25-ranked retrieval
+- [Phase 54]: KQL parser uses regex heuristic for generic code blocks (where|project|summarize|extend|DeviceEvents)
+- [Phase 54]: Elastic TOML parser iterates all [[rule.threat]] entries including nested subtechniques
+- [Phase 54]: Directory indexers skip entries with empty IDs (format prefix only) to prevent bad data
 
 ### Blockers/Concerns
 
@@ -88,6 +93,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-08T16:23:50Z
-Stopped at: Completed 53-02-PLAN.md
-Resume: Phase 53 complete. MCP server (mcp-hunt-intel/bin/server.cjs) starts over stdio with 5 ATT&CK tools registered: lookup_technique (ID + sub-techniques), search_techniques (FTS5 + filters), lookup_group (ID/name with techniques + software), generate_layer (4 modes: custom/group/coverage/gap producing Navigator v4.5 JSON), analyze_coverage (per-tactic gap breakdown). Tool timeout at 30s default via THRUNT_MCP_TIMEOUT. Coverage/gap gracefully degrade before Phase 54. 33 new tests, 2811 total pass. Phase 53 complete (2/2 plans). Next: Phase 54 (Sigma rules).
+Last session: 2026-04-08T18:15:23Z
+Stopped at: Completed 54-01-PLAN.md
+Resume: Phase 54 Plan 01 complete. detections.cjs (mcp-hunt-intel/lib/detections.cjs) provides 12 exports: 4 format-specific parsers (parseSigmaRule, parseEscuRule, parseElasticRule, parseKqlRule), ensureDetectionsSchema, insertDetection, 4 directory indexers, searchDetections (FTS5 + BM25 + filters), populateDetectionsIfEmpty. Dependencies added: js-yaml@4.1.1, smol-toml@1.6.1. 38 new tests, 1842 total pass. Next: Phase 54 Plan 02 (MCP tools + CLI integration for detection search).

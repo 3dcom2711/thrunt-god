@@ -230,7 +230,7 @@ Plans:
   4. A KQL markdown file is parsed and produces a record with detection query, Microsoft table references, and MITRE tags
   5. All parsed rules land in a unified detections table with FTS5 external content, searchable by technique ID, tactic, severity, source format, or process name
   6. Bundled SigmaHQ core rules are indexed on first run; setting SIGMA_PATHS, SPLUNK_PATHS, or ELASTIC_PATHS environment variables causes those custom rule directories to be indexed in addition to bundled rules
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 54-01-PLAN.md — Four format-specific parsers (Sigma, ESCU, Elastic, KQL), detections schema, directory indexers, FTS search, test fixtures
 - [ ] 54-02-PLAN.md — Wire detections into openIntelDb lifecycle, bundle SigmaHQ core rules, env var path handling, integration tests
@@ -303,7 +303,7 @@ Plans:
 | 51. Program Dashboard & Extension Wiring | 2/2 | Complete    | 2026-04-08 |
 | 52. Cross-Case Intelligence | 2/2 | Complete    | 2026-04-08 |
 | 53. MCP Server & ATT&CK Tools | 2/2 | Complete    | 2026-04-08 |
-| 54. Detection Rule Ingestion | 0/TBD | Not started | - |
+| 54. Detection Rule Ingestion | 1/2 | In Progress|  |
 | 55. Detection Coverage & Gap Analysis | 0/TBD | Not started | - |
 | 56. Knowledge Graph | 0/TBD | Not started | - |
 | 57. Agent Wiring & Workflow Integration | 0/TBD | Not started | - |
