@@ -90,10 +90,12 @@ describe('AutomationTreeDataProvider', () => {
       assert.equal(runbookChildren[0].contextValue, 'automationRunbookChild');
     });
 
-    it('returns empty array for Recent Runs children (placeholder)', () => {
+    it('returns "No history available" for Recent Runs children when no logger set', () => {
       const roots = provider.getChildren(undefined);
       const runsChildren = provider.getChildren(roots[3]);
-      assert.deepEqual(runsChildren, []);
+      assert.equal(runsChildren.length, 1);
+      assert.equal(runsChildren[0].label, 'No history available');
+      assert.equal(runsChildren[0].contextValue, 'automationRecentRunChild');
     });
   });
 

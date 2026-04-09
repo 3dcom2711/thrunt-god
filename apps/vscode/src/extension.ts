@@ -40,6 +40,7 @@ import { McpControlPanel, MCP_CONTROL_VIEW_TYPE } from './mcpControlPanel';
 import { CommandDeckRegistry, CommandDeckPanel, COMMAND_DECK_VIEW_TYPE, BUILT_IN_COMMANDS, getContextRelevantIds } from './commandDeck';
 import { RunbookPanel } from './runbookPanel';
 import { RunbookRegistry, RunbookEngine, RUNBOOK_PANEL_VIEW_TYPE } from './runbook';
+import { ExecutionLogger } from './executionLogger';
 import type { CommandDeckContext } from '../shared/command-deck';
 import type { SessionDiff } from '../shared/hunt-overview';
 import { resolveArtifactType } from './watcher';
@@ -1136,12 +1137,22 @@ export function activate(context: vscode.ExtensionContext): void {
     const mcpStatus = new MCPStatusManager(mcpOutputChannel, mcpServerPath);
     context.subscriptions.push(mcpStatus);
 
+    // Execution history logger
+    const executionLogger = new ExecutionLogger(workspaceRoot || '');
+    context.subscriptions.push(executionLogger);
+
     // Automation sidebar tree
     const automationProvider = new AutomationTreeDataProvider({ mcpStatus });
     context.subscriptions.push(automationProvider);
     context.subscriptions.push(
       vscode.window.registerTreeDataProvider('thruntGod.automationTree', automationProvider)
     );
+
+    // Wire execution logger to automation tree for auto-refresh on new entries
+    automationProvider.setExecutionLogger(executionLogger);
+    context.subscriptions.push(executionLogger.onDidAppend(() => {
+      automationProvider.refresh();
+    }));
 
     // Runbook registry and engine
     const runbookRegistry = new RunbookRegistry(workspaceRoot || '');
@@ -1192,14 +1203,14 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.commands.registerCommand('thrunt-god.openRunbook', (item?: AutomationTreeItem) => {
         const runbookPath = item?.dataId;
-        RunbookPanel.createOrShow(context, runbookRegistry, runbookEngine, runbookPath);
+        RunbookPanel.createOrShow(context, runbookRegistry, runbookEngine, executionLogger, mcpStatus, runbookPath);
       })
     );
 
     context.subscriptions.push(
       vscode.window.registerWebviewPanelSerializer(RUNBOOK_PANEL_VIEW_TYPE, {
         deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
-          RunbookPanel.restorePanel(context, runbookRegistry, runbookEngine, panel);
+          RunbookPanel.restorePanel(context, runbookRegistry, runbookEngine, executionLogger, mcpStatus, panel);
           return Promise.resolve();
         },
       })
@@ -1211,7 +1222,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
       vscode.commands.registerCommand('thrunt-god.openCommandDeck', () => {
-        CommandDeckPanel.createOrShow(context, commandDeckRegistry);
+        CommandDeckPanel.createOrShow(context, commandDeckRegistry, executionLogger, mcpStatus);
       })
     );
 
@@ -1219,7 +1230,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.window.registerWebviewPanelSerializer(COMMAND_DECK_VIEW_TYPE, {
         deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
-          CommandDeckPanel.restorePanel(context, commandDeckRegistry, panel);
+          CommandDeckPanel.restorePanel(context, commandDeckRegistry, executionLogger, mcpStatus, panel);
           return Promise.resolve();
         },
       })

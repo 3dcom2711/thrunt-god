@@ -10,6 +10,8 @@ import type {
   CommandTemplate,
   RecentCommandEntry,
 } from '../shared/command-deck';
+import { ExecutionLogger, confirmMutatingAction, buildCommandEntry } from './executionLogger';
+import type { MCPStatusManager } from './mcpStatusManager';
 
 // ---------------------------------------------------------------------------
 // Built-in commands (10 curated actions)
@@ -309,6 +311,8 @@ export class CommandDeckPanel implements vscode.Disposable {
   private constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly registry: CommandDeckRegistry,
+    private readonly logger: ExecutionLogger,
+    private readonly mcpStatus: MCPStatusManager | null,
     private readonly panel: vscode.WebviewPanel
   ) {
     this.panel.webview.options = {
@@ -348,7 +352,9 @@ export class CommandDeckPanel implements vscode.Disposable {
 
   static createOrShow(
     context: vscode.ExtensionContext,
-    registry: CommandDeckRegistry
+    registry: CommandDeckRegistry,
+    logger: ExecutionLogger,
+    mcpStatus: MCPStatusManager | null
   ): CommandDeckPanel {
     const existing = CommandDeckPanel.currentPanel;
     if (existing && !existing.isDisposed) {
@@ -368,7 +374,7 @@ export class CommandDeckPanel implements vscode.Disposable {
       }
     );
 
-    const created = new CommandDeckPanel(context, registry, panel);
+    const created = new CommandDeckPanel(context, registry, logger, mcpStatus, panel);
     CommandDeckPanel.currentPanel = created;
     return created;
   }
@@ -376,9 +382,11 @@ export class CommandDeckPanel implements vscode.Disposable {
   static restorePanel(
     context: vscode.ExtensionContext,
     registry: CommandDeckRegistry,
+    logger: ExecutionLogger,
+    mcpStatus: MCPStatusManager | null,
     panel: vscode.WebviewPanel
   ): CommandDeckPanel {
-    const restored = new CommandDeckPanel(context, registry, panel);
+    const restored = new CommandDeckPanel(context, registry, logger, mcpStatus, panel);
     CommandDeckPanel.currentPanel = restored;
     return restored;
   }
@@ -479,7 +487,7 @@ export class CommandDeckPanel implements vscode.Disposable {
     return cliPath;
   }
 
-  private runCli(args: string[]): Promise<void> {
+  private runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const cliPath = this.resolveCliPath();
     if (!cliPath) {
@@ -492,19 +500,20 @@ export class CommandDeckPanel implements vscode.Disposable {
     });
 
     let stdout = '';
+    let stderr = '';
     child.stdout.on('data', (d: Buffer) => {
       stdout += d.toString();
     });
     child.stderr.on('data', (d: Buffer) => {
-      stdout += d.toString();
+      stderr += d.toString();
     });
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve, reject) => {
       child.on('close', (code) => {
         if (code === 0) {
-          resolve();
+          resolve({ stdout, stderr, exitCode: 0 });
         } else {
-          reject(new Error(`CLI exited with code ${code}: ${stdout.slice(0, 500)}`));
+          reject(new Error(`CLI exited with code ${code}: ${(stdout + stderr).slice(0, 500)}`));
         }
       });
       child.on('error', reject);
@@ -523,14 +532,34 @@ export class CommandDeckPanel implements vscode.Disposable {
       return;
     }
 
+    const environment = this.mcpStatus?.getStatus().profile ?? null;
+
+    // Confirmation gate for mutating actions
+    if (cmd.mutating) {
+      const confirmed = await confirmMutatingAction(cmd.label, environment);
+      if (!confirmed) {
+        this.postMessage({ type: 'execResult', commandId, success: false, message: 'Cancelled by user' });
+        return;
+      }
+    }
+
+    const startedAt = Date.now();
     try {
+      let stdout = '';
+      let stderr = '';
+      let exitCode: number | null = 0;
+
       if (cmd.commandId) {
         await vscode.commands.executeCommand(cmd.commandId);
       } else if (cmd.cliArgs) {
-        await this.runCli(cmd.cliArgs);
+        const result = await this.runCli(cmd.cliArgs);
+        stdout = result.stdout;
+        stderr = result.stderr;
+        exitCode = result.exitCode;
       }
 
       await this.registry.recordExecution(commandId, cmd.label, true);
+      this.logger.append(buildCommandEntry(cmd.label, cmd.cliArgs || [], stdout, stderr, exitCode, startedAt, 'success', environment, cmd.mutating));
       this.postMessage({
         type: 'execResult',
         commandId,
@@ -540,6 +569,7 @@ export class CommandDeckPanel implements vscode.Disposable {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       await this.registry.recordExecution(commandId, cmd.label, false);
+      this.logger.append(buildCommandEntry(cmd.label, cmd.cliArgs || [], '', errMsg, 1, startedAt, 'failure', environment, cmd.mutating));
       this.postMessage({
         type: 'execResult',
         commandId,
@@ -561,19 +591,38 @@ export class CommandDeckPanel implements vscode.Disposable {
       return;
     }
 
+    const environment = this.mcpStatus?.getStatus().profile ?? null;
+
+    // Confirmation gate for mutating templates
+    if (tmpl.mutating) {
+      const confirmed = await confirmMutatingAction(tmpl.label, environment);
+      if (!confirmed) {
+        return;
+      }
+    }
+
     // Substitute placeholders in cliArgs
     const resolvedArgs = (tmpl.cliArgs || []).map((arg) =>
       arg.replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (_, key) => values[key] ?? '')
     );
 
+    const startedAt = Date.now();
     try {
+      let stdout = '';
+      let stderr = '';
+      let exitCode: number | null = 0;
+
       if (tmpl.commandId) {
         await vscode.commands.executeCommand(tmpl.commandId);
       } else if (resolvedArgs.length > 0) {
-        await this.runCli(resolvedArgs);
+        const result = await this.runCli(resolvedArgs);
+        stdout = result.stdout;
+        stderr = result.stderr;
+        exitCode = result.exitCode;
       }
 
       await this.registry.recordExecution(tmpl.id, tmpl.label, true);
+      this.logger.append(buildCommandEntry(tmpl.label, resolvedArgs, stdout, stderr, exitCode, startedAt, 'success', environment, tmpl.mutating));
       this.postMessage({
         type: 'execResult',
         commandId: tmpl.id,
@@ -581,12 +630,14 @@ export class CommandDeckPanel implements vscode.Disposable {
         message: 'Template executed',
       });
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       await this.registry.recordExecution(tmpl.id, tmpl.label, false);
+      this.logger.append(buildCommandEntry(tmpl.label, resolvedArgs, '', errMsg, 1, startedAt, 'failure', environment, tmpl.mutating));
       this.postMessage({
         type: 'execResult',
         commandId: tmpl.id,
         success: false,
-        message: err instanceof Error ? err.message : String(err),
+        message: errMsg,
       });
     }
 

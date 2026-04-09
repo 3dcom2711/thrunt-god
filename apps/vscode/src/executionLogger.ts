@@ -8,8 +8,10 @@ const HISTORY_FILENAME = '.run-history.json';
 const HISTORY_DIR = '.planning';
 const DEFAULT_MAX_ENTRIES = 100;
 
-export class ExecutionLogger {
+export class ExecutionLogger implements vscode.Disposable {
   private readonly historyPath: string;
+  private readonly _onDidAppend = new vscode.EventEmitter<void>();
+  readonly onDidAppend: vscode.Event<void> = this._onDidAppend.event;
 
   constructor(private readonly workspaceRoot: string) {
     this.historyPath = path.join(workspaceRoot, HISTORY_DIR, HISTORY_FILENAME);
@@ -27,6 +29,7 @@ export class ExecutionLogger {
       entries.length = max;
     }
     this.writeEntries(entries);
+    this._onDidAppend.fire();
   }
 
   /**
@@ -72,6 +75,10 @@ export class ExecutionLogger {
     } catch (err) {
       console.error(`[ExecutionLogger] Failed to clear history: ${err}`);
     }
+  }
+
+  dispose(): void {
+    this._onDidAppend.dispose();
   }
 
   private readEntries(): ExecutionEntry[] {

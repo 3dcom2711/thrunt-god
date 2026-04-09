@@ -8,6 +8,8 @@ import type {
   RunbookRunRecord,
 } from '../shared/runbook';
 import { RunbookEngine, RunbookRegistry } from './runbook';
+import { ExecutionLogger, buildRunbookEntry } from './executionLogger';
+import type { MCPStatusManager } from './mcpStatusManager';
 
 // Re-export for convenience
 export { RUNBOOK_PANEL_VIEW_TYPE } from './runbook';
@@ -105,6 +107,8 @@ export class RunbookPanel implements vscode.Disposable {
     private readonly context: vscode.ExtensionContext,
     private readonly registry: RunbookRegistry,
     private readonly engine: RunbookEngine,
+    private readonly logger: ExecutionLogger,
+    private readonly mcpStatus: MCPStatusManager | null,
     private readonly panel: vscode.WebviewPanel
   ) {
     this.panel.webview.options = {
@@ -146,6 +150,8 @@ export class RunbookPanel implements vscode.Disposable {
     context: vscode.ExtensionContext,
     registry: RunbookRegistry,
     engine: RunbookEngine,
+    logger: ExecutionLogger,
+    mcpStatus: MCPStatusManager | null,
     runbookPath?: string
   ): RunbookPanel {
     const existing = RunbookPanel.currentPanel;
@@ -169,7 +175,7 @@ export class RunbookPanel implements vscode.Disposable {
       }
     );
 
-    const created = new RunbookPanel(context, registry, engine, panel);
+    const created = new RunbookPanel(context, registry, engine, logger, mcpStatus, panel);
     RunbookPanel.currentPanel = created;
 
     if (runbookPath) {
@@ -183,9 +189,11 @@ export class RunbookPanel implements vscode.Disposable {
     context: vscode.ExtensionContext,
     registry: RunbookRegistry,
     engine: RunbookEngine,
+    logger: ExecutionLogger,
+    mcpStatus: MCPStatusManager | null,
     panel: vscode.WebviewPanel
   ): RunbookPanel {
-    const restored = new RunbookPanel(context, registry, engine, panel);
+    const restored = new RunbookPanel(context, registry, engine, logger, mcpStatus, panel);
     RunbookPanel.currentPanel = restored;
     return restored;
   }
@@ -345,6 +353,9 @@ export class RunbookPanel implements vscode.Disposable {
       // Generator return value is the RunbookRunRecord
       const record = iterResult.value as RunbookRunRecord;
       this.postMessage({ type: 'runComplete', record });
+
+      const environment = this.mcpStatus?.getStatus().profile ?? null;
+      this.logger.append(buildRunbookEntry(record, environment));
     } catch (err) {
       this.postMessage({
         type: 'error',

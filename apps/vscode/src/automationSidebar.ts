@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { MCPStatusManager } from './mcpStatusManager';
 import type { RunbookRegistry } from './runbook';
+import type { ExecutionLogger } from './executionLogger';
+import type { ExecutionEntry } from '../shared/execution-history';
 
 // ---------------------------------------------------------------------------
 // Node types for dispatch in getChildren
@@ -58,12 +60,14 @@ export class AutomationTreeDataProvider
   private commandCount: number;
   private mcpStatus: MCPStatusManager | null;
   private runbookRegistry: RunbookRegistry | null;
+  private executionLogger: ExecutionLogger | null;
 
-  constructor(options?: { runbookCount?: number; commandCount?: number; mcpStatus?: MCPStatusManager; runbookRegistry?: RunbookRegistry }) {
+  constructor(options?: { runbookCount?: number; commandCount?: number; mcpStatus?: MCPStatusManager; runbookRegistry?: RunbookRegistry; executionLogger?: ExecutionLogger }) {
     this.runbookCount = options?.runbookCount ?? 0;
     this.commandCount = options?.commandCount ?? 0;
     this.mcpStatus = options?.mcpStatus ?? null;
     this.runbookRegistry = options?.runbookRegistry ?? null;
+    this.executionLogger = options?.executionLogger ?? null;
   }
 
   refresh(): void {
@@ -85,6 +89,11 @@ export class AutomationTreeDataProvider
     this.refresh();
   }
 
+  setExecutionLogger(logger: ExecutionLogger): void {
+    this.executionLogger = logger;
+    this.refresh();
+  }
+
   getTreeItem(element: AutomationTreeItem): vscode.TreeItem {
     return element;
   }
@@ -100,6 +109,10 @@ export class AutomationTreeDataProvider
 
     if (element.nodeType === 'runbooks') {
       return this.getRunbookChildren();
+    }
+
+    if (element.nodeType === 'recent-runs') {
+      return this.getRecentRunsChildren();
     }
 
     return [];
@@ -148,6 +161,9 @@ export class AutomationTreeDataProvider
     const runbookDescription =
       this.runbookCount > 0 ? `${this.runbookCount} runbooks` : 'No runbooks found';
 
+    const recentCount = this.executionLogger?.getRecent().length ?? 0;
+    const recentDescription = recentCount > 0 ? `${recentCount} runs` : 'No recent runs';
+
     return [
       this.getMcpRootNode(),
       new AutomationTreeItem('Command Deck', vscode.TreeItemCollapsibleState.Collapsed, {
@@ -164,11 +180,61 @@ export class AutomationTreeDataProvider
       }),
       new AutomationTreeItem('Recent Runs', vscode.TreeItemCollapsibleState.Collapsed, {
         iconPath: new vscode.ThemeIcon('history'),
-        description: 'No recent runs',
+        description: recentDescription,
         nodeType: 'recent-runs',
         contextValue: 'automationRecentRuns',
       }),
     ];
+  }
+
+  private getRecentRunsChildren(): AutomationTreeItem[] {
+    if (!this.executionLogger) {
+      return [
+        new AutomationTreeItem('No history available', vscode.TreeItemCollapsibleState.None, {
+          iconPath: new vscode.ThemeIcon('info'),
+          contextValue: 'automationRecentRunChild',
+        }),
+      ];
+    }
+
+    const entries = this.executionLogger.getRecent();
+    if (entries.length === 0) {
+      return [
+        new AutomationTreeItem('No recent runs', vscode.TreeItemCollapsibleState.None, {
+          iconPath: new vscode.ThemeIcon('info'),
+          contextValue: 'automationRecentRunChild',
+        }),
+      ];
+    }
+
+    return entries.map((entry: ExecutionEntry) => {
+      const statusIcon = entry.status === 'success'
+        ? new vscode.ThemeIcon('pass', new vscode.ThemeColor('charts.green'))
+        : entry.status === 'aborted'
+          ? new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('charts.yellow'))
+          : new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+
+      const ts = new Date(entry.startedAt);
+      const timeStr = ts.toLocaleTimeString();
+      const dateStr = ts.toLocaleDateString();
+      const description = `${dateStr} ${timeStr} (${entry.duration}ms)`;
+
+      const mutatingBadge = entry.mutating ? '$(edit)' : '$(eye)';
+      const envLabel = entry.environment ? ` [${entry.environment}]` : '';
+      const tooltip = `${mutatingBadge} ${entry.name}${envLabel}\nStatus: ${entry.status}\nDuration: ${entry.duration}ms\n\n${entry.stdout.slice(0, 500)}`;
+
+      return new AutomationTreeItem(
+        entry.name,
+        vscode.TreeItemCollapsibleState.None,
+        {
+          description,
+          iconPath: statusIcon,
+          tooltip,
+          contextValue: 'automationRecentRunChild',
+          dataId: entry.id,
+        }
+      );
+    });
   }
 
   private getMcpRootNode(): AutomationTreeItem {
