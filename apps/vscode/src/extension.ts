@@ -1790,6 +1790,7 @@ export { HuntDataStore } from './store';
 export { ArtifactWatcher, resolveArtifactType } from './watcher';
 export { HuntTreeDataProvider, HuntTreeItem } from './sidebar';
 export { AutomationTreeDataProvider, AutomationTreeItem } from './automationSidebar';
+export { MCPStatusManager, type MCPHealthResult, type MCPConnectionStatus, type MCPStatus } from './mcpStatusManager';
 export { HuntStatusBar } from './statusBar';
 export { HuntCodeLensProvider } from './codeLens';
 export { EvidenceIntegrityDiagnostics } from './diagnostics';
