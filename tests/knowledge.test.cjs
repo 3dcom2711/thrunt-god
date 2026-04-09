@@ -310,6 +310,26 @@ describe('knowledge.cjs - addEntity / getEntity', () => {
     assert.ok(found.source);
     assert.equal(found.source, 'manual');
   });
+
+  it('preserves created_at when upserting an existing entity', () => {
+    const { addEntity, getEntity } = loadKnowledge();
+    const first = addEntity(db, {
+      type: 'threat_actor',
+      name: 'APT28',
+      description: 'Original description',
+    });
+    const createdAtBefore = getEntity(db, first.id).created_at;
+
+    const second = addEntity(db, {
+      type: 'threat_actor',
+      name: 'APT28',
+      description: 'Updated description',
+    });
+    const found = getEntity(db, second.id);
+
+    assert.equal(found.created_at, createdAtBefore);
+    assert.equal(found.description, 'Updated description');
+  });
 });
 
 describe('knowledge.cjs - addRelation / getRelations', () => {
@@ -787,6 +807,33 @@ describe('knowledge.cjs - importStixFromIntel', () => {
     assert.deepEqual(second, { imported: false });
     assert.equal(entityAfter.created_at, entityBefore.created_at, 'entity timestamps should stay stable on skipped import');
     assert.equal(relationAfter.created_at, relationBefore.created_at, 'relation timestamps should stay stable on skipped import');
+  });
+
+  it('treats orphaned intel relationship rows as filtered-out data, not an incomplete import', () => {
+    const { importStixFromIntel } = loadKnowledge();
+    const groupId = intelDb.prepare('SELECT id FROM groups LIMIT 1').get().id;
+    const softwareId = intelDb.prepare('SELECT id FROM software LIMIT 1').get().id;
+
+    intelDb.prepare(
+      'INSERT INTO group_software (group_id, software_id) VALUES (?, ?)'
+    ).run(groupId, 'S99999');
+    intelDb.prepare(
+      'INSERT INTO software_techniques (software_id, technique_id) VALUES (?, ?)'
+    ).run(softwareId, 'T9999');
+
+    const first = importStixFromIntel(programDb, intelDb, { force: true });
+    const relationCountBefore = programDb.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_relations WHERE source = 'att&ck-stix'"
+    ).get().cnt;
+
+    const second = importStixFromIntel(programDb, intelDb);
+    const relationCountAfter = programDb.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_relations WHERE source = 'att&ck-stix'"
+    ).get().cnt;
+
+    assert.deepEqual(first, { imported: true });
+    assert.deepEqual(second, { imported: false });
+    assert.equal(relationCountAfter, relationCountBefore);
   });
 
   it('supports embedded intel.db imports when no separate source db is passed', () => {

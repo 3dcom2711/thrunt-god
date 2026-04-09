@@ -66,12 +66,12 @@ function extractIOCs(text) {
 
   // Remove SHA256 matches from text before SHA1 extraction to avoid partial matches
   let reduced = text;
-  for (const h of sha256s) reduced = reduced.replace(h, '');
+  for (const h of sha256s) reduced = reduced.split(h).join('');
 
   const sha1s = [...new Set(reduced.match(SHA1_RE) || [])];
 
   // Remove SHA1 matches before MD5 extraction
-  for (const h of sha1s) reduced = reduced.replace(h, '');
+  for (const h of sha1s) reduced = reduced.split(h).join('');
 
   const md5s = [...new Set(reduced.match(MD5_RE) || [])];
 

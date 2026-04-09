@@ -634,7 +634,24 @@ function searchDetections(db, query, opts = {}) {
 
 function scanDetectionFiles(dirPath, extPattern, format) {
   try {
-    const entries = fs.readdirSync(dirPath, { recursive: true });
+    const entries = [];
+    const pending = [''];
+
+    while (pending.length > 0) {
+      const relDir = pending.pop();
+      const absDir = relDir ? path.join(dirPath, relDir) : dirPath;
+      const children = fs.readdirSync(absDir, { withFileTypes: true });
+
+      for (const child of children) {
+        const childRelPath = relDir ? path.join(relDir, child.name) : child.name;
+        if (child.isDirectory()) {
+          pending.push(childRelPath);
+          continue;
+        }
+        entries.push(childRelPath);
+      }
+    }
+
     const files = [];
     for (const relFile of entries) {
       const nativeRel = typeof relFile === 'string' ? relFile : relFile.toString();
@@ -656,6 +673,7 @@ function scanDetectionFiles(dirPath, extPattern, format) {
       });
     }
 
+    files.sort((a, b) => a.relPath.localeCompare(b.relPath));
     return files;
   } catch (err) {
     process.stderr.write(`[detections] Warning: failed to read ${format} directory ${dirPath}: ${err.message}\n`);

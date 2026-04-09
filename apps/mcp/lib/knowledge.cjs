@@ -43,7 +43,10 @@ function upsertEntityRecord(db, opts) {
   const description = opts.description || '';
   const metadata = opts.metadata || '{}';
   const source = opts.source || 'manual';
-  const created_at = new Date().toISOString();
+  const existing = db.prepare(
+    'SELECT created_at FROM kg_entities WHERE id = ?'
+  ).get(id);
+  const created_at = existing?.created_at || new Date().toISOString();
 
   db.prepare(
     `INSERT INTO kg_entities (id, type, name, description, metadata, created_at, source)
@@ -53,7 +56,7 @@ function upsertEntityRecord(db, opts) {
        name = excluded.name,
        description = excluded.description,
        metadata = excluded.metadata,
-       created_at = excluded.created_at,
+       created_at = kg_entities.created_at,
        source = excluded.source`
   ).run(id, type, name, description, metadata, created_at, source);
 
@@ -447,12 +450,19 @@ function hasCompleteStixImport(programDb, intelDb) {
     intelDb.prepare(`
       SELECT COUNT(*) AS cnt
       FROM group_techniques gt
+      INNER JOIN groups g ON g.id = gt.group_id
       INNER JOIN techniques t ON UPPER(t.id) = UPPER(gt.technique_id)
     `).get().cnt +
-    intelDb.prepare('SELECT COUNT(*) AS cnt FROM group_software').get().cnt +
+    intelDb.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM group_software gs
+      INNER JOIN groups g ON g.id = gs.group_id
+      INNER JOIN software s ON s.id = gs.software_id
+    `).get().cnt +
     intelDb.prepare(`
       SELECT COUNT(*) AS cnt
       FROM software_techniques st
+      INNER JOIN software s ON s.id = st.software_id
       INNER JOIN techniques t ON UPPER(t.id) = UPPER(st.technique_id)
     `).get().cnt;
 

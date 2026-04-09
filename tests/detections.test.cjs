@@ -773,6 +773,47 @@ describe('detections.cjs - env var path indexing', () => {
     assert.equal(row.source_format, 'sigma');
   });
 
+  it('indexes nested custom directories without relying on recursive fs.readdirSync support', () => {
+    const customDir = path.join(tmpDir, 'compat-sigma');
+    const nestedDir = path.join(customDir, 'nested');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const customYaml = sigmaYaml.replace(
+      '3b6ab547-f55a-4d6e-88a1-a6a9f87e1234',
+      'custom-sigma-node20-compat-001'
+    );
+    fs.writeFileSync(path.join(nestedDir, 'nested-rule.yml'), customYaml);
+
+    process.env.SIGMA_PATHS = customDir;
+
+    const { ensureDetectionsSchema, populateDetectionsIfEmpty } = loadDet();
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(tmpDir, 'compat-env-test.db');
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    ensureDetectionsSchema(db);
+
+    const originalReaddirSync = fs.readdirSync;
+    fs.readdirSync = function(dirPath, options) {
+      if (options && typeof options === 'object' && options.recursive) {
+        throw new Error('recursive readdir unsupported');
+      }
+      return originalReaddirSync.call(this, dirPath, options);
+    };
+
+    try {
+      populateDetectionsIfEmpty(db);
+    } finally {
+      fs.readdirSync = originalReaddirSync;
+    }
+
+    const row = db.prepare(
+      "SELECT * FROM detections WHERE id = 'sigma:custom-sigma-node20-compat-001'"
+    ).get();
+    assert.ok(row);
+    assert.equal(row.file_path, 'nested/nested-rule.yml');
+  });
+
   it('SPLUNK_PATHS indexes ESCU directory', () => {
     const customDir = path.join(tmpDir, 'custom-escu');
     fs.mkdirSync(customDir, { recursive: true });

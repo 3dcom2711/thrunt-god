@@ -236,6 +236,25 @@ describe('db.cjs - extractIOCs', () => {
     assert.deepEqual(iocs.sha256s, ['e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855']);
   });
 
+  it('removes repeated SHA256 hashes before shorter hash extraction', () => {
+    const { extractIOCs } = loadDb();
+    const sha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+    const iocs = extractIOCs(`Repeated values ${sha256} and ${sha256}`);
+
+    assert.deepEqual(iocs.sha256s, [sha256]);
+    assert.deepEqual(iocs.sha1s, []);
+    assert.deepEqual(iocs.md5s, []);
+  });
+
+  it('removes repeated SHA1 hashes before MD5 extraction', () => {
+    const { extractIOCs } = loadDb();
+    const sha1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+    const iocs = extractIOCs(`Repeated values ${sha1} and ${sha1}`);
+
+    assert.deepEqual(iocs.sha1s, [sha1]);
+    assert.deepEqual(iocs.md5s, []);
+  });
+
   it('returns empty arrays for text without IOCs', () => {
     const { extractIOCs } = loadDb();
     const iocs = extractIOCs('No indicators here');
