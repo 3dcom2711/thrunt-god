@@ -657,6 +657,33 @@ describe('knowledge.cjs - importStixFromIntel', () => {
     assert.equal(relationCount, relationCountAfter, 'relation count should not change on re-import');
   });
 
+  it('short-circuits once the ATT&CK graph is already complete', () => {
+    const { importStixFromIntel } = loadKnowledge();
+
+    const first = importStixFromIntel(programDb, intelDb, { force: true });
+    assert.deepEqual(first, { imported: true });
+
+    const entityBefore = programDb.prepare(
+      "SELECT id, created_at FROM kg_entities WHERE source = 'att&ck-stix' ORDER BY id LIMIT 1"
+    ).get();
+    const relationBefore = programDb.prepare(
+      "SELECT id, created_at FROM kg_relations WHERE source = 'att&ck-stix' ORDER BY id LIMIT 1"
+    ).get();
+
+    const second = importStixFromIntel(programDb, intelDb);
+
+    const entityAfter = programDb.prepare(
+      "SELECT id, created_at FROM kg_entities WHERE id = ?"
+    ).get(entityBefore.id);
+    const relationAfter = programDb.prepare(
+      "SELECT id, created_at FROM kg_relations WHERE id = ?"
+    ).get(relationBefore.id);
+
+    assert.deepEqual(second, { imported: false });
+    assert.equal(entityAfter.created_at, entityBefore.created_at, 'entity timestamps should stay stable on skipped import');
+    assert.equal(relationAfter.created_at, relationBefore.created_at, 'relation timestamps should stay stable on skipped import');
+  });
+
   it('STIX-imported entities have source att&ck-stix', () => {
     const { importStixFromIntel } = loadKnowledge();
     importStixFromIntel(programDb, intelDb);

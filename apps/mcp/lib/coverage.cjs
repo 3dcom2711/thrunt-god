@@ -2,6 +2,12 @@
 
 const { lookupTechnique, getTechniquesByTactic } = require('./intel.cjs');
 
+let _detections;
+function getDetections() {
+  if (!_detections) _detections = require('./detections.cjs');
+  return _detections;
+}
+
 const THREAT_PROFILES = {
   ransomware: [
     'T1486',     // Data Encrypted for Impact
@@ -144,12 +150,13 @@ function compareDetections(db, input) {
 function _compareForTechnique(db, techniqueId) {
   const tech = lookupTechnique(db, techniqueId);
   const techniqueName = tech ? tech.name : null;
+  const techniqueMatch = getDetections().buildTechniqueIdMatchClause('technique_ids', techniqueId);
 
   let rows;
   try {
     rows = db.prepare(
-      'SELECT id, title, source_format, severity FROM detections WHERE technique_ids LIKE ?'
-    ).all(`%${techniqueId}%`);
+      `SELECT id, title, source_format, severity FROM detections WHERE ${techniqueMatch.clause}`
+    ).all(...techniqueMatch.params);
   } catch {
     rows = [];
   }
@@ -221,11 +228,12 @@ function suggestDetections(db, techniqueId) {
 
     for (const sibId of siblingIds) {
       if (similarRules.length >= 10) break;
+      const techniqueMatch = getDetections().buildTechniqueIdMatchClause('technique_ids', sibId);
 
       try {
         const detRows = db.prepare(
-          'SELECT id, title, logsource, source_format FROM detections WHERE technique_ids LIKE ? LIMIT ?'
-        ).all(`%${sibId}%`, 10 - similarRules.length);
+          `SELECT id, title, logsource, source_format FROM detections WHERE ${techniqueMatch.clause} LIMIT ?`
+        ).all(...techniqueMatch.params, 10 - similarRules.length);
 
         for (const row of detRows) {
           if (similarRules.length >= 10) break;

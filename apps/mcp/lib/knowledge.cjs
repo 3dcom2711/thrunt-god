@@ -24,6 +24,37 @@ function buildAttackDescription(label, attackId, description = '') {
 
 /**
  * @param {import('better-sqlite3').Database} db
+ * @param {{ type: string, name: string, description?: string, metadata?: string, source?: string, id?: string }} opts
+ * @returns {object}
+ */
+function upsertEntityRecord(db, opts) {
+  const id = opts.id || makeEntityId(opts.type, opts.name);
+  const type = opts.type;
+  const name = opts.name;
+  const description = opts.description || '';
+  const metadata = opts.metadata || '{}';
+  const source = opts.source || 'manual';
+  const created_at = new Date().toISOString();
+
+  const existing = db.prepare('SELECT rowid FROM kg_entities WHERE id = ?').get(id);
+  if (existing) {
+    db.prepare('DELETE FROM kg_entities_fts WHERE rowid = ?').run(existing.rowid);
+  }
+
+  db.prepare(
+    'INSERT OR REPLACE INTO kg_entities (id, type, name, description, metadata, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, type, name, description, metadata, created_at, source);
+
+  const newRow = db.prepare('SELECT rowid FROM kg_entities WHERE id = ?').get(id);
+  db.prepare(
+    'INSERT INTO kg_entities_fts (rowid, name, description) VALUES (?, ?, ?)'
+  ).run(newRow.rowid, name, description);
+
+  return { id, type, name, description, metadata, created_at, source };
+}
+
+/**
+ * @param {import('better-sqlite3').Database} db
  */
 function ensureKnowledgeSchema(db) {
   db.exec(`
@@ -81,32 +112,14 @@ function ensureKnowledgeSchema(db) {
  * @returns {object}
  */
 function addEntity(db, opts) {
-  const id = opts.id || makeEntityId(opts.type, opts.name);
-  const type = opts.type;
-  const name = opts.name;
-  const description = opts.description || '';
-  const metadata = opts.metadata || '{}';
-  const source = opts.source || 'manual';
-  const created_at = new Date().toISOString();
-
+  let entity;
   const doAdd = db.transaction(() => {
-    const existing = db.prepare('SELECT rowid FROM kg_entities WHERE id = ?').get(id);
-    if (existing) {
-      db.prepare('DELETE FROM kg_entities_fts WHERE rowid = ?').run(existing.rowid);
-    }
-
-    db.prepare(
-      'INSERT OR REPLACE INTO kg_entities (id, type, name, description, metadata, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, type, name, description, metadata, created_at, source);
-
-    db.prepare(
-      'INSERT INTO kg_entities_fts (rowid, name, description) VALUES ((SELECT rowid FROM kg_entities WHERE id = ?), ?, ?)'
-    ).run(id, name, description);
+    entity = upsertEntityRecord(db, opts);
   });
 
   doAdd.immediate();
 
-  return { id, type, name, description, metadata, created_at, source };
+  return entity;
 }
 
 /**
@@ -368,13 +381,70 @@ function getLearnings(db, filters = {}) {
 }
 
 /**
+ * @param {import('better-sqlite3').Database} programDb
+ * @param {import('better-sqlite3').Database} intelDb
+ * @returns {boolean}
+ */
+function hasCompleteStixImport(programDb, intelDb) {
+  const expectedTechniqueCount = intelDb.prepare('SELECT COUNT(*) AS cnt FROM techniques').get().cnt;
+  const expectedGroupCount = intelDb.prepare('SELECT COUNT(*) AS cnt FROM groups').get().cnt;
+  const expectedToolCount = intelDb.prepare('SELECT COUNT(*) AS cnt FROM software').get().cnt;
+  const expectedRelationCount =
+    intelDb.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM group_techniques gt
+      INNER JOIN techniques t ON UPPER(t.id) = UPPER(gt.technique_id)
+    `).get().cnt +
+    intelDb.prepare('SELECT COUNT(*) AS cnt FROM group_software').get().cnt +
+    intelDb.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM software_techniques st
+      INNER JOIN techniques t ON UPPER(t.id) = UPPER(st.technique_id)
+    `).get().cnt;
+
+  const actualTechniqueCount = programDb.prepare(
+    "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'technique'"
+  ).get().cnt;
+  const actualGroupCount = programDb.prepare(
+    "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'threat_actor'"
+  ).get().cnt;
+  const actualToolCount = programDb.prepare(
+    "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'tool'"
+  ).get().cnt;
+  const actualRelationCount = programDb.prepare(
+    "SELECT COUNT(*) AS cnt FROM kg_relations WHERE source = 'att&ck-stix'"
+  ).get().cnt;
+  const danglingRelationCount = programDb.prepare(`
+    SELECT COUNT(*) AS cnt
+    FROM kg_relations r
+    LEFT JOIN kg_entities src ON src.id = r.from_entity
+    LEFT JOIN kg_entities dst ON dst.id = r.to_entity
+    WHERE r.source = 'att&ck-stix'
+      AND (src.id IS NULL OR dst.id IS NULL)
+  `).get().cnt;
+
+  return (
+    actualTechniqueCount === expectedTechniqueCount &&
+    actualGroupCount === expectedGroupCount &&
+    actualToolCount === expectedToolCount &&
+    actualRelationCount === expectedRelationCount &&
+    danglingRelationCount === 0
+  );
+}
+
+/**
  * Import ATT&CK STIX relationships from intel.db into the knowledge graph.
  * Idempotent: upserts entities, deletes and re-inserts STIX relations.
  *
  * @param {import('better-sqlite3').Database} programDb
  * @param {import('better-sqlite3').Database} intelDb
+ * @param {{ force?: boolean }} [opts={}]
  */
-function importStixFromIntel(programDb, intelDb) {
+function importStixFromIntel(programDb, intelDb, opts = {}) {
+  if (!opts.force && hasCompleteStixImport(programDb, intelDb)) {
+    return { imported: false };
+  }
+
   const techniques = intelDb.prepare('SELECT * FROM techniques').all();
   const groups = intelDb.prepare('SELECT * FROM groups').all();
   const software = intelDb.prepare('SELECT * FROM software').all();
@@ -468,30 +538,11 @@ function importStixFromIntel(programDb, intelDb) {
   });
 
   doImport.immediate();
+  return { imported: true };
 }
 
 function addEntityDirect(db, opts) {
-  const id = opts.id || makeEntityId(opts.type, opts.name);
-  const type = opts.type;
-  const name = opts.name;
-  const description = opts.description || '';
-  const metadata = opts.metadata || '{}';
-  const source = opts.source || 'manual';
-  const created_at = new Date().toISOString();
-
-  const existing = db.prepare('SELECT rowid, name, description FROM kg_entities WHERE id = ?').get(id);
-  if (existing) {
-    db.prepare('DELETE FROM kg_entities_fts WHERE rowid = ?').run(existing.rowid);
-  }
-
-  db.prepare(
-    'INSERT OR REPLACE INTO kg_entities (id, type, name, description, metadata, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, type, name, description, metadata, created_at, source);
-
-  const newRow = db.prepare('SELECT rowid FROM kg_entities WHERE id = ?').get(id);
-  db.prepare(
-    'INSERT INTO kg_entities_fts (rowid, name, description) VALUES (?, ?, ?)'
-  ).run(newRow.rowid, name, description);
+  return upsertEntityRecord(db, opts);
 }
 
 module.exports = {

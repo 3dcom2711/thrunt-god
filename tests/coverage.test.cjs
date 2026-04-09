@@ -18,6 +18,11 @@ function loadIntel() {
   if (!intel) intel = require('../apps/mcp/lib/intel.cjs');
   return intel;
 }
+let det;
+function loadDet() {
+  if (!det) det = require('../apps/mcp/lib/detections.cjs');
+  return det;
+}
 function loadCoverage() {
   if (!coverage) coverage = require('../apps/mcp/lib/coverage.cjs');
   return coverage;
@@ -124,28 +129,61 @@ describe('compareDetections', () => {
   before(() => {
     tmpDir = makeTempDir();
     const { openIntelDb } = loadIntel();
+    const { insertDetection } = loadDet();
     db = openIntelDb({ dbDir: tmpDir });
 
-    db.prepare(`INSERT OR IGNORE INTO detections (id, title, source_format, technique_ids, tactics, severity, logsource, query, description, metadata, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'sigma:test-t1059-1', 'Sigma Powershell Execution', 'sigma', 'T1059,T1059.001', 'Execution', 'high', '{}', 'detect powershell', 'Test sigma rule', '{}', 'test/sigma1.yml'
-    );
-    db.prepare(`INSERT INTO detections_fts (title, description, query, technique_ids) VALUES (?, ?, ?, ?)`).run(
-      'Sigma Powershell Execution', 'Test sigma rule', 'detect powershell', 'T1059,T1059.001'
-    );
-
-    db.prepare(`INSERT OR IGNORE INTO detections (id, title, source_format, technique_ids, tactics, severity, logsource, query, description, metadata, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'elastic:test-t1059-2', 'Elastic Script Execution', 'elastic', 'T1059', 'Execution', 'medium', 'logs-*', 'process where', 'Test elastic rule', '{}', 'test/elastic1.toml'
-    );
-    db.prepare(`INSERT INTO detections_fts (title, description, query, technique_ids) VALUES (?, ?, ?, ?)`).run(
-      'Elastic Script Execution', 'Test elastic rule', 'process where', 'T1059'
-    );
-
-    db.prepare(`INSERT OR IGNORE INTO detections (id, title, source_format, technique_ids, tactics, severity, logsource, query, description, metadata, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'sigma:test-t1078-1', 'Valid Accounts Usage', 'sigma', 'T1078', 'Persistence', 'medium', '{}', 'detect valid accounts', 'Test sigma rule', '{}', 'test/sigma2.yml'
-    );
-    db.prepare(`INSERT INTO detections_fts (title, description, query, technique_ids) VALUES (?, ?, ?, ?)`).run(
-      'Valid Accounts Usage', 'Test sigma rule', 'detect valid accounts', 'T1078'
-    );
+    insertDetection(db, {
+      id: 'sigma:test-t1059-1',
+      title: 'Sigma Powershell Execution',
+      source_format: 'sigma',
+      technique_ids: 'T1059,T1059.001',
+      tactics: 'Execution',
+      severity: 'high',
+      logsource: '{}',
+      query: 'detect powershell',
+      description: 'Test sigma rule',
+      metadata: '{}',
+      file_path: 'test/sigma1.yml',
+    });
+    insertDetection(db, {
+      id: 'elastic:test-t1059-2',
+      title: 'Elastic Script Execution',
+      source_format: 'elastic',
+      technique_ids: 'T1059',
+      tactics: 'Execution',
+      severity: 'medium',
+      logsource: 'logs-*',
+      query: 'process where',
+      description: 'Test elastic rule',
+      metadata: '{}',
+      file_path: 'test/elastic1.toml',
+    });
+    insertDetection(db, {
+      id: 'sigma:test-t1078-1',
+      title: 'Valid Accounts Usage',
+      source_format: 'sigma',
+      technique_ids: 'T1078',
+      tactics: 'Persistence',
+      severity: 'medium',
+      logsource: '{}',
+      query: 'detect valid accounts',
+      description: 'Test sigma rule',
+      metadata: '{}',
+      file_path: 'test/sigma2.yml',
+    });
+    insertDetection(db, {
+      id: 'sigma:test-t1003-subtechnique-only',
+      title: 'Sub-technique Only Credential Access',
+      source_format: 'sigma',
+      technique_ids: 'T1003.001',
+      tactics: 'Credential Access',
+      severity: 'high',
+      logsource: '{}',
+      query: 'lsass access',
+      description: 'Should not count for T1003 parent searches',
+      metadata: '{}',
+      file_path: 'test/sigma-subtech.yml',
+    });
   });
 
   after(() => {
@@ -202,6 +240,16 @@ describe('compareDetections', () => {
 
     assert.ok(result);
   });
+
+  it('does not count sub-technique-only detections for the parent technique', () => {
+    const { compareDetections } = loadCoverage();
+    const result = compareDetections(db, 'T1003');
+
+    assert.ok(
+      !result.sources.some(source => source.rule_id === 'sigma:test-t1003-subtechnique-only'),
+      'parent-technique coverage should exclude detections tagged only to sub-techniques'
+    );
+  });
 });
 
 describe('suggestDetections', () => {
@@ -210,14 +258,22 @@ describe('suggestDetections', () => {
   before(() => {
     tmpDir = makeTempDir();
     const { openIntelDb } = loadIntel();
+    const { insertDetection } = loadDet();
     db = openIntelDb({ dbDir: tmpDir });
 
-    db.prepare(`INSERT OR IGNORE INTO detections (id, title, source_format, technique_ids, tactics, severity, logsource, query, description, metadata, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'sigma:suggest-t1059', 'PowerShell Execution Detection', 'sigma', 'T1059', 'Execution', 'high', '{"product":"windows"}', 'detect powershell', 'Sigma detection for powershell', '{}', 'test/suggest-sigma.yml'
-    );
-    db.prepare(`INSERT INTO detections_fts (title, description, query, technique_ids) VALUES (?, ?, ?, ?)`).run(
-      'PowerShell Execution Detection', 'Sigma detection for powershell', 'detect powershell', 'T1059'
-    );
+    insertDetection(db, {
+      id: 'sigma:suggest-t1059',
+      title: 'PowerShell Execution Detection',
+      source_format: 'sigma',
+      technique_ids: 'T1059',
+      tactics: 'Execution',
+      severity: 'high',
+      logsource: '{"product":"windows"}',
+      query: 'detect powershell',
+      description: 'Sigma detection for powershell',
+      metadata: '{}',
+      file_path: 'test/suggest-sigma.yml',
+    });
   });
 
   after(() => {

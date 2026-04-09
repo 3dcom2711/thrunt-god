@@ -295,6 +295,82 @@ describe('detections.cjs - ensureDetectionsSchema', () => {
   });
 });
 
+describe('detections.cjs - legacy detections_fts migration', () => {
+  let tmpDir, db;
+
+  beforeEach(() => {
+    tmpDir = makeTempDir();
+    const Database = require('better-sqlite3');
+    db = new Database(path.join(tmpDir, 'legacy-detections.db'));
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    db.exec(`
+      CREATE TABLE detections (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        source_format TEXT NOT NULL,
+        technique_ids TEXT,
+        tactics TEXT,
+        severity TEXT,
+        logsource TEXT,
+        query TEXT,
+        description TEXT,
+        metadata TEXT,
+        file_path TEXT
+      );
+
+      CREATE VIRTUAL TABLE detections_fts USING fts5(
+        title, description, query, technique_ids,
+        tokenize='porter unicode61'
+      );
+    `);
+    db.prepare(`
+      INSERT INTO detections
+        (id, title, source_format, technique_ids, tactics, severity, logsource, query, description, metadata, file_path)
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'sigma:legacy-detection',
+      'Legacy PowerShell Detection',
+      'sigma',
+      'T1059.001',
+      'Execution',
+      'high',
+      '{}',
+      'legacy powershell query',
+      'Legacy rule inserted before migration',
+      '{}',
+      'legacy.yml'
+    );
+    db.prepare(
+      'INSERT INTO detections_fts (title, description, query, technique_ids) VALUES (?, ?, ?, ?)'
+    ).run(
+      'Legacy PowerShell Detection',
+      'Legacy rule inserted before migration',
+      'legacy powershell query',
+      'T1059.001'
+    );
+  });
+
+  afterEach(() => {
+    if (db) db.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rebuilds detections_fts with stable ids and preserves searchable rows', () => {
+    const { ensureDetectionsSchema, searchDetections } = loadDet();
+    ensureDetectionsSchema(db);
+
+    const ftsSql = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'detections_fts'"
+    ).get().sql;
+    assert.match(ftsSql, /\bid\s+UNINDEXED\b/i);
+
+    const rows = searchDetections(db, 'PowerShell', { technique_id: 'T1059.001' });
+    assert.ok(rows.some(row => row.id === 'sigma:legacy-detection'));
+  });
+});
+
 describe('detections.cjs - insertDetection + searchDetections', () => {
   let tmpDir, db;
 
@@ -332,10 +408,30 @@ describe('detections.cjs - insertDetection + searchDetections', () => {
     assert.ok(results.some(r => r.title.includes('PowerShell')));
   });
 
-  it('FTS search finds by technique_id using LIKE filter', () => {
+  it('FTS search finds by technique_id using exact technique matching', () => {
     const { searchDetections } = loadDet();
     const results = searchDetections(db, 'PowerShell', { technique_id: 'T1059.001' });
     assert.ok(results.length > 0);
+  });
+
+  it('does not match parent technique filters against sub-technique-only detections', () => {
+    const { insertDetection, searchDetections } = loadDet();
+    insertDetection(db, {
+      id: 'sigma:subtechnique-only',
+      title: 'Sub-technique Only Rule',
+      source_format: 'sigma',
+      technique_ids: 'T1003.001',
+      tactics: 'Credential Access',
+      severity: 'medium',
+      logsource: '{}',
+      query: 'lsass access',
+      description: 'Should not be returned for T1003 exact filters',
+      metadata: '{}',
+      file_path: 'subtechnique.yml',
+    });
+
+    const results = searchDetections(db, 'Rule', { technique_id: 'T1003' });
+    assert.ok(!results.some(row => row.id === 'sigma:subtechnique-only'));
   });
 
   it('FTS search finds by description keyword', () => {
@@ -582,6 +678,13 @@ describe('detections.cjs - openIntelDb integration', () => {
     assert.ok(count >= 3, `expected at least 3 bundled sigma rules, got ${count}`);
   });
 
+  it('openIntelDb populates bundled KQL rules on first run', () => {
+    const count = db.prepare(
+      "SELECT COUNT(*) AS cnt FROM detections WHERE source_format = 'kql'"
+    ).get().cnt;
+    assert.ok(count >= 1, `expected at least 1 bundled KQL rule, got ${count}`);
+  });
+
   it('populateDetectionsIfEmpty is idempotent', () => {
     const countBefore = db.prepare('SELECT COUNT(*) AS cnt FROM detections').get().cnt;
     assert.ok(countBefore > 0);
@@ -604,6 +707,7 @@ describe('detections.cjs - env var path indexing', () => {
     savedEnv.SIGMA_PATHS = process.env.SIGMA_PATHS;
     savedEnv.SPLUNK_PATHS = process.env.SPLUNK_PATHS;
     savedEnv.ELASTIC_PATHS = process.env.ELASTIC_PATHS;
+    savedEnv.KQL_PATHS = process.env.KQL_PATHS;
   });
 
   afterEach(() => {
@@ -616,6 +720,8 @@ describe('detections.cjs - env var path indexing', () => {
     else process.env.SPLUNK_PATHS = savedEnv.SPLUNK_PATHS;
     if (savedEnv.ELASTIC_PATHS === undefined) delete process.env.ELASTIC_PATHS;
     else process.env.ELASTIC_PATHS = savedEnv.ELASTIC_PATHS;
+    if (savedEnv.KQL_PATHS === undefined) delete process.env.KQL_PATHS;
+    else process.env.KQL_PATHS = savedEnv.KQL_PATHS;
   });
 
   it('SIGMA_PATHS indexes custom directory', () => {
@@ -697,6 +803,52 @@ describe('detections.cjs - env var path indexing', () => {
     ).get();
     assert.ok(row);
     assert.equal(row.source_format, 'elastic');
+  });
+
+  it('KQL_PATHS indexes KQL directory', () => {
+    const customDir = path.join(tmpDir, 'custom-kql');
+    fs.mkdirSync(customDir, { recursive: true });
+    fs.writeFileSync(path.join(customDir, 'custom-kql.md'), kqlMd);
+
+    process.env.KQL_PATHS = customDir;
+
+    const { ensureDetectionsSchema, populateDetectionsIfEmpty } = loadDet();
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(tmpDir, 'kql-env-test.db');
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    ensureDetectionsSchema(db);
+    populateDetectionsIfEmpty(db);
+
+    const row = db.prepare(
+      "SELECT * FROM detections WHERE id = 'kql:custom-kql.md'"
+    ).get();
+    assert.ok(row);
+    assert.equal(row.source_format, 'kql');
+  });
+
+  it('indexes custom paths on later startups after bundled detections already exist', () => {
+    const customDir = path.join(tmpDir, 'delayed-sigma');
+    fs.mkdirSync(customDir, { recursive: true });
+    const customYaml = sigmaYaml.replace(
+      '3b6ab547-f55a-4d6e-88a1-a6a9f87e1234',
+      'custom-sigma-delayed-startup-001'
+    );
+    fs.writeFileSync(path.join(customDir, 'delayed-rule.yml'), customYaml);
+
+    const { openIntelDb } = loadIntel();
+    db = openIntelDb({ dbDir: tmpDir });
+
+    process.env.SIGMA_PATHS = customDir;
+
+    const { populateDetectionsIfEmpty } = loadDet();
+    populateDetectionsIfEmpty(db);
+
+    const row = db.prepare(
+      "SELECT * FROM detections WHERE id = 'sigma:custom-sigma-delayed-startup-001'"
+    ).get();
+    assert.ok(row, 'custom detection should be indexed even after bundled rules already exist');
   });
 
   it('nonexistent env var path logs warning but does not throw', () => {

@@ -286,6 +286,66 @@ function parseKqlRule(mdText, filePath) {
   }
 }
 
+/**
+ * Build a SQL clause that matches a technique ID exactly inside a comma-separated list.
+ *
+ * @param {string} column
+ * @param {string} techniqueId
+ * @returns {{ clause: string, params: string[] }}
+ */
+function buildTechniqueIdMatchClause(column, techniqueId) {
+  const normalisedId = String(techniqueId || '').toUpperCase().trim();
+  const normalisedColumn = `UPPER(REPLACE(COALESCE(${column}, ''), ' ', ''))`;
+
+  return {
+    clause: `(${normalisedColumn} = ? OR ${normalisedColumn} LIKE ? OR ${normalisedColumn} LIKE ? OR ${normalisedColumn} LIKE ?)`,
+    params: [
+      normalisedId,
+      `${normalisedId},%`,
+      `%,${normalisedId},%`,
+      `%,${normalisedId}`,
+    ],
+  };
+}
+
+/** @param {import('better-sqlite3').Database} db */
+function ensureDetectionsFtsSchema(db) {
+  const row = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'detections_fts'"
+  ).get();
+  const hasStableId = row && /\bid\s+UNINDEXED\b/i.test(row.sql || '');
+  if (hasStableId) return;
+
+  const rebuildFts = db.transaction(() => {
+    db.exec('DROP TABLE IF EXISTS detections_fts');
+    db.exec(`
+      CREATE VIRTUAL TABLE detections_fts USING fts5(
+        title, description, query, technique_ids, id UNINDEXED,
+        tokenize='porter unicode61'
+      )
+    `);
+
+    const insertFts = db.prepare(
+      'INSERT INTO detections_fts (title, description, query, technique_ids, id) VALUES (?, ?, ?, ?, ?)'
+    );
+    const rows = db.prepare(
+      'SELECT id, title, description, query, technique_ids FROM detections'
+    ).all();
+
+    for (const existing of rows) {
+      insertFts.run(
+        existing.title,
+        existing.description || '',
+        existing.query || '',
+        existing.technique_ids || '',
+        existing.id
+      );
+    }
+  });
+
+  rebuildFts.immediate();
+}
+
 /** @param {import('better-sqlite3').Database} db */
 function ensureDetectionsSchema(db) {
   db.exec(`
@@ -303,14 +363,11 @@ function ensureDetectionsSchema(db) {
       file_path TEXT
     );
 
-    CREATE VIRTUAL TABLE IF NOT EXISTS detections_fts USING fts5(
-      title, description, query, technique_ids,
-      tokenize='porter unicode61'
-    );
-
     CREATE INDEX IF NOT EXISTS idx_det_source ON detections(source_format);
     CREATE INDEX IF NOT EXISTS idx_det_severity ON detections(severity);
   `);
+
+  ensureDetectionsFtsSchema(db);
 }
 
 /**
@@ -335,8 +392,8 @@ function insertDetection(db, row) {
 
   if (result.changes > 0) {
     db.prepare(
-      'INSERT INTO detections_fts (title, description, query, technique_ids) VALUES (?, ?, ?, ?)'
-    ).run(row.title, row.description, row.query, row.technique_ids);
+      'INSERT INTO detections_fts (title, description, query, technique_ids, id) VALUES (?, ?, ?, ?, ?)'
+    ).run(row.title, row.description, row.query, row.technique_ids, row.id);
   }
 
   return result.changes;
@@ -436,8 +493,8 @@ function searchDetections(db, query, opts = {}) {
       SELECT d.*
       FROM detections d
       INNER JOIN (
-        SELECT rowid, rank FROM detections_fts WHERE detections_fts MATCH ? ORDER BY rank
-      ) AS fts ON d.rowid = fts.rowid
+        SELECT id, rank FROM detections_fts WHERE detections_fts MATCH ? ORDER BY rank
+      ) AS fts ON d.id = fts.id
     `;
     const params = [query];
     const conditions = [];
@@ -453,8 +510,9 @@ function searchDetections(db, query, opts = {}) {
     }
 
     if (opts.technique_id) {
-      conditions.push('d.technique_ids LIKE ?');
-      params.push(`%${opts.technique_id}%`);
+      const techniqueMatch = buildTechniqueIdMatchClause('d.technique_ids', opts.technique_id);
+      conditions.push(techniqueMatch.clause);
+      params.push(...techniqueMatch.params);
     }
 
     if (conditions.length > 0) {
@@ -491,11 +549,17 @@ function indexEnvPaths(db, envKey, indexFn) {
 function populateDetectionsIfEmpty(db) {
   const doPopulate = db.transaction(() => {
     const count = db.prepare('SELECT COUNT(*) AS cnt FROM detections').get().cnt;
-    if (count > 0) return;
 
-    const bundledSigmaDir = path.join(__dirname, '..', 'data', 'sigma-core', 'rules');
-    if (fs.existsSync(bundledSigmaDir)) {
-      indexSigmaDirectory(db, bundledSigmaDir);
+    if (count === 0) {
+      const bundledSigmaDir = path.join(__dirname, '..', 'data', 'sigma-core', 'rules');
+      if (fs.existsSync(bundledSigmaDir)) {
+        indexSigmaDirectory(db, bundledSigmaDir);
+      }
+
+      const bundledKqlDir = path.join(__dirname, '..', 'data', 'kql');
+      if (fs.existsSync(bundledKqlDir)) {
+        indexKqlDirectory(db, bundledKqlDir);
+      }
     }
 
     indexEnvPaths(db, 'SIGMA_PATHS', indexSigmaDirectory);
@@ -512,6 +576,7 @@ module.exports = {
   parseEscuRule,
   parseElasticRule,
   parseKqlRule,
+  buildTechniqueIdMatchClause,
   ensureDetectionsSchema,
   insertDetection,
   indexSigmaDirectory,
