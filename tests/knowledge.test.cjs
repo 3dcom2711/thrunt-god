@@ -708,6 +708,25 @@ describe('knowledge.cjs - importStixFromIntel', () => {
     assert.equal(relationAfter.created_at, relationBefore.created_at, 'relation timestamps should stay stable on skipped import');
   });
 
+  it('supports embedded intel.db imports when no separate source db is passed', () => {
+    const { importStixFromIntel } = loadKnowledge();
+    const sharedDir = makeTempDir();
+    const sharedDb = makeIntelDb(sharedDir);
+
+    try {
+      const result = importStixFromIntel(sharedDb, { force: true });
+      const stixCount = sharedDb.prepare(
+        "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix'"
+      ).get().cnt;
+
+      assert.deepEqual(result, { imported: true });
+      assert.ok(stixCount > 0);
+    } finally {
+      sharedDb.close();
+      fs.rmSync(sharedDir, { recursive: true, force: true });
+    }
+  });
+
   it('STIX-imported entities have source att&ck-stix', () => {
     const { importStixFromIntel } = loadKnowledge();
     importStixFromIntel(programDb, intelDb);

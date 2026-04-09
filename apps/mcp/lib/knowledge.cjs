@@ -435,13 +435,21 @@ function hasCompleteStixImport(programDb, intelDb) {
 /**
  * Import ATT&CK STIX relationships from intel.db into the knowledge graph.
  * Idempotent: upserts entities, deletes and re-inserts STIX relations.
+ * When intelDb is omitted, programDb is used as both the ATT&CK source and
+ * knowledge-graph target. The MCP server uses that embedded mode inside
+ * intel.db; the CLI passes a separate program.db target.
  *
  * @param {import('better-sqlite3').Database} programDb
- * @param {import('better-sqlite3').Database} intelDb
+ * @param {import('better-sqlite3').Database | { force?: boolean }} [intelDbOrOpts]
  * @param {{ force?: boolean }} [opts={}]
  */
-function importStixFromIntel(programDb, intelDb, opts = {}) {
-  if (!opts.force && hasCompleteStixImport(programDb, intelDb)) {
+function importStixFromIntel(programDb, intelDbOrOpts, opts = {}) {
+  const intelDb = intelDbOrOpts && typeof intelDbOrOpts.prepare === 'function'
+    ? intelDbOrOpts
+    : programDb;
+  const effectiveOpts = intelDb === intelDbOrOpts ? opts : (intelDbOrOpts || {});
+
+  if (!effectiveOpts.force && hasCompleteStixImport(programDb, intelDb)) {
     return { imported: false };
   }
 

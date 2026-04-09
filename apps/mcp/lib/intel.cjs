@@ -101,7 +101,7 @@ function ensureIntelSchema(db) {
  * T1059 -> /techniques/T1059/, T1059.001 -> /techniques/T1059/001/
  */
 function buildTechniqueUrl(id) {
-  return `https://attack.mitre.org/techniques/${id.replace('.', '/')}/`;
+  return `https://attack.mitre.org/techniques/${id.replace(/\./g, '/')}/`;
 }
 
 /**
@@ -218,7 +218,7 @@ function openIntelDb(opts = {}) {
 
   const { ensureKnowledgeSchema, importStixFromIntel } = require('./knowledge.cjs');
   ensureKnowledgeSchema(db);
-  importStixFromIntel(db, db);
+  importStixFromIntel(db);
 
   return db;
 }

@@ -80,6 +80,11 @@ describe('intel.cjs - openIntelDb', () => {
     assert.ok(tables.includes('software_techniques'));
     assert.ok(tables.includes('detections'));
     assert.ok(tables.includes('detections_fts'));
+    assert.ok(tables.includes('kg_entities'));
+    assert.ok(tables.includes('kg_relations'));
+    assert.ok(tables.includes('kg_decisions'));
+    assert.ok(tables.includes('kg_learnings'));
+    assert.ok(tables.includes('kg_entities_fts'));
     db.close();
   });
 
@@ -178,6 +183,13 @@ describe('intel.cjs - population', () => {
     const row = db.prepare("SELECT url FROM techniques WHERE id = 'T1059.001'").get();
     assert.ok(row);
     assert.ok(row.url.includes('attack.mitre.org/techniques/T1059/001'));
+  });
+
+  it('embeds ATT&CK knowledge graph entities in intel.db for MCP queries', () => {
+    const stixCount = db.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix'"
+    ).get().cnt;
+    assert.ok(stixCount > 0);
   });
 });
 
