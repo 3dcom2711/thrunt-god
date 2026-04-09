@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Sidebar Automation & Operations
-status: in_progress
-stopped_at: Completed 59-01-PLAN.md
-last_updated: "2026-04-09T20:58:33Z"
-last_activity: 2026-04-09 -- Completed 59-01 (MCPStatusManager, health check flags, shared types, status-driven tree)
+status: executing
+stopped_at: Completed 59-02-PLAN.md
+last_updated: "2026-04-09T21:05:30.627Z"
+last_activity: 2026-04-09 -- Completed 59-02 (MCP context menu commands, MCPStatusManager lifecycle wiring)
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 13
-  completed_plans: 3
-  percent: 23
+  total_plans: 5
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 ## Current Position
 
 Phase: 59 of 62 (MCP Runtime Control Panel)
-Plan: 1 of 3 plans in phase
+Plan: 2 of 3 plans in phase
 Status: In progress
-Last activity: 2026-04-09 -- Completed 59-01 (MCPStatusManager, health check flags, shared types, status-driven tree)
+Last activity: 2026-04-09 -- Completed 59-02 (MCP context menu commands, MCPStatusManager lifecycle wiring)
 
-Progress: [██--------] 23% (v3.1 Phase 59: 1/3 plans)
+Progress: [████████░░] 80% (v3.1 Phase 59: 2/3 plans)
 
 ## Accumulated Context
 
@@ -57,6 +57,8 @@ Progress: [██--------] 23% (v3.1 Phase 59: 1/3 plans)
 - [Phase 59]: MCPStatusManager uses subprocess spawn for health checks, consistent with MCP subprocess-only integration pattern
 - [Phase 59]: Health check timeout at 10 seconds with SIGTERM then SIGKILL after 2s grace period
 - [Phase 59]: dbOpts declaration moved before --health/--list-tools blocks to support early-exit paths
+- [Phase 59]: MCP server path resolution: prefer thruntGod.mcp.serverPath config, fall back to workspace-local apps/mcp/bin/server.cjs
+- [Phase 59]: MCP command handler pattern: async try/catch with showInformationMessage on success, showErrorMessage on failure
 
 ### Blockers/Concerns
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T20:58:33Z
-Stopped at: Completed 59-01-PLAN.md
-Resume: Phase 59 plan 1 of 3 complete. MCPStatusManager class with subprocess health checks, --health/--list-tools server flags, shared MCP types, status-driven tree node rendering. 304 total tests passing. Ready for 59-02 (MCP context menu commands).
+Last session: 2026-04-09T21:05:30.624Z
+Stopped at: Completed 59-02-PLAN.md
+Resume: Phase 59 plan 2 of 3 complete. 5 MCP context menu commands registered and wired to MCPStatusManager. AutomationTreeDataProvider receives mcpStatus and auto-refreshes on changes. mcpControlPanel activation event registered. 310 total tests passing. Ready for 59-03 (MCP webview panel).
