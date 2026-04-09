@@ -1962,6 +1962,34 @@ describe('cmdProgramRollup', () => {
     assert.ok(stateContent.includes('T1078.004'), 'should include T1078.004');
   });
 
+  test('programRollup: falls back to technique IDs extracted from case artifacts', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'artifact-case', name: 'Artifact Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    setupCaseState(tmpDir, 'artifact-case', []);
+
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'artifact-case');
+    fs.writeFileSync(
+      path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nObserved T1059.001 execution followed by T1078.004 credential use.\n'
+    );
+    fs.writeFileSync(
+      path.join(caseDir, 'HYPOTHESES.md'),
+      '# Hypotheses\n\n## Hypothesis 1\n\nT1059.001 likely enabled the follow-on access.\n'
+    );
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.techniques, 2, 'artifact-derived techniques should be included in rollup');
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('Techniques covered: T1059.001, T1078.004'));
+    assert.ok(stateContent.includes('| artifact-case | Artifact Case | active | 2026-04-01 | - | 2 |'));
+    assert.ok(!stateContent.includes('No technique data available.'));
+  });
+
   test('programRollup: idempotent - running twice does not duplicate Case Summary', () => {
     setupProgramState(tmpDir, [
       { slug: 'case-x', name: 'Xray', status: 'active', opened_at: '2026-04-01' },

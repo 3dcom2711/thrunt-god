@@ -3845,6 +3845,36 @@ function cmdCaseSearch(cwd, query, options, raw) {
 
 // ─── Program commands ────────────────────────────────────────────────────────
 
+function readCaseArtifactTechniqueIds(caseDir) {
+  if (!extractTechniqueIds) return [];
+
+  let combined = '';
+  const findingsPath = path.join(caseDir, 'FINDINGS.md');
+  if (fs.existsSync(findingsPath)) {
+    combined += fs.readFileSync(findingsPath, 'utf-8') + '\n';
+  }
+  const hypothesesPath = path.join(caseDir, 'HYPOTHESES.md');
+  if (fs.existsSync(hypothesesPath)) {
+    combined += fs.readFileSync(hypothesesPath, 'utf-8') + '\n';
+  }
+
+  return combined ? extractTechniqueIds(combined) : [];
+}
+
+function readIndexedCaseTechniqueIds(db, slug) {
+  if (!db) return [];
+
+  const rows = db.prepare(`
+    SELECT ct.technique_id
+    FROM case_techniques ct
+    JOIN case_index ci ON ci.id = ct.case_id
+    WHERE ci.slug = ?
+    ORDER BY ct.technique_id
+  `).all(slug);
+
+  return rows.map(row => row.technique_id).filter(Boolean);
+}
+
 function cmdProgramRollup(cwd, raw) {
   const roster = getCaseRoster(cwd);
   const root = planningRoot(cwd);
@@ -3858,72 +3888,95 @@ function cmdProgramRollup(cwd, raw) {
   const today = new Date();
   const STALE_DAYS = 14;
   const events = [];
+  let caseDb = null;
 
-  // Enrich roster entries with technique data and stale detection
-  const enriched = roster.map(entry => {
-    const caseStatePath = path.join(root, 'cases', entry.slug, 'STATE.md');
-    let techniqueIds = [];
-    if (fs.existsSync(caseStatePath)) {
-      const content = fs.readFileSync(caseStatePath, 'utf-8');
-      const fm = extractFrontmatter(content);
-      if (Array.isArray(fm.technique_ids)) {
-        techniqueIds = fm.technique_ids;
-        for (const t of techniqueIds) allTechniques.add(t);
+  if (openProgramDb) {
+    const dbPath = path.join(root, 'program.db');
+    if (fs.existsSync(dbPath)) {
+      try {
+        caseDb = openProgramDb(cwd);
+      } catch {
+        caseDb = null;
       }
     }
-
-    // Determine stale status
-    let isStale = false;
-    if (entry.status === 'active') {
-      const activityDate = getCaseActivityDate(caseStatePath, entry);
-      if (activityDate) {
-        const diffDays = Math.floor((today - activityDate) / (1000 * 60 * 60 * 24));
-        if (diffDays > STALE_DAYS) isStale = true;
-      }
-    }
-
-    // Collect timeline events
-    if (entry.opened_at) {
-      events.push({ date: entry.opened_at, text: `Opened: ${entry.name}` });
-    }
-    if (entry.closed_at) {
-      events.push({ date: entry.closed_at, text: `Closed: ${entry.name}` });
-    }
-
-    const displayStatus = isStale ? 'stale' : entry.status;
-    return { ...entry, techniqueIds, isStale, displayStatus };
-  });
-
-  // Compute counts
-  const activeCount = enriched.filter(e => e.status === 'active' && !e.isStale).length;
-  const staleCount = enriched.filter(e => e.isStale).length;
-  const closedCount = enriched.filter(e => e.status === 'closed').length;
-  const uniqueCount = allTechniques.size;
-
-  // Build case table
-  const tableRows = enriched.map(e => {
-    const tc = e.techniqueIds.length || e.technique_count || '0';
-    return `| ${e.slug} | ${e.name} | ${e.displayStatus} | ${e.opened_at || '-'} | ${e.closed_at || '-'} | ${tc} |`;
-  }).join('\n');
-
-  // Build coverage gaps
-  let coverageSection;
-  if (allTechniques.size === 0) {
-    coverageSection = 'No technique data available.';
-  } else {
-    const sorted = [...allTechniques].sort();
-    coverageSection = `Techniques covered: ${sorted.join(', ')}`;
   }
 
-  // Build timeline (last 10 events, chronological)
-  events.sort((a, b) => a.date.localeCompare(b.date));
-  const timelineEvents = events.slice(-10);
-  const timelineSection = timelineEvents.length > 0
-    ? timelineEvents.map(e => `- ${e.date}: ${e.text}`).join('\n')
-    : 'No case events yet.';
+  try {
+    // Enrich roster entries with technique data and stale detection
+    const enriched = roster.map(entry => {
+      const caseDir = path.join(root, 'cases', entry.slug);
+      const caseStatePath = path.join(caseDir, 'STATE.md');
+      let techniqueIds = [];
+      if (fs.existsSync(caseStatePath)) {
+        const content = fs.readFileSync(caseStatePath, 'utf-8');
+        const fm = extractFrontmatter(content);
+        if (Array.isArray(fm.technique_ids) && fm.technique_ids.length > 0) {
+          techniqueIds = fm.technique_ids.filter(Boolean);
+        }
+      }
 
-  // Generate rollup body
-  const rollupBody = `## Case Summary
+      if (techniqueIds.length === 0) {
+        techniqueIds = readIndexedCaseTechniqueIds(caseDb, entry.slug);
+      }
+
+      if (techniqueIds.length === 0) {
+        techniqueIds = readCaseArtifactTechniqueIds(caseDir);
+      }
+
+      for (const t of techniqueIds) allTechniques.add(t);
+
+      // Determine stale status
+      let isStale = false;
+      if (entry.status === 'active') {
+        const activityDate = getCaseActivityDate(caseStatePath, entry);
+        if (activityDate) {
+          const diffDays = Math.floor((today - activityDate) / (1000 * 60 * 60 * 24));
+          if (diffDays > STALE_DAYS) isStale = true;
+        }
+      }
+
+      // Collect timeline events
+      if (entry.opened_at) {
+        events.push({ date: entry.opened_at, text: `Opened: ${entry.name}` });
+      }
+      if (entry.closed_at) {
+        events.push({ date: entry.closed_at, text: `Closed: ${entry.name}` });
+      }
+
+      const displayStatus = isStale ? 'stale' : entry.status;
+      return { ...entry, techniqueIds, isStale, displayStatus };
+    });
+
+    // Compute counts
+    const activeCount = enriched.filter(e => e.status === 'active' && !e.isStale).length;
+    const staleCount = enriched.filter(e => e.isStale).length;
+    const closedCount = enriched.filter(e => e.status === 'closed').length;
+    const uniqueCount = allTechniques.size;
+
+    // Build case table
+    const tableRows = enriched.map(e => {
+      const tc = e.techniqueIds.length || e.technique_count || '0';
+      return `| ${e.slug} | ${e.name} | ${e.displayStatus} | ${e.opened_at || '-'} | ${e.closed_at || '-'} | ${tc} |`;
+    }).join('\n');
+
+    // Build coverage gaps
+    let coverageSection;
+    if (allTechniques.size === 0) {
+      coverageSection = 'No technique data available.';
+    } else {
+      const sorted = [...allTechniques].sort();
+      coverageSection = `Techniques covered: ${sorted.join(', ')}`;
+    }
+
+    // Build timeline (last 10 events, chronological)
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    const timelineEvents = events.slice(-10);
+    const timelineSection = timelineEvents.length > 0
+      ? timelineEvents.map(e => `- ${e.date}: ${e.text}`).join('\n')
+      : 'No case events yet.';
+
+    // Generate rollup body
+    const rollupBody = `## Case Summary
 
 **Cases:** ${activeCount} active, ${closedCount} closed, ${staleCount} stale | **Techniques:** ${uniqueCount} unique across all cases
 
@@ -3940,21 +3993,24 @@ ${coverageSection}
 ${timelineSection}
 `;
 
-  // Write to program STATE.md: preserve frontmatter, replace body
-  const stateContent = fs.readFileSync(statePath, 'utf-8');
-  const fm = extractFrontmatter(stateContent);
-  const yamlStr = reconstructFrontmatter(fm);
-  const newContent = `---\n${yamlStr}\n---\n\n${rollupBody}`;
-  fs.writeFileSync(statePath, newContent, 'utf-8');
+    // Write to program STATE.md: preserve frontmatter, replace body
+    const stateContent = fs.readFileSync(statePath, 'utf-8');
+    const fm = extractFrontmatter(stateContent);
+    const yamlStr = reconstructFrontmatter(fm);
+    const newContent = `---\n${yamlStr}\n---\n\n${rollupBody}`;
+    fs.writeFileSync(statePath, newContent, 'utf-8');
 
-  output({
-    success: true,
-    total: roster.length,
-    active: activeCount,
-    closed: closedCount,
-    stale: staleCount,
-    techniques: uniqueCount,
-  }, raw);
+    output({
+      success: true,
+      total: roster.length,
+      active: activeCount,
+      closed: closedCount,
+      stale: staleCount,
+      techniques: uniqueCount,
+    }, raw);
+  } finally {
+    if (caseDb) caseDb.close();
+  }
 }
 
 // ─── Migration commands ─────────────────────────────────────────────────────

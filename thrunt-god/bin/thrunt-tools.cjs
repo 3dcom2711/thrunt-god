@@ -312,25 +312,23 @@ async function main() {
   const caseEqArg = args.find(arg => arg.startsWith('--case='));
   const caseIdx = args.indexOf('--case');
   let caseSlug = null;
+  let caseProvided = false;
   if (caseEqArg) {
     caseSlug = caseEqArg.slice('--case='.length).trim();
     if (!caseSlug) error('Missing value for --case');
     args.splice(args.indexOf(caseEqArg), 1);
+    caseProvided = true;
   } else if (caseIdx !== -1) {
     caseSlug = args[caseIdx + 1];
     if (!caseSlug || caseSlug.startsWith('--')) error('Missing value for --case');
     args.splice(caseIdx, 2);
+    caseProvided = true;
   } else if (process.env.THRUNT_CASE) {
     caseSlug = process.env.THRUNT_CASE.trim();
-  } else {
-    const { getActiveCase } = require('./lib/core.cjs');
-    caseSlug = getActiveCase(cwd);
+    caseProvided = true;
   }
   if (caseSlug && !/^[a-zA-Z0-9_-]+$/.test(caseSlug)) {
     error('Invalid case slug: must be alphanumeric, hyphens, and underscores only');
-  }
-  if (caseSlug) {
-    process.env.THRUNT_CASE = caseSlug;
   }
 
   const rawIndex = args.indexOf('--raw');
@@ -363,6 +361,17 @@ async function main() {
   ]);
   if (!SKIP_ROOT_RESOLUTION.has(command)) {
     cwd = findProjectRoot(cwd);
+  }
+
+  if (!caseProvided) {
+    const { getActiveCase } = require('./lib/core.cjs');
+    caseSlug = getActiveCase(cwd);
+  }
+  if (caseSlug && !/^[a-zA-Z0-9_-]+$/.test(caseSlug)) {
+    error('Invalid case slug: must be alphanumeric, hyphens, and underscores only');
+  }
+  if (caseSlug) {
+    process.env.THRUNT_CASE = caseSlug;
   }
 
   // When --pick is active, intercept stdout to extract the requested field.

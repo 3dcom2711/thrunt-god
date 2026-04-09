@@ -4,6 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { runThruntTools, createTempProject, cleanup } = require('./helpers.cjs');
@@ -1594,6 +1595,21 @@ case_roster: []
     const output = JSON.parse(result.output);
     assert.strictEqual(output.slug, 'status-test');
     assert.strictEqual(output.status, 'active');
+  });
+
+  test('case status from nested cwd resolves active case from project root', () => {
+    execSync('git init', { cwd: tmpDir, stdio: 'pipe' });
+    runThruntTools(['case', 'new', 'Nested Scope'], tmpDir);
+
+    const nestedDir = path.join(tmpDir, 'backend', 'src');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    const result = runThruntTools(['case', 'status'], nestedDir);
+    assert.ok(result.success, `Status failed from nested cwd: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.slug, 'nested-scope');
+    assert.strictEqual(output.is_active, true);
   });
 });
 
