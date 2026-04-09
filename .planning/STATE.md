@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Sidebar Automation & Operations
 status: in_progress
-stopped_at: Completed 60-02-PLAN.md
-last_updated: "2026-04-09T21:40:37Z"
-last_activity: 2026-04-09 -- Completed 60-02 (Context-aware highlighting, tree selection listener, command count)
+stopped_at: Completed 60-03-PLAN.md
+last_updated: "2026-04-09T21:47:36Z"
+last_activity: 2026-04-09 -- Completed 60-03 (Parameterized templates, full command execution bridge)
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 87
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 ## Current Position
 
 Phase: 60 of 62 (Command Deck Webview)
-Plan: 2 of 3 plans in phase
-Status: In progress
-Last activity: 2026-04-09 -- Completed 60-02 (Context-aware highlighting, tree selection listener, command count)
+Plan: 3 of 3 plans in phase (complete)
+Status: Phase complete
+Last activity: 2026-04-09 -- Completed 60-03 (Parameterized templates, full command execution bridge)
 
-Progress: [████████░░] 81% (v3.1 Phase 60: 2/3 plans)
+Progress: [██████████] 100% (v3.1 Phase 60: 3/3 plans)
 
 ## Accumulated Context
 
@@ -69,6 +69,9 @@ Progress: [████████░░] 81% (v3.1 Phase 60: 2/3 plans)
 - [Phase 60]: Context relevance mapping mirrored in extension host and webview for decoupled operation
 - [Phase 60]: Hunt tree changed from registerTreeDataProvider to createTreeView for onDidChangeSelection events
 - [Phase 60]: setCommandCount follows setRunbookCount pattern for consistency in AutomationTreeDataProvider
+- [Phase 60]: CLI execution uses direct subprocess spawn with process.execPath + cliPath rather than CLIBridge instance to keep command deck self-contained
+- [Phase 60]: resolveCliPath prefers thruntGod.cli.path config, falls back to workspace-local dist/thrunt-god/bin/thrunt-tools.cjs
+- [Phase 60]: Template IDs generated from label via slugification with tpl- prefix for namespace separation from built-in commands
 
 ### Blockers/Concerns
 
@@ -76,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T21:40:37Z
-Stopped at: Completed 60-02-PLAN.md
-Resume: Phase 60 plan 2 complete. Context-aware command highlighting via getContextRelevantIds() and tree selection listener. AutomationTreeDataProvider shows live "10 commands" count. 356 total tests passing. Ready for 60-03.
+Last session: 2026-04-09T21:47:36Z
+Stopped at: Completed 60-03-PLAN.md
+Resume: Phase 60 complete. All 3 plans delivered: foundation (01), context-aware highlighting (02), and parameterized templates with full CLI execution (03). 364 total tests passing. Phase 60 Command Deck Webview is done.
