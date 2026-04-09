@@ -6,6 +6,47 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 const toml = require('smol-toml');
 
+const ATTACK_TACTIC_DISPLAY_NAMES = new Map([
+  ['reconnaissance', 'Reconnaissance'],
+  ['resource development', 'Resource Development'],
+  ['initial access', 'Initial Access'],
+  ['execution', 'Execution'],
+  ['persistence', 'Persistence'],
+  ['privilege escalation', 'Privilege Escalation'],
+  ['defense evasion', 'Defense Evasion'],
+  ['credential access', 'Credential Access'],
+  ['discovery', 'Discovery'],
+  ['lateral movement', 'Lateral Movement'],
+  ['collection', 'Collection'],
+  ['command and control', 'Command and Control'],
+  ['exfiltration', 'Exfiltration'],
+  ['impact', 'Impact'],
+]);
+
+function normalizeAttackTacticTag(tag) {
+  const normalised = String(tag || '')
+    .replace(/^attack\./i, '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  if (!normalised) {
+    return '';
+  }
+
+  const canonical = ATTACK_TACTIC_DISPLAY_NAMES.get(normalised);
+  if (canonical) {
+    return canonical;
+  }
+
+  return normalised
+    .split(/\s+/)
+    .map((word) => (word === 'and'
+      ? 'and'
+      : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(' ');
+}
+
 /**
  * @typedef {Object} DetectionRow
  * @property {string} id - Composite key: 'source_format:original_id' (e.g., sigma:abc123)
@@ -39,13 +80,9 @@ function parseSigmaRule(yamlText, filePath) {
       .filter((v, i, a) => a.indexOf(v) === i); // deduplicate
 
     const tactics = tags
-      .filter(t => /^attack\./.test(t) && !/^attack\.t\d{4}/i.test(t))
-      .map(t =>
-        t.replace(/^attack\./, '')
-          .replace(/_/g, ' ')
-          .replace(/-/g, ' ')
-          .replace(/\b\w/g, c => c.toUpperCase())
-      )
+      .filter(t => /^attack\./i.test(t) && !/^attack\.t\d{4}/i.test(t))
+      .map(normalizeAttackTacticTag)
+      .filter(Boolean)
       .filter((v, i, a) => a.indexOf(v) === i); // deduplicate
 
     return {

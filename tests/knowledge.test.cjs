@@ -125,6 +125,17 @@ describe('knowledge.cjs - ensureKnowledgeSchema', () => {
     assert.ok(row);
   });
 
+  it('uses an external-content FTS table backed by kg_entities', () => {
+    const { ensureKnowledgeSchema } = loadKnowledge();
+    ensureKnowledgeSchema(db);
+
+    const row = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='kg_entities_fts'"
+    ).get();
+    assert.ok(row?.sql.includes("content='kg_entities'"));
+    assert.ok(row?.sql.includes("content_rowid='rowid'"));
+  });
+
   it('idempotent -- calling twice does not throw', () => {
     const { ensureKnowledgeSchema } = loadKnowledge();
     ensureKnowledgeSchema(db);
@@ -137,6 +148,47 @@ describe('knowledge.cjs - ensureKnowledgeSchema', () => {
     assert.ok(tables.includes('kg_relations'));
     assert.ok(tables.includes('kg_decisions'));
     assert.ok(tables.includes('kg_learnings'));
+  });
+
+  it('migrates legacy standalone kg_entities_fts tables and rebuilds search data', () => {
+    db.exec(`
+      CREATE TABLE kg_entities (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        metadata TEXT DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        source TEXT DEFAULT 'manual'
+      );
+      CREATE VIRTUAL TABLE kg_entities_fts USING fts5(
+        name,
+        description,
+        tokenize='porter unicode61'
+      );
+    `);
+    db.prepare(
+      'INSERT INTO kg_entities (id, type, name, description, metadata, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      'threat_actor--apt28',
+      'threat_actor',
+      'APT28',
+      'Russian military intelligence',
+      '{}',
+      new Date().toISOString(),
+      'manual'
+    );
+
+    const { ensureKnowledgeSchema, searchEntities } = loadKnowledge();
+    ensureKnowledgeSchema(db);
+
+    const row = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='kg_entities_fts'"
+    ).get();
+    assert.ok(row?.sql.includes("content='kg_entities'"));
+
+    const results = searchEntities(db, 'APT28');
+    assert.ok(results.some(result => result.id === 'threat_actor--apt28'));
   });
 });
 

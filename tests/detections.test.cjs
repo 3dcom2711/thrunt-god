@@ -62,6 +62,28 @@ describe('detections.cjs - parseSigmaRule', () => {
     assert.ok(row.tactics.includes('Defense Evasion'));
   });
 
+  it('normalizes Sigma tactic tags to ATT&CK display names', () => {
+    const { parseSigmaRule } = loadDet();
+    const row = parseSigmaRule(`
+title: C2 Normalization
+id: sigma-c2-normalization
+tags:
+  - attack.command-and-control
+  - attack.defense-evasion
+logsource:
+  product: windows
+detection:
+  selection:
+    Image: cmd.exe
+  condition: selection
+`, '/test.yml');
+
+    assert.ok(row);
+    assert.ok(row.tactics.includes('Command and Control'));
+    assert.ok(row.tactics.includes('Defense Evasion'));
+    assert.ok(!row.tactics.includes('Command And Control'));
+  });
+
   it('returns null for malformed YAML', () => {
     const { parseSigmaRule } = loadDet();
     const row = parseSigmaRule('{{{{not yaml at all!@#$', '/bad.yml');

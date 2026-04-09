@@ -104,6 +104,19 @@ function buildTechniqueUrl(id) {
   return `https://attack.mitre.org/techniques/${id.replace(/\./g, '/')}/`;
 }
 
+function getTechniqueTacticsValue(technique) {
+  if (!technique || typeof technique !== 'object') {
+    return '';
+  }
+
+  const raw = technique.tactics ?? technique.tactic ?? '';
+  if (Array.isArray(raw)) {
+    return raw.map(value => String(value).trim()).filter(Boolean).join(', ');
+  }
+
+  return typeof raw === 'string' ? raw : String(raw || '');
+}
+
 /**
  * Populate the database from bundled JSON files if empty.
  * Uses BEGIN IMMEDIATE to prevent concurrent population races.
@@ -126,18 +139,20 @@ function populateIfEmpty(db) {
     );
 
     for (const t of techData.techniques) {
+      const techniqueTactics = getTechniqueTacticsValue(t);
       const platforms = Array.isArray(t.platforms) ? t.platforms.join(', ') : (t.platforms || '');
       const dataSources = Array.isArray(t.data_sources) ? t.data_sources.join(', ') : (t.data_sources || '');
       const url = buildTechniqueUrl(t.id);
 
-      const r = insertTechnique.run(t.id, t.name, t.description, t.tactic, platforms, dataSources, url);
+      const r = insertTechnique.run(t.id, t.name, t.description, techniqueTactics, platforms, dataSources, url);
       if (r.changes > 0) insertFts.run(t.name, t.description, t.id);
 
       if (Array.isArray(t.sub_techniques)) {
         for (const sub of t.sub_techniques) {
+          const subTactics = getTechniqueTacticsValue(sub) || techniqueTactics;
           const subUrl = buildTechniqueUrl(sub.id);
           const subDesc = sub.description || t.description;
-          const sr = insertTechnique.run(sub.id, sub.name, subDesc, t.tactic, platforms, dataSources, subUrl);
+          const sr = insertTechnique.run(sub.id, sub.name, subDesc, subTactics, platforms, dataSources, subUrl);
           if (sr.changes > 0) insertFts.run(sub.name, subDesc, sub.id);
         }
       }

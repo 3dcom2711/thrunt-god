@@ -45,19 +45,17 @@ function upsertEntityRecord(db, opts) {
   const source = opts.source || 'manual';
   const created_at = new Date().toISOString();
 
-  const existing = db.prepare('SELECT rowid FROM kg_entities WHERE id = ?').get(id);
-  if (existing) {
-    db.prepare('DELETE FROM kg_entities_fts WHERE rowid = ?').run(existing.rowid);
-  }
-
   db.prepare(
-    'INSERT OR REPLACE INTO kg_entities (id, type, name, description, metadata, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    `INSERT INTO kg_entities (id, type, name, description, metadata, created_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       type = excluded.type,
+       name = excluded.name,
+       description = excluded.description,
+       metadata = excluded.metadata,
+       created_at = excluded.created_at,
+       source = excluded.source`
   ).run(id, type, name, description, metadata, created_at, source);
-
-  const newRow = db.prepare('SELECT rowid FROM kg_entities WHERE id = ?').get(id);
-  db.prepare(
-    'INSERT INTO kg_entities_fts (rowid, name, description) VALUES (?, ?, ?)'
-  ).run(newRow.rowid, name, description);
 
   return { id, type, name, description, metadata, created_at, source };
 }
@@ -106,13 +104,56 @@ function ensureKnowledgeSchema(db) {
       created_at TEXT NOT NULL,
       case_slug TEXT DEFAULT ''
     );
+  `);
 
+  db.exec(`
+    DROP TRIGGER IF EXISTS kg_entities_ai;
+    DROP TRIGGER IF EXISTS kg_entities_ad;
+    DROP TRIGGER IF EXISTS kg_entities_au;
+  `);
+
+  const ftsRow = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'kg_entities_fts'"
+  ).get();
+  const usesExternalContent = Boolean(
+    ftsRow
+      && typeof ftsRow.sql === 'string'
+      && ftsRow.sql.includes("content='kg_entities'")
+      && ftsRow.sql.includes("content_rowid='rowid'")
+  );
+
+  if (!usesExternalContent) {
+    db.exec('DROP TABLE IF EXISTS kg_entities_fts;');
+  }
+
+  db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS kg_entities_fts USING fts5(
       name,
       description,
+      content='kg_entities',
+      content_rowid='rowid',
       tokenize='porter unicode61'
     );
+
+    CREATE TRIGGER IF NOT EXISTS kg_entities_ai AFTER INSERT ON kg_entities BEGIN
+      INSERT INTO kg_entities_fts(rowid, name, description)
+      VALUES (new.rowid, new.name, new.description);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS kg_entities_ad AFTER DELETE ON kg_entities BEGIN
+      INSERT INTO kg_entities_fts(kg_entities_fts, rowid, name, description)
+      VALUES ('delete', old.rowid, old.name, old.description);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS kg_entities_au AFTER UPDATE ON kg_entities BEGIN
+      INSERT INTO kg_entities_fts(kg_entities_fts, rowid, name, description)
+      VALUES ('delete', old.rowid, old.name, old.description);
+      INSERT INTO kg_entities_fts(rowid, name, description)
+      VALUES (new.rowid, new.name, new.description);
+    END;
   `);
+
+  db.prepare("INSERT INTO kg_entities_fts(kg_entities_fts) VALUES('rebuild')").run();
 }
 
 /**

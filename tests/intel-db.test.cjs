@@ -185,6 +185,15 @@ describe('intel.cjs - population', () => {
     assert.ok(row.url.includes('attack.mitre.org/techniques/T1059/001'));
   });
 
+  it('maps bundled tactic fields into the techniques.tactics column', () => {
+    const row = db.prepare("SELECT tactics FROM techniques WHERE id = 'T1078'").get();
+    assert.ok(row);
+    assert.equal(
+      row.tactics,
+      'Defense Evasion, Persistence, Privilege Escalation, Initial Access'
+    );
+  });
+
   it('embeds ATT&CK knowledge graph entities in intel.db for MCP queries', () => {
     const stixCount = db.prepare(
       "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix'"
