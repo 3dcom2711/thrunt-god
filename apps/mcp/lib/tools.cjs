@@ -35,12 +35,13 @@ function withTimeout(fn) {
     if (!result || typeof result.then !== 'function') return result;
 
     let timer;
+    const clearTimer = () => clearTimeout(timer);
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => {
         controller.abort();
         reject(new DOMException(`Tool timed out after ${TIMEOUT_MS}ms`, 'AbortError'));
       }, TIMEOUT_MS);
-      controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+      controller.signal.addEventListener('abort', clearTimer, { once: true });
     });
 
     try {
@@ -54,7 +55,8 @@ function withTimeout(fn) {
       }
       throw err;
     } finally {
-      clearTimeout(timer);
+      clearTimer();
+      controller.signal.removeEventListener('abort', clearTimer);
     }
   };
 }

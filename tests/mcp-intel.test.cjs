@@ -585,6 +585,52 @@ describe('timeout enforcement', () => {
       if (originalToolsCache) require.cache[toolsPath] = originalToolsCache;
     }
   });
+
+  it('withTimeout removes the abort listener after successful completion', async () => {
+    const toolsPath = require.resolve('../apps/mcp/lib/tools.cjs');
+    const originalToolsCache = require.cache[toolsPath];
+
+    try {
+      delete require.cache[toolsPath];
+      const { withTimeout } = require(toolsPath);
+      let addCount = 0;
+      let removeCount = 0;
+      let addedListener = null;
+      let removedListener = null;
+
+      const fastHandler = withTimeout(async (_args, signal) => {
+        const originalAdd = signal.addEventListener.bind(signal);
+        const originalRemove = signal.removeEventListener.bind(signal);
+
+        signal.addEventListener = (type, listener, options) => {
+          if (type === 'abort') {
+            addCount += 1;
+            addedListener = listener;
+          }
+          return originalAdd(type, listener, options);
+        };
+
+        signal.removeEventListener = (type, listener, options) => {
+          if (type === 'abort') {
+            removeCount += 1;
+            removedListener = listener;
+          }
+          return originalRemove(type, listener, options);
+        };
+
+        return { content: [{ type: 'text', text: 'done' }] };
+      });
+
+      const result = await fastHandler({});
+      assert.equal(result.isError, undefined);
+      assert.equal(addCount, 1);
+      assert.equal(removeCount, 1);
+      assert.equal(removedListener, addedListener);
+    } finally {
+      delete require.cache[toolsPath];
+      if (originalToolsCache) require.cache[toolsPath] = originalToolsCache;
+    }
+  });
 });
 
 describe('server.cjs stdout purity', () => {
