@@ -2039,3 +2039,4 @@ export {
 } from './commandDeck';
 export { validateRunbook, parseRunbook, RunbookRegistry, RunbookEngine, resolveParams, RUNBOOK_PANEL_VIEW_TYPE, VALID_STEP_ACTIONS } from './runbook';
 export { RunbookPanel } from './runbookPanel';
+export { ExecutionLogger, confirmMutatingAction, buildCommandEntry, buildRunbookEntry } from './executionLogger';

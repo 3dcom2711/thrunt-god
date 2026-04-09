@@ -532,6 +532,13 @@
           "type": "string",
           "default": "runtime execute --pack {packId} --phase {phase}",
           "description": "Template used by Run Hunt Phase. Supported placeholders: {phase}, {phaseName}, {phaseNameSlug}, {packId}."
+        },
+        "thruntGod.executionHistory.maxEntries": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 10000,
+          "description": "Maximum number of execution history entries to retain in .planning/.run-history.json."
         }
       }
     }
