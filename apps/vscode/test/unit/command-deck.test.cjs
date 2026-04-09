@@ -127,6 +127,51 @@ describe('getContextRelevantIds', () => {
   });
 });
 
+describe('extractPlaceholders', () => {
+  it('CommandDeckRegistry.extractPlaceholders is a function', () => {
+    assert.equal(typeof ext.CommandDeckRegistry.extractPlaceholders, 'function');
+  });
+
+  it('extractPlaceholders finds {packId} in string', () => {
+    assert.deepEqual(ext.CommandDeckRegistry.extractPlaceholders('runtime execute --pack {packId}'), ['packId']);
+  });
+
+  it('extractPlaceholders finds multiple placeholders', () => {
+    assert.deepEqual(ext.CommandDeckRegistry.extractPlaceholders('{a} --flag {b}'), ['a', 'b']);
+  });
+
+  it('extractPlaceholders deduplicates', () => {
+    assert.deepEqual(ext.CommandDeckRegistry.extractPlaceholders('{x} {x}'), ['x']);
+  });
+
+  it('extractPlaceholders returns empty for no placeholders', () => {
+    assert.deepEqual(ext.CommandDeckRegistry.extractPlaceholders('no placeholders'), []);
+  });
+});
+
+describe('BUILT_IN_COMMANDS execution targets', () => {
+  it('BUILT_IN_COMMANDS each have either commandId or cliArgs', () => {
+    for (const cmd of ext.BUILT_IN_COMMANDS) {
+      assert.ok(
+        cmd.commandId || cmd.cliArgs,
+        `command ${cmd.id} missing both commandId and cliArgs`
+      );
+    }
+  });
+
+  it('BUILT_IN_COMMANDS mutating flag: runtime-doctor is false', () => {
+    const cmd = ext.BUILT_IN_COMMANDS.find(c => c.id === 'runtime-doctor');
+    assert.ok(cmd, 'runtime-doctor not found');
+    assert.equal(cmd.mutating, false);
+  });
+
+  it('BUILT_IN_COMMANDS mutating flag: close-case is true', () => {
+    const cmd = ext.BUILT_IN_COMMANDS.find(c => c.id === 'close-case');
+    assert.ok(cmd, 'close-case not found');
+    assert.equal(cmd.mutating, true);
+  });
+});
+
 describe('Command Deck manifest', () => {
   it('openCommandDeck command registered', () => {
     const cmd = pkg.contributes.commands.find(c => c.command === 'thrunt-god.openCommandDeck');

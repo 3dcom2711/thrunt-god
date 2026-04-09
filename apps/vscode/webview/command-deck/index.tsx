@@ -4,6 +4,8 @@ import type {
   HostToCommandDeckMessage,
   CommandDeckToHostMessage,
   CommandDef,
+  CommandTemplate,
+  CommandCategory,
   RecentCommandEntry,
   CommandDeckContext,
 } from '../../shared/command-deck';
@@ -31,9 +33,12 @@ function getRelevantIdsFromContext(context: CommandDeckContext | null): string[]
 function CommandDeckApp() {
   const { setIsDark } = useTheme();
   const [commands, setCommands] = useState<CommandDef[]>([]);
+  const [templates, setTemplates] = useState<CommandTemplate[]>([]);
   const [pinned, setPinned] = useState<string[]>([]);
   const [recent, setRecent] = useState<RecentCommandEntry[]>([]);
   const [context, setContext] = useState<CommandDeckContext | null>(null);
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [templatePrompt, setTemplatePrompt] = useState<{ templateId: string; placeholders: string[] } | null>(null);
 
   useEffect(() => {
     vscode.postMessage({ type: 'webview:ready' });
@@ -44,6 +49,7 @@ function CommandDeckApp() {
       switch (message.type) {
         case 'init':
           setCommands(message.commands);
+          setTemplates(message.templates);
           setPinned(message.pinned);
           setRecent(message.recent);
           setContext(message.context);
@@ -56,6 +62,12 @@ function CommandDeckApp() {
           break;
         case 'context':
           setContext(message.context);
+          break;
+        case 'templates':
+          setTemplates(message.templates);
+          break;
+        case 'templatePrompt':
+          setTemplatePrompt({ templateId: message.templateId, placeholders: message.placeholders });
           break;
         case 'execResult':
           // Brief flash or update recent -- handled by subsequent 'commands' message
@@ -136,6 +148,74 @@ function CommandDeckApp() {
         );
       })}
 
+      {/* Templates section */}
+      {templates.length > 0 && (
+        <section class="cd-section">
+          <h2 class="cd-section-title">Templates</h2>
+          <div class="cd-grid">
+            {templates.map(tmpl => (
+              <div key={tmpl.id} class="cd-card">
+                <div class="cd-card__header">
+                  <span class="cd-card__label">{tmpl.label}</span>
+                  <Badge variant={tmpl.mutating ? 'warning' : 'success'}>
+                    {tmpl.mutating ? 'mutating' : 'read-only'}
+                  </Badge>
+                </div>
+                <p class="cd-card__desc">{tmpl.description}</p>
+                {tmpl.placeholders.length > 0 && (
+                  <p class="cd-card__placeholders">
+                    Params: {tmpl.placeholders.map(p => `{${p}}`).join(', ')}
+                  </p>
+                )}
+                <div class="cd-card__actions">
+                  <GhostButton
+                    onClick={() => {
+                      if (tmpl.placeholders.length > 0) {
+                        setTemplatePrompt({ templateId: tmpl.id, placeholders: tmpl.placeholders });
+                      } else {
+                        vscode.postMessage({ type: 'template:exec', templateId: tmpl.id, values: {} });
+                      }
+                    }}
+                    ariaLabel={`Run ${tmpl.label}`}
+                  >
+                    Run
+                  </GhostButton>
+                  <GhostButton
+                    onClick={() => vscode.postMessage({ type: 'template:delete', templateId: tmpl.id })}
+                    ariaLabel={`Delete ${tmpl.label}`}
+                  >
+                    Delete
+                  </GhostButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* New Template button */}
+      <section class="cd-section">
+        <GhostButton onClick={() => setShowTemplateForm(true)} ariaLabel="Create new template">
+          + New Template
+        </GhostButton>
+      </section>
+
+      {showTemplateForm && (
+        <TemplateForm onClose={() => setShowTemplateForm(false)} />
+      )}
+
+      {templatePrompt && (
+        <PlaceholderPrompt
+          templateId={templatePrompt.templateId}
+          placeholders={templatePrompt.placeholders}
+          onSubmit={(values) => {
+            vscode.postMessage({ type: 'template:exec', templateId: templatePrompt.templateId, values });
+            setTemplatePrompt(null);
+          }}
+          onCancel={() => setTemplatePrompt(null)}
+        />
+      )}
+
       {recent.length > 0 && (
         <section class="cd-section">
           <h2 class="cd-section-title">Recent</h2>
@@ -189,6 +269,113 @@ function CommandCard({
         </GhostButton>
       </div>
     </div>
+  );
+}
+
+function TemplateForm({ onClose }: { onClose: () => void }) {
+  const [label, setLabel] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<CommandCategory>('Execution');
+  const [cliArgsStr, setCli] = useState('');
+  const [mutating, setMutating] = useState(false);
+
+  const handleSave = useCallback(() => {
+    if (!label.trim() || !cliArgsStr.trim()) return;
+    const args = cliArgsStr.split(/\s+/).filter(Boolean);
+    const placeholders: string[] = [];
+    const seen = new Set<string>();
+    for (const arg of args) {
+      const matches = arg.match(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g);
+      if (matches) {
+        for (const m of matches) {
+          const name = m.slice(1, -1);
+          if (!seen.has(name)) {
+            seen.add(name);
+            placeholders.push(name);
+          }
+        }
+      }
+    }
+    const id = 'tpl-' + label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    vscode.postMessage({
+      type: 'template:save',
+      template: { id, label: label.trim(), description: description.trim(), category, mutating, cliArgs: args, placeholders },
+    });
+    onClose();
+  }, [label, description, category, cliArgsStr, mutating, onClose]);
+
+  return (
+    <section class="cd-template-form">
+      <div class="cd-template-form__header">
+        <h2 class="cd-section-title">New Template</h2>
+        <GhostButton onClick={onClose} ariaLabel="Cancel">Cancel</GhostButton>
+      </div>
+      <div class="cd-form-field">
+        <label class="cd-form-label">Label</label>
+        <input class="cd-form-input" value={label} onInput={e => setLabel((e.target as HTMLInputElement).value)} placeholder="e.g. Run specific pack" />
+      </div>
+      <div class="cd-form-field">
+        <label class="cd-form-label">Description</label>
+        <input class="cd-form-input" value={description} onInput={e => setDescription((e.target as HTMLInputElement).value)} placeholder="What this template does" />
+      </div>
+      <div class="cd-form-field">
+        <label class="cd-form-label">CLI Args (use {'{placeholder}'} syntax)</label>
+        <input class="cd-form-input" value={cliArgsStr} onInput={e => setCli((e.target as HTMLInputElement).value)} placeholder="runtime execute --pack {packId}" />
+      </div>
+      <div class="cd-form-field">
+        <label class="cd-form-label">Category</label>
+        <select class="cd-form-select" value={category} onChange={e => setCategory((e.target as HTMLSelectElement).value as CommandCategory)}>
+          <option value="Investigation">Investigation</option>
+          <option value="Execution">Execution</option>
+          <option value="Intelligence">Intelligence</option>
+          <option value="Maintenance">Maintenance</option>
+        </select>
+      </div>
+      <div class="cd-form-field">
+        <label>
+          <input type="checkbox" checked={mutating} onChange={e => setMutating((e.target as HTMLInputElement).checked)} />
+          {' '}Mutating (changes state)
+        </label>
+      </div>
+      <GhostButton onClick={handleSave} ariaLabel="Save template">Save Template</GhostButton>
+    </section>
+  );
+}
+
+function PlaceholderPrompt({
+  templateId,
+  placeholders,
+  onSubmit,
+  onCancel,
+}: {
+  templateId: string;
+  placeholders: string[];
+  onSubmit: (values: Record<string, string>) => void;
+  onCancel: () => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(placeholders.map(p => [p, '']))
+  );
+
+  return (
+    <section class="cd-placeholder-prompt">
+      <h2 class="cd-section-title">Fill Parameters</h2>
+      {placeholders.map(ph => (
+        <div key={ph} class="cd-form-field">
+          <label class="cd-form-label">{ph}</label>
+          <input
+            class="cd-form-input"
+            value={values[ph] || ''}
+            onInput={e => setValues(v => ({ ...v, [ph]: (e.target as HTMLInputElement).value }))}
+            placeholder={`Enter ${ph}...`}
+          />
+        </div>
+      ))}
+      <div class="cd-action-row">
+        <GhostButton onClick={() => onSubmit(values)} ariaLabel="Execute with values">Execute</GhostButton>
+        <GhostButton onClick={onCancel} ariaLabel="Cancel">Cancel</GhostButton>
+      </div>
+    </section>
   );
 }
 
@@ -288,6 +475,58 @@ const styles = `
 @keyframes cd-pulse {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 1; }
+}
+.cd-template-form,
+.cd-placeholder-prompt {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, var(--vscode-editorWidget-border, #444));
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.cd-template-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cd-form-field {
+  margin-bottom: 8px;
+}
+.cd-form-label {
+  display: block;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 4px;
+  font-size: 0.9em;
+}
+.cd-form-input,
+.cd-form-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-size: 0.9em;
+  border: 1px solid var(--vscode-input-border, #555);
+  background: var(--vscode-input-background, #1e1e1e);
+  color: var(--vscode-input-foreground, #ccc);
+  border-radius: 4px;
+  font-family: var(--vscode-font-family);
+}
+.cd-form-input:focus,
+.cd-form-select:focus {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  border-color: var(--vscode-focusBorder, #007fd4);
+}
+.cd-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cd-card__placeholders {
+  font-size: 0.85em;
+  color: var(--vscode-textPreformat-foreground, #ce9178);
+  margin: 0 0 8px 0;
+  font-family: var(--vscode-editor-fontFamily, monospace);
 }
 `;
 
