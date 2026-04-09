@@ -77,7 +77,6 @@ ALLOWLIST=(
   'hooks/thrunt-prompt-guard.js'
   'SECURITY.md'
   'thrunt-god/data/mitre-attack-enterprise.json'
-  'apps/mcp/data/'
 )
 
 normalize_path() {
@@ -106,10 +105,10 @@ is_allowlisted() {
       return 0
     fi
     # Directory prefix match (allowlist entries ending in /)
-    if [[ "$allowed" == */ && "$normalized" == "$candidate"* ]]; then
+    if [[ "$allowed" == */ && "$normalized" == "$candidate/"* ]]; then
       return 0
     fi
-    if [[ "$allowed" == */ && "$normalized" = /* && "$normalized" == "$repo_root/$candidate"* ]]; then
+    if [[ "$allowed" == */ && "$normalized" = /* && "$normalized" == "$repo_root/$candidate/"* ]]; then
       return 0
     fi
   done

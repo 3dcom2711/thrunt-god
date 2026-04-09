@@ -13,6 +13,11 @@ function makeTempIntelDir() {
   return dir;
 }
 
+function loadAttackData() {
+  const attackDataPath = path.join(__dirname, '..', 'apps', 'mcp', 'data', 'mitre-attack-enterprise.json');
+  return JSON.parse(fs.readFileSync(attackDataPath, 'utf-8'));
+}
+
 let intel;
 function loadIntel() {
   if (!intel) intel = require('../apps/mcp/lib/intel.cjs');
@@ -89,11 +94,20 @@ describe('intel.cjs - openIntelDb', () => {
 
 describe('intel.cjs - population', () => {
   let tmpDir, db;
+  let expectedParentCount;
+  let expectedTotalCount;
 
   before(() => {
     tmpDir = makeTempIntelDir();
     const { openIntelDb } = loadIntel();
     db = openIntelDb({ dbDir: tmpDir });
+
+    const attackData = loadAttackData();
+    expectedParentCount = attackData.techniques.length;
+    expectedTotalCount = attackData.techniques.reduce(
+      (count, technique) => count + 1 + (Array.isArray(technique.sub_techniques) ? technique.sub_techniques.length : 0),
+      0
+    );
   });
 
   after(() => {
@@ -101,21 +115,21 @@ describe('intel.cjs - population', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('populates techniques table with 160 parent techniques', () => {
+  it('populates techniques table with every parent technique from the bundled ATT&CK data', () => {
     const parentCount = db.prepare(
       "SELECT COUNT(*) AS cnt FROM techniques WHERE id NOT LIKE '%.%'"
     ).get().cnt;
-    assert.equal(parentCount, 160, `expected 160 parent techniques, got ${parentCount}`);
+    assert.equal(parentCount, expectedParentCount, `expected ${expectedParentCount} parent techniques, got ${parentCount}`);
   });
 
-  it('populates techniques table with all sub-techniques (557 total)', () => {
+  it('populates techniques table with every bundled technique and sub-technique', () => {
     const totalCount = db.prepare('SELECT COUNT(*) AS cnt FROM techniques').get().cnt;
-    assert.equal(totalCount, 557, `expected 557 total techniques, got ${totalCount}`);
+    assert.equal(totalCount, expectedTotalCount, `expected ${expectedTotalCount} total techniques, got ${totalCount}`);
   });
 
   it('populates techniques_fts FTS5 table', () => {
     const ftsCount = db.prepare('SELECT COUNT(*) AS cnt FROM techniques_fts').get().cnt;
-    assert.equal(ftsCount, 557, `expected 557 FTS rows, got ${ftsCount}`);
+    assert.equal(ftsCount, expectedTotalCount, `expected ${expectedTotalCount} FTS rows, got ${ftsCount}`);
   });
 
   it('populates groups table from mitre-attack-groups.json', () => {

@@ -104,6 +104,26 @@ describe('db.cjs - openProgramDb', () => {
     database.close();
   });
 
+  it('backfills ATT&CK technique entities when reopening an older partial knowledge graph', () => {
+    const { openProgramDb } = loadDb();
+
+    let database = openProgramDb(tmpDir);
+    const threatActors = database.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'threat_actor'"
+    ).get().cnt;
+    assert.ok(threatActors > 0, 'initial open should import STIX threat actors');
+
+    database.prepare("DELETE FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'technique'").run();
+    database.close();
+
+    database = openProgramDb(tmpDir);
+    const techniques = database.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'technique'"
+    ).get().cnt;
+    assert.ok(techniques > 0, 're-open should restore missing ATT&CK technique entities');
+    database.close();
+  });
+
   it('returns null when .planning/ directory does not exist', () => {
     const { openProgramDb } = loadDb();
     const noPlanning = path.join(os.tmpdir(), `thrunt-db-test-${crypto.randomUUID()}`);

@@ -154,9 +154,15 @@ function openProgramDb(cwd) {
     const kg = getKnowledge();
     kg.ensureKnowledgeSchema(db);
 
-    // Auto-import STIX relationships on first open (when kg_entities is empty)
-    const entityCount = db.prepare('SELECT COUNT(*) AS cnt FROM kg_entities').get().cnt;
-    if (entityCount === 0) {
+    // Auto-import bundled ATT&CK entities/relations on first open and backfill
+    // older program DBs that were created before technique entities were seeded.
+    const techniqueCount = db.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_entities WHERE source = 'att&ck-stix' AND type = 'technique'"
+    ).get().cnt;
+    const relationCount = db.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_relations WHERE source = 'att&ck-stix'"
+    ).get().cnt;
+    if (techniqueCount === 0 || relationCount === 0) {
       try {
         const intel = getIntel();
         const intelDb = intel.openIntelDb();

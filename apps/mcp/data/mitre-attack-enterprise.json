@@ -732,6 +732,15 @@
       "data_sources": ["Logon Session", "User Account", "Application Log"]
     },
     {
+      "id": "T1112",
+      "name": "Modify Registry",
+      "tactic": "Defense Evasion, Persistence",
+      "description": "Adversaries may modify the Windows Registry to support defense evasion, persistence, or execution.",
+      "sub_techniques": [],
+      "platforms": ["Windows"],
+      "data_sources": ["Windows Registry Key Modification", "Command Execution", "Process Creation"]
+    },
+    {
       "id": "T1555",
       "name": "Credentials from Password Stores",
       "tactic": "Credential Access",

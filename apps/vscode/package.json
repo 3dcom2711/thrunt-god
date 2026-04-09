@@ -51,7 +51,8 @@
     "onWebviewPanel:thruntGod.huntOverview",
     "onWebviewPanel:thruntGod.evidenceBoard",
     "onWebviewPanel:thruntGod.queryAnalysis",
-    "onWebviewPanel:thruntGod.drainViewer"
+    "onWebviewPanel:thruntGod.drainViewer",
+    "onWebviewPanel:thruntGod.programDashboard"
   ],
   "main": "./dist/extension.js",
   "contributes": {

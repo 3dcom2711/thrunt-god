@@ -30,25 +30,31 @@ const TIMEOUT_MS = parseInt(process.env.THRUNT_MCP_TIMEOUT, 10) || 30000;
 
 function withTimeout(fn) {
   return async (args) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const result = fn(args);
+    if (!result || typeof result.then !== 'function') {
+      return result;
+    }
+
+    let timer;
     try {
-      return await fn(args, controller.signal);
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        return {
-          content: [{ type: 'text', text: `Tool timed out after ${TIMEOUT_MS}ms` }],
-          isError: true,
-        };
-      }
-      throw err;
+      return await Promise.race([
+        result,
+        new Promise(resolve => {
+          timer = setTimeout(() => {
+            resolve({
+              content: [{ type: 'text', text: `Tool timed out after ${TIMEOUT_MS}ms` }],
+              isError: true,
+            });
+          }, TIMEOUT_MS);
+        }),
+      ]);
     } finally {
       clearTimeout(timer);
     }
   };
 }
 
-async function handleLookupTechnique(db, args) {
+function handleLookupTechnique(db, args) {
   const { technique_id } = args;
   const row = lookupTechnique(db, technique_id);
 
@@ -72,7 +78,7 @@ async function handleLookupTechnique(db, args) {
   };
 }
 
-async function handleSearchTechniques(db, args) {
+function handleSearchTechniques(db, args) {
   const { query, tactic, platform, limit = 20 } = args;
   const results = searchTechniques(db, query, { tactic, platform, limit });
   return {
@@ -80,7 +86,7 @@ async function handleSearchTechniques(db, args) {
   };
 }
 
-async function handleLookupGroup(db, args) {
+function handleLookupGroup(db, args) {
   const { group_id } = args;
 
   let group = lookupGroup(db, group_id);
@@ -110,7 +116,7 @@ async function handleLookupGroup(db, args) {
   };
 }
 
-async function handleGenerateLayer(db, args) {
+function handleGenerateLayer(db, args) {
   const { mode, name, technique_ids, group_id, description } = args;
 
   let techniqueEntries = [];
@@ -211,7 +217,7 @@ async function handleGenerateLayer(db, args) {
   };
 }
 
-async function handleCompareDetections(db, args) {
+function handleCompareDetections(db, args) {
   const { technique_id, query } = args;
   const input = technique_id || query;
   if (!input) {
@@ -224,7 +230,7 @@ async function handleCompareDetections(db, args) {
   return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
 }
 
-async function handleSuggestDetections(db, args) {
+function handleSuggestDetections(db, args) {
   const { technique_id } = args;
   const tech = lookupTechnique(db, technique_id);
   if (!tech) {
@@ -237,7 +243,7 @@ async function handleSuggestDetections(db, args) {
   return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
 }
 
-async function handleAnalyzeCoverage(db, args) {
+function handleAnalyzeCoverage(db, args) {
   const { group_id, profile, include_techniques = true } = args;
 
   let techIds;
@@ -294,9 +300,9 @@ async function handleAnalyzeCoverage(db, args) {
 
   for (const tid of techIds) {
     const tactics_str = tacticMap.get(tid);
-    if (!tactics_str) continue;
-
-    const tactics = tactics_str.split(',').map(s => s.trim()).filter(Boolean);
+    const tactics = tactics_str
+      ? tactics_str.split(',').map(s => s.trim()).filter(Boolean)
+      : ['Unknown'];
     for (const tactic of tactics) {
       if (!tacticBreakdown[tactic]) {
         tacticBreakdown[tactic] = { total: 0, covered: 0, uncovered: 0, techniques: [] };
@@ -339,7 +345,7 @@ async function handleAnalyzeCoverage(db, args) {
   };
 }
 
-async function handleQueryKnowledge(db, args) {
+function handleQueryKnowledge(db, args) {
   const { query, type, limit = 10 } = args;
   const entities = searchEntities(db, query, { type, limit });
 
@@ -359,7 +365,7 @@ async function handleQueryKnowledge(db, args) {
   };
 }
 
-async function handleLogDecision(db, args) {
+function handleLogDecision(db, args) {
   const { case_slug, technique_id, decision, reasoning, context } = args;
   logDecision(db, { case_slug, technique_id, decision, reasoning, context });
 
@@ -370,7 +376,7 @@ async function handleLogDecision(db, args) {
   };
 }
 
-async function handleLogLearning(db, args) {
+function handleLogLearning(db, args) {
   const { topic, pattern, detail, technique_ids, case_slug } = args;
   logLearning(db, { topic, pattern, detail, technique_ids, case_slug });
 
@@ -390,7 +396,7 @@ function registerTools(server, db) {
         .regex(/^T\d{4}(?:\.\d{3})?$/i)
         .describe('ATT&CK technique ID (e.g., T1059.001, T1078)'),
     },
-    withTimeout(async (args) => handleLookupTechnique(db, args))
+    withTimeout((args) => handleLookupTechnique(db, args))
   );
 
   server.tool(
@@ -402,7 +408,7 @@ function registerTools(server, db) {
       platform: z.string().optional().describe('Filter by platform (e.g., "Windows", "Linux", "Cloud")'),
       limit: z.number().int().min(1).max(100).default(20).describe('Maximum results to return'),
     },
-    withTimeout(async (args) => handleSearchTechniques(db, args))
+    withTimeout((args) => handleSearchTechniques(db, args))
   );
 
   server.tool(
@@ -411,7 +417,7 @@ function registerTools(server, db) {
     {
       group_id: z.string().describe('ATT&CK group ID (e.g., G0007) or group name (e.g., "APT28")'),
     },
-    withTimeout(async (args) => handleLookupGroup(db, args))
+    withTimeout((args) => handleLookupGroup(db, args))
   );
 
   server.tool(
@@ -424,7 +430,7 @@ function registerTools(server, db) {
       group_id: z.string().optional().describe('Group ID for group/gap mode (e.g., G0007)'),
       description: z.string().optional().describe('Layer description'),
     },
-    withTimeout(async (args) => handleGenerateLayer(db, args))
+    withTimeout((args) => handleGenerateLayer(db, args))
   );
 
   server.tool(
@@ -435,7 +441,7 @@ function registerTools(server, db) {
       profile: z.string().optional().describe('Named threat profile: ransomware, apt, initial-access, persistence, credential-access, defense-evasion'),
       include_techniques: z.boolean().default(true).describe('Include technique-level detail in each tactic'),
     },
-    withTimeout(async (args) => handleAnalyzeCoverage(db, args))
+    withTimeout((args) => handleAnalyzeCoverage(db, args))
   );
 
   server.tool(
@@ -445,7 +451,7 @@ function registerTools(server, db) {
       technique_id: z.string().optional().describe('ATT&CK technique ID (e.g., T1059)'),
       query: z.string().optional().describe('Free-text search query'),
     },
-    withTimeout(async (args) => handleCompareDetections(db, args))
+    withTimeout((args) => handleCompareDetections(db, args))
   );
 
   server.tool(
@@ -454,7 +460,7 @@ function registerTools(server, db) {
     {
       technique_id: z.string().regex(/^T\d{4}(?:\.\d{3})?$/i).describe('ATT&CK technique ID'),
     },
-    withTimeout(async (args) => handleSuggestDetections(db, args))
+    withTimeout((args) => handleSuggestDetections(db, args))
   );
 
   server.tool(
@@ -465,7 +471,7 @@ function registerTools(server, db) {
       type: z.enum(['threat_actor', 'technique', 'detection', 'campaign', 'tool', 'vulnerability', 'data_source']).optional(),
       limit: z.number().int().min(1).max(50).default(10),
     },
-    withTimeout(async (args) => handleQueryKnowledge(db, args))
+    withTimeout((args) => handleQueryKnowledge(db, args))
   );
 
   server.tool(
@@ -478,7 +484,7 @@ function registerTools(server, db) {
       reasoning: z.string().optional(),
       context: z.string().optional(),
     },
-    withTimeout(async (args) => handleLogDecision(db, args))
+    withTimeout((args) => handleLogDecision(db, args))
   );
 
   server.tool(
@@ -491,7 +497,7 @@ function registerTools(server, db) {
       technique_ids: z.string().optional().describe('Comma-separated ATT&CK technique IDs'),
       case_slug: z.string().optional(),
     },
-    withTimeout(async (args) => handleLogLearning(db, args))
+    withTimeout((args) => handleLogLearning(db, args))
   );
 }
 

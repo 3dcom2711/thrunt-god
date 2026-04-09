@@ -473,6 +473,28 @@ describe('tool handlers with intel DB', () => {
       assert.ok(data.gap_percent >= 0 && data.gap_percent <= 100);
     });
   });
+
+  describe('query_knowledge', () => {
+    it('returns ATT&CK group entities from a fresh intel DB bootstrap', async () => {
+      const { handleQueryKnowledge } = loadTools();
+      const result = await handleQueryKnowledge(db, { query: 'APT28', limit: 5 });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(Array.isArray(data));
+      assert.ok(data.some(entity => entity.type === 'threat_actor' && entity.name === 'APT28'));
+    });
+
+    it('supports ATT&CK technique ID lookups after knowledge import', async () => {
+      const { handleQueryKnowledge } = loadTools();
+      const result = await handleQueryKnowledge(db, { query: 'T1059', limit: 5 });
+      assert.ok(!result.isError);
+
+      const data = JSON.parse(result.content[0].text);
+      assert.ok(Array.isArray(data));
+      assert.ok(data.some(entity => entity.type === 'technique' && entity.id === 'technique--t1059'));
+    });
+  });
 });
 
 describe('timeout enforcement', () => {

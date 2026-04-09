@@ -568,6 +568,18 @@ describe('knowledge.cjs - importStixFromIntel', () => {
     assert.equal(tools, softwareCount, `should have ${softwareCount} tool entities`);
   });
 
+  it('creates technique entities for each ATT&CK technique in intel.db', () => {
+    const { importStixFromIntel } = loadKnowledge();
+    importStixFromIntel(programDb, intelDb);
+
+    const techniqueCount = intelDb.prepare('SELECT COUNT(*) AS cnt FROM techniques').get().cnt;
+    const kgTechniques = programDb.prepare(
+      "SELECT COUNT(*) AS cnt FROM kg_entities WHERE type = 'technique' AND source = 'att&ck-stix'"
+    ).get().cnt;
+
+    assert.equal(kgTechniques, techniqueCount, `should have ${techniqueCount} technique entities`);
+  });
+
   it('creates uses relations for group_techniques rows', () => {
     const { importStixFromIntel } = loadKnowledge();
     importStixFromIntel(programDb, intelDb);
@@ -602,6 +614,22 @@ describe('knowledge.cjs - importStixFromIntel', () => {
     ).get().cnt;
 
     assert.equal(stRelations, stCount, `should have ${stCount} software->technique relations, got ${stRelations}`);
+  });
+
+  it('does not leave STIX relations pointing at missing knowledge entities', () => {
+    const { importStixFromIntel } = loadKnowledge();
+    importStixFromIntel(programDb, intelDb);
+
+    const dangling = programDb.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM kg_relations r
+      LEFT JOIN kg_entities src ON src.id = r.from_entity
+      LEFT JOIN kg_entities dst ON dst.id = r.to_entity
+      WHERE r.source = 'att&ck-stix'
+        AND (src.id IS NULL OR dst.id IS NULL)
+    `).get().cnt;
+
+    assert.equal(dangling, 0, 'all STIX relations should reference imported entities');
   });
 
   it('idempotent -- running twice does not duplicate rows', () => {

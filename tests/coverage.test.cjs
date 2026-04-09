@@ -62,16 +62,17 @@ describe('THREAT_PROFILES constant', () => {
     assert.ok(THREAT_PROFILES.apt.includes('T1059'), 'apt missing T1059 (Command and Scripting Interpreter)');
   });
 
-  it('initial-access profile techniques all exist in the techniques table', () => {
+  it('all threat-profile techniques exist in the techniques table', () => {
     const tmpDir = makeTempDir();
     try {
       const { openIntelDb } = loadIntel();
       const db = openIntelDb({ dbDir: tmpDir });
       const { THREAT_PROFILES } = loadCoverage();
 
-      for (const tid of THREAT_PROFILES['initial-access']) {
+      const ids = new Set(Object.values(THREAT_PROFILES).flat());
+      for (const tid of ids) {
         const row = db.prepare('SELECT id FROM techniques WHERE id = ?').get(tid);
-        assert.ok(row, `initial-access technique ${tid} not found in techniques table`);
+        assert.ok(row, `profile technique ${tid} not found in techniques table`);
       }
       db.close();
     } finally {

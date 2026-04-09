@@ -1762,6 +1762,17 @@ describe('cmdMigrateCase', () => {
     assert.ok(content.includes('opened_at:'), 'case STATE.md should have opened_at');
   });
 
+  test('creates parseable migrated case STATE.md content', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const caseStatePath = path.join(tmpDir, '.planning', 'cases', 'my-hunt', 'STATE.md');
+    const content = fs.readFileSync(caseStatePath, 'utf-8');
+    assert.ok(content.includes('## Current Position'));
+    assert.ok(content.includes('**Active signal:** my-hunt migrated from flat .planning/ layout'));
+    assert.ok(content.includes('Status: Active'));
+  });
+
   test('sets .active-case pointer to migrated slug', () => {
     const result = runThruntTools('migrate-case my-hunt', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -2144,6 +2155,21 @@ describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
     assert.strictEqual(output.past_case_matches.length, 0, 'first case should have empty past_case_matches');
   });
 
+  test('cmdCaseNew writes parseable case STATE.md content', () => {
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'First Investigation'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+
+    const statePath = path.join(tmpDir, '.planning', 'cases', 'first-investigation', 'STATE.md');
+    const content = fs.readFileSync(statePath, 'utf-8');
+    assert.ok(content.includes('## Current Position'));
+    assert.ok(content.includes('**Active signal:** First Investigation opened for investigation'));
+    assert.ok(content.includes('Phase: 1 of 1'));
+    assert.ok(content.includes('Plan: 1 of 1'));
+    assert.ok(content.includes('Status: Active'));
+  });
+
   test('cmdCaseNew returns matches after past case indexed', () => {
     setupProgramState(tmpDir, []);
 
@@ -2188,6 +2214,22 @@ describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
     assert.ok(result.success, `Close should succeed even if indexing has issues: ${result.error}`);
     const output = JSON.parse(result.output);
     assert.strictEqual(output.success, true, 'case close should succeed even with indexing edge cases');
+  });
+
+  test('cmdCaseClose updates structured case STATE.md status fields', () => {
+    setupProgramState(tmpDir, []);
+
+    const newResult = runThruntTools(['case', 'new', 'Close Me'], tmpDir);
+    assert.ok(newResult.success, `New case failed: ${newResult.error}`);
+
+    const closeResult = runThruntTools(['case', 'close', 'close-me'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    const statePath = path.join(tmpDir, '.planning', 'cases', 'close-me', 'STATE.md');
+    const content = fs.readFileSync(statePath, 'utf-8');
+    assert.ok(content.includes('status: closed'), 'frontmatter should be updated to closed');
+    assert.ok(content.includes('Status: Closed'), 'body status should be updated to Closed');
+    assert.ok(content.includes('Last activity: Closed '), 'body last activity should reflect closure');
   });
 });
 

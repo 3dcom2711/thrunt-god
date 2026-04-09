@@ -11,6 +11,17 @@ function makeEntityId(type, name) {
   return `${type}--${slugify(name)}`;
 }
 
+function splitCsv(value) {
+  if (!value || typeof value !== 'string') return [];
+  return value.split(',').map(part => part.trim()).filter(Boolean);
+}
+
+function buildAttackDescription(label, attackId, description = '') {
+  const prefix = `${label}: ${attackId}.`;
+  const trimmed = description.trim();
+  return trimmed ? `${prefix} ${trimmed}` : prefix;
+}
+
 /**
  * @param {import('better-sqlite3').Database} db
  */
@@ -202,6 +213,25 @@ function searchEntities(db, query, opts = {}) {
   if (!query || typeof query !== 'string' || query.trim() === '') return [];
 
   const limit = opts.limit || 50;
+  const normalised = query.trim().toUpperCase();
+
+  if (/^[A-Z]\d{4}(?:\.\d{3})?$/.test(normalised)) {
+    const conditions = ['metadata LIKE ?'];
+    const params = [`%"attack_id":"${normalised}"%`];
+
+    if (opts.type) {
+      conditions.push('type = ?');
+      params.push(opts.type);
+    }
+
+    const exactMatches = db.prepare(
+      `SELECT * FROM kg_entities WHERE ${conditions.join(' AND ')} LIMIT ?`
+    ).all(...params, limit);
+
+    if (exactMatches.length > 0) {
+      return exactMatches;
+    }
+  }
 
   try {
     let sql = `
@@ -345,11 +375,13 @@ function getLearnings(db, filters = {}) {
  * @param {import('better-sqlite3').Database} intelDb
  */
 function importStixFromIntel(programDb, intelDb) {
+  const techniques = intelDb.prepare('SELECT * FROM techniques').all();
   const groups = intelDb.prepare('SELECT * FROM groups').all();
   const software = intelDb.prepare('SELECT * FROM software').all();
   const groupTechniques = intelDb.prepare('SELECT * FROM group_techniques').all();
   const groupSoftware = intelDb.prepare('SELECT * FROM group_software').all();
   const softwareTechniques = intelDb.prepare('SELECT * FROM software_techniques').all();
+  const techniqueIds = new Set(techniques.map(t => String(t.id).toUpperCase()));
 
   const groupMap = new Map();
   for (const g of groups) groupMap.set(g.id, g);
@@ -360,11 +392,33 @@ function importStixFromIntel(programDb, intelDb) {
   const doImport = programDb.transaction(() => {
     programDb.prepare("DELETE FROM kg_relations WHERE source = 'att&ck-stix'").run();
 
+    for (const t of techniques) {
+      addEntityDirect(programDb, {
+        id: `technique--${String(t.id).toLowerCase()}`,
+        type: 'technique',
+        name: t.name,
+        description: buildAttackDescription('ATT&CK Technique ID', t.id, t.description || ''),
+        metadata: JSON.stringify({
+          attack_id: t.id,
+          tactics: splitCsv(t.tactics),
+          platforms: splitCsv(t.platforms),
+          data_sources: splitCsv(t.data_sources),
+          url: t.url || '',
+        }),
+        source: 'att&ck-stix',
+      });
+    }
+
     for (const g of groups) {
       addEntityDirect(programDb, {
         type: 'threat_actor',
         name: g.name,
-        description: g.description || '',
+        description: buildAttackDescription('ATT&CK Group ID', g.id, g.description || ''),
+        metadata: JSON.stringify({
+          attack_id: g.id,
+          aliases: splitCsv(g.aliases),
+          url: g.url || '',
+        }),
         source: 'att&ck-stix',
       });
     }
@@ -373,7 +427,11 @@ function importStixFromIntel(programDb, intelDb) {
       addEntityDirect(programDb, {
         type: 'tool',
         name: s.name,
-        description: s.description || '',
+        description: buildAttackDescription('ATT&CK Software ID', s.id, s.description || ''),
+        metadata: JSON.stringify({
+          attack_id: s.id,
+          software_type: s.type || '',
+        }),
         source: 'att&ck-stix',
       });
     }
@@ -385,9 +443,9 @@ function importStixFromIntel(programDb, intelDb) {
 
     for (const gt of groupTechniques) {
       const group = groupMap.get(gt.group_id);
-      if (!group) continue;
+      if (!group || !techniqueIds.has(String(gt.technique_id).toUpperCase())) continue;
       const fromId = makeEntityId('threat_actor', group.name);
-      const toId = `technique--${gt.technique_id.toLowerCase()}`;
+      const toId = `technique--${String(gt.technique_id).toLowerCase()}`;
       insertRelation.run(fromId, toId, 'uses', '{}', now, 'att&ck-stix');
     }
 
@@ -402,9 +460,9 @@ function importStixFromIntel(programDb, intelDb) {
 
     for (const st of softwareTechniques) {
       const sw = softwareMap.get(st.software_id);
-      if (!sw) continue;
+      if (!sw || !techniqueIds.has(String(st.technique_id).toUpperCase())) continue;
       const fromId = makeEntityId('tool', sw.name);
-      const toId = `technique--${st.technique_id.toLowerCase()}`;
+      const toId = `technique--${String(st.technique_id).toLowerCase()}`;
       insertRelation.run(fromId, toId, 'uses', '{}', now, 'att&ck-stix');
     }
   });
@@ -413,7 +471,7 @@ function importStixFromIntel(programDb, intelDb) {
 }
 
 function addEntityDirect(db, opts) {
-  const id = makeEntityId(opts.type, opts.name);
+  const id = opts.id || makeEntityId(opts.type, opts.name);
   const type = opts.type;
   const name = opts.name;
   const description = opts.description || '';

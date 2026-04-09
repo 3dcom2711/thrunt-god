@@ -3389,6 +3389,72 @@ async function cmdConnectorsInit(cwd, args, raw) {
 
 // ─── Case commands ───────────────────────────────────────────────────────────
 
+function buildStateDocument(frontmatter, body) {
+  return `---\n${reconstructFrontmatter(frontmatter)}\n---\n\n${body.trimEnd()}\n`;
+}
+
+function buildCaseStateBody(title, opts = {}) {
+  const status = opts.status || 'Active';
+  const activeSignal = opts.activeSignal || `${title} opened for investigation`;
+  const currentFocus = opts.currentFocus || 'Initial triage and evidence collection';
+  const lastActivity = opts.lastActivity || status;
+  const scope = opts.scope || 'Validate the case signal, collect first evidence, and decide the next investigation step.';
+  const confidence = opts.confidence || 'Low';
+  const blockers = opts.blockers || 'None.';
+
+  return [
+    `# Case: ${title}`,
+    '',
+    '## Current Position',
+    '',
+    `**Active signal:** ${activeSignal}`,
+    `**Current focus:** ${currentFocus}`,
+    'Phase: 1 of 1',
+    'Plan: 1 of 1',
+    `Status: ${status}`,
+    `Last activity: ${lastActivity}`,
+    '',
+    '### Current Scope',
+    '',
+    scope,
+    '',
+    '### Confidence',
+    '',
+    confidence,
+    '',
+    '### Blockers',
+    '',
+    blockers,
+    '',
+  ].join('\n');
+}
+
+function updateCaseStateBody(content, fallbackTitle, opts = {}) {
+  if (!/## Current Position/m.test(content)) {
+    const fm = extractFrontmatter(content);
+    return buildStateDocument(fm, buildCaseStateBody(fallbackTitle, opts));
+  }
+
+  let next = content;
+  if (opts.activeSignal && /\*\*Active signal:\*\* .+/m.test(next)) {
+    next = next.replace(/\*\*Active signal:\*\* .+/m, `**Active signal:** ${opts.activeSignal}`);
+  }
+  if (opts.currentFocus && /\*\*Current focus:\*\* .+/m.test(next)) {
+    next = next.replace(/\*\*Current focus:\*\* .+/m, `**Current focus:** ${opts.currentFocus}`);
+  }
+  if (opts.status && /^Status:\s*.+$/m.test(next)) {
+    next = next.replace(/^Status:\s*.+$/m, `Status: ${opts.status}`);
+  }
+  if (opts.lastActivity) {
+    if (/^Last activity:\s*.+$/m.test(next)) {
+      next = next.replace(/^Last activity:\s*.+$/m, `Last activity: ${opts.lastActivity}`);
+    } else if (/^Status:\s*.+$/m.test(next)) {
+      next = next.replace(/^Status:\s*.+$/m, match => `${match}\nLast activity: ${opts.lastActivity}`);
+    }
+  }
+  return next;
+}
+
 function cmdCaseNew(cwd, name, options, raw) {
   if (!name) {
     error('Case name required. Usage: case new <name>');
@@ -3451,9 +3517,17 @@ function cmdCaseNew(cwd, name, options, raw) {
 
   fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'), `# Hypotheses\n\n_No hypotheses yet._\n`, 'utf-8');
 
-  const caseStateFm = `---\nstatus: active\nopened_at: ${today}\ntechnique_ids: []\n---\n\n`;
-  const caseStateBody = `# Case: ${name}\n\nStatus: Active\n`;
-  fs.writeFileSync(path.join(caseDir, 'STATE.md'), caseStateFm + caseStateBody, 'utf-8');
+  const caseStateFm = {
+    status: 'active',
+    opened_at: today,
+    technique_ids: [],
+  };
+  const caseStateBody = buildCaseStateBody(name, {
+    activeSignal: `${name} opened for investigation`,
+    currentFocus: 'Initial triage and evidence collection',
+    lastActivity: `Opened ${today}`,
+  });
+  fs.writeFileSync(path.join(caseDir, 'STATE.md'), buildStateDocument(caseStateFm, caseStateBody), 'utf-8');
 
   // Create QUERIES/ and RECEIPTS/ directories
   fs.mkdirSync(path.join(caseDir, 'QUERIES'), { recursive: true });
@@ -3560,9 +3634,15 @@ function cmdCaseClose(cwd, slug, raw) {
   if (fs.existsSync(caseStatePath)) {
     const content = fs.readFileSync(caseStatePath, 'utf-8');
     const fm = extractFrontmatter(content);
+    const closedAt = new Date().toISOString().split('T')[0];
     fm.status = 'closed';
-    fm.closed_at = new Date().toISOString().split('T')[0];
-    const newContent = spliceFrontmatter(content, fm);
+    fm.closed_at = closedAt;
+    let newContent = spliceFrontmatter(content, fm);
+    newContent = updateCaseStateBody(newContent, slug, {
+      status: 'Closed',
+      currentFocus: 'Closed and ready for follow-up as needed',
+      lastActivity: `Closed ${closedAt}`,
+    });
     fs.writeFileSync(caseStatePath, newContent, 'utf-8');
   }
 
@@ -3874,12 +3954,18 @@ function cmdMigrateCase(cwd, slug, raw) {
   // Create case-level STATE.md
   const caseStatePath = path.join(caseDir, 'STATE.md');
   if (!fs.existsSync(caseStatePath)) {
-    const caseFm = reconstructFrontmatter({
+    const caseFm = {
       status: 'active',
       opened_at: new Date().toISOString().split('T')[0],
       technique_ids: [],
+    };
+    const caseBody = buildCaseStateBody(slug, {
+      activeSignal: `${slug} migrated from flat .planning/ layout`,
+      currentFocus: 'Resume triage from migrated artifacts',
+      lastActivity: `Migrated ${caseFm.opened_at}`,
+      scope: 'Review migrated artifacts and normalize any remaining case state for continued investigation.',
     });
-    fs.writeFileSync(caseStatePath, '---\n' + caseFm + '\n---\n\n# Case: ' + slug + '\n\nStatus: Active\nMigrated from flat .planning/ layout.\n', 'utf-8');
+    fs.writeFileSync(caseStatePath, buildStateDocument(caseFm, caseBody), 'utf-8');
   }
 
   // Update program roster

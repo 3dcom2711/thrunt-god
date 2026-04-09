@@ -216,8 +216,9 @@ function openIntelDb(opts = {}) {
   getDetections().ensureDetectionsSchema(db);
   getDetections().populateDetectionsIfEmpty(db);
 
-  const { ensureKnowledgeSchema } = require('./knowledge.cjs');
+  const { ensureKnowledgeSchema, importStixFromIntel } = require('./knowledge.cjs');
   ensureKnowledgeSchema(db);
+  importStixFromIntel(db, db);
 
   return db;
 }
