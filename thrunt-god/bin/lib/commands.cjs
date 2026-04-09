@@ -3429,6 +3429,40 @@ function buildCaseStateBody(title, opts = {}) {
   ].join('\n');
 }
 
+function parseActivityDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/\d{4}-\d{2}-\d{2}/);
+  if (!match) return null;
+  const date = new Date(match[0]);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getCaseActivityDate(caseStatePath, rosterEntry = {}) {
+  if (fs.existsSync(caseStatePath)) {
+    try {
+      const content = fs.readFileSync(caseStatePath, 'utf-8');
+      const fm = extractFrontmatter(content);
+      const activityMatch = content.match(/^last_activity:\s*(.+)$/im)
+        || content.match(/^Last Activity:\s*(.+)$/im)
+        || content.match(/^Last activity:\s*(.+)$/im);
+      const explicitActivity = fm.last_activity || (activityMatch ? activityMatch[1].trim() : null);
+      const explicitDate = parseActivityDate(explicitActivity);
+      if (explicitDate) {
+        return explicitDate;
+      }
+
+      const stat = fs.statSync(caseStatePath);
+      if (!Number.isNaN(stat.mtime.getTime())) {
+        return stat.mtime;
+      }
+    } catch {
+      // Fall back to roster timestamps below.
+    }
+  }
+
+  return parseActivityDate(rosterEntry.last_activity || rosterEntry.opened_at);
+}
+
 function updateCaseStateBody(content, fallbackTitle, opts = {}) {
   if (!/## Current Position/m.test(content)) {
     const fm = extractFrontmatter(content);
@@ -3518,6 +3552,7 @@ function cmdCaseNew(cwd, name, options, raw) {
   fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'), `# Hypotheses\n\n_No hypotheses yet._\n`, 'utf-8');
 
   const caseStateFm = {
+    title: name,
     status: 'active',
     opened_at: today,
     technique_ids: [],
@@ -3806,10 +3841,9 @@ function cmdProgramRollup(cwd, raw) {
     // Determine stale status
     let isStale = false;
     if (entry.status === 'active') {
-      const lastDate = entry.last_activity || entry.opened_at;
-      if (lastDate) {
-        const d = new Date(lastDate);
-        const diffDays = Math.floor((today - d) / (1000 * 60 * 60 * 24));
+      const activityDate = getCaseActivityDate(caseStatePath, entry);
+      if (activityDate) {
+        const diffDays = Math.floor((today - activityDate) / (1000 * 60 * 60 * 24));
         if (diffDays > STALE_DAYS) isStale = true;
       }
     }

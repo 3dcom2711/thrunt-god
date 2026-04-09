@@ -1970,6 +1970,9 @@ describe('cmdProgramRollup', () => {
       { slug: 'old-case', name: 'Old Case', status: 'active', opened_at: thirtyDaysAgo },
     ]);
     setupCaseState(tmpDir, 'old-case');
+    const caseStatePath = path.join(tmpDir, '.planning', 'cases', 'old-case', 'STATE.md');
+    const staleTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(caseStatePath, staleTime, staleTime);
 
     const result = runThruntTools('program rollup', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -1980,6 +1983,21 @@ describe('cmdProgramRollup', () => {
 
     const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
     assert.ok(stateContent.includes('stale'), 'STATE.md should show stale status in table');
+  });
+
+  test('programRollup: recent case STATE activity keeps active case out of stale bucket', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setupProgramState(tmpDir, [
+      { slug: 'recent-case', name: 'Recent Case', status: 'active', opened_at: thirtyDaysAgo },
+    ]);
+    setupCaseState(tmpDir, 'recent-case');
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.stale, 0, 'recent case STATE activity should prevent stale classification');
+    assert.strictEqual(parsed.active, 1, 'case should remain active when STATE.md was recently updated');
   });
 });
 
@@ -2163,6 +2181,7 @@ describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
 
     const statePath = path.join(tmpDir, '.planning', 'cases', 'first-investigation', 'STATE.md');
     const content = fs.readFileSync(statePath, 'utf-8');
+    assert.ok(content.includes('title: First Investigation'));
     assert.ok(content.includes('## Current Position'));
     assert.ok(content.includes('**Active signal:** First Investigation opened for investigation'));
     assert.ok(content.includes('Phase: 1 of 1'));
@@ -2194,6 +2213,10 @@ describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
     const output2 = JSON.parse(newResult2.output);
     assert.ok(Array.isArray(output2.past_case_matches), 'output should include past_case_matches');
     assert.ok(output2.past_case_matches.length > 0, 'should have past case matches from FTS or technique overlap');
+    assert.ok(
+      output2.past_case_matches.some(match => match.name === 'PowerShell Execution'),
+      'past case matches should preserve the user-facing case title instead of the slug'
+    );
   });
 
   test('cmdCaseClose indexing failure is non-fatal', () => {
