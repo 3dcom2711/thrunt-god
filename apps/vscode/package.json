@@ -283,6 +283,11 @@
         "command": "thrunt-god.mcpOpenLogs",
         "title": "Open MCP Logs",
         "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpOpenPanel",
+        "title": "Open MCP Control Panel",
+        "category": "THRUNT"
       }
     ],
     "menus": {
@@ -366,6 +371,11 @@
           "command": "thrunt-god.mcpOpenLogs",
           "when": "view == thruntGod.automationTree && viewItem == automationMcp",
           "group": "mcp@5"
+        },
+        {
+          "command": "thrunt-god.mcpOpenPanel",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "group": "mcp@6"
         }
       ],
       "editor/context": [

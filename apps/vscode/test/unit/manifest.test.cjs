@@ -116,11 +116,11 @@ describe('extension manifest', () => {
 });
 
 describe('MCP commands', () => {
-  it('registers 5 MCP commands in package.json', () => {
+  it('registers 6 MCP commands in package.json', () => {
     const mcpCommands = manifest.contributes.commands.filter(
       (c) => c.command.startsWith('thrunt-god.mcp')
     );
-    assert.equal(mcpCommands.length, 5);
+    assert.equal(mcpCommands.length, 6);
   });
 
   it('registers mcpStart command with THRUNT category', () => {
@@ -136,10 +136,10 @@ describe('MCP commands', () => {
     assert.equal(cmd.title, 'Run MCP Health Check');
   });
 
-  it('registers 5 MCP context menu entries gated by automationMcp', () => {
+  it('registers 6 MCP context menu entries gated by automationMcp', () => {
     const ctx = manifest.contributes.menus['view/item/context'];
     const mcpMenus = ctx.filter(m => m.command.startsWith('thrunt-god.mcp'));
-    assert.equal(mcpMenus.length, 5);
+    assert.equal(mcpMenus.length, 6);
     for (const menu of mcpMenus) {
       assert.ok(
         menu.when.includes('viewItem == automationMcp'),
@@ -156,7 +156,7 @@ describe('MCP commands', () => {
     const ctx = manifest.contributes.menus['view/item/context'];
     const mcpMenus = ctx.filter(m => m.command.startsWith('thrunt-god.mcp'));
     const groups = mcpMenus.map(m => m.group).sort();
-    assert.deepEqual(groups, ['mcp@1', 'mcp@2', 'mcp@3', 'mcp@4', 'mcp@5']);
+    assert.deepEqual(groups, ['mcp@1', 'mcp@2', 'mcp@3', 'mcp@4', 'mcp@5', 'mcp@6']);
   });
 
   it('has mcpControlPanel activation event', () => {

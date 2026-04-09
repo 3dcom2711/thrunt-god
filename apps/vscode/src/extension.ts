@@ -36,6 +36,7 @@ import {
 import { EvidenceBoardPanel, EVIDENCE_BOARD_VIEW_TYPE } from './evidenceBoardPanel';
 import { QueryAnalysisPanel, QUERY_ANALYSIS_VIEW_TYPE } from './queryAnalysisPanel';
 import { ProgramDashboardPanel, PROGRAM_DASHBOARD_VIEW_TYPE } from './programDashboardPanel';
+import { McpControlPanel, MCP_CONTROL_VIEW_TYPE } from './mcpControlPanel';
 import type { SessionDiff } from '../shared/hunt-overview';
 import { resolveArtifactType } from './watcher';
 
@@ -1716,6 +1717,22 @@ export function activate(context: vscode.ExtensionContext): void {
       })
     );
 
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpOpenPanel', () => {
+        McpControlPanel.createOrShow(context, mcpStatus);
+      })
+    );
+
+    // MCP Control Panel serializer for panel restoration
+    context.subscriptions.push(
+      vscode.window.registerWebviewPanelSerializer(MCP_CONTROL_VIEW_TYPE, {
+        deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+          McpControlPanel.restorePanel(context, mcpStatus, panel);
+          return Promise.resolve();
+        },
+      })
+    );
+
     const statusBar = new HuntStatusBar(store);
     context.subscriptions.push(statusBar);
 
@@ -1936,3 +1953,7 @@ export {
   ProgramDashboardPanel,
   PROGRAM_DASHBOARD_VIEW_TYPE,
 } from './programDashboardPanel';
+export {
+  McpControlPanel,
+  MCP_CONTROL_VIEW_TYPE,
+} from './mcpControlPanel';
