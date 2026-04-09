@@ -499,10 +499,11 @@ function indexDirectory(db, dirPath, extPattern, parseFn, format) {
     const files = fs.readdirSync(dirPath, { recursive: true });
 
     for (const relFile of files) {
-      const rel = typeof relFile === 'string' ? relFile : relFile.toString();
-      if (!extPattern.test(rel)) continue;
+      const nativeRel = typeof relFile === 'string' ? relFile : relFile.toString();
+      if (!extPattern.test(nativeRel)) continue;
+      const rel = nativeRel.replace(/\\/g, '/');
 
-      const fullPath = path.join(dirPath, rel);
+      const fullPath = path.join(dirPath, nativeRel);
 
       // Skip directories that match the extension pattern
       try {
