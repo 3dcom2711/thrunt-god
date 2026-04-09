@@ -247,11 +247,12 @@ export class RunbookRegistry {
     }
   }
 
-  getRunbooks(): Array<{ name: string; path: string; valid: boolean; errors: string[] }> {
-    const result: Array<{ name: string; path: string; valid: boolean; errors: string[] }> = [];
+  getRunbooks(): Array<{ name: string; description: string; path: string; valid: boolean; errors: string[] }> {
+    const result: Array<{ name: string; description: string; path: string; valid: boolean; errors: string[] }> = [];
     for (const [, entry] of this.runbooks) {
       result.push({
-        name: entry.def?.name ?? path.basename(entry.path),
+        name: entry.def?.name ?? path.basename(entry.path, path.extname(entry.path)),
+        description: entry.def?.description ?? '',
         path: entry.path,
         valid: entry.def !== null && entry.errors.length === 0,
         errors: entry.errors,

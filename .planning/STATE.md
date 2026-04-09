@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Sidebar Automation & Operations
-status: in-progress
-stopped_at: Completed 61-01-PLAN.md
-last_updated: "2026-04-09T22:08:08Z"
-last_activity: 2026-04-09 -- Completed 61-01 (Runbook schema, parser, registry, example YAML)
+status: executing
+stopped_at: Completed 61-02-PLAN.md
+last_updated: "2026-04-09T22:14:23.629Z"
+last_activity: 2026-04-09 -- Completed 61-02 (RunbookEngine with dry-run, confirm, subprocess execution)
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 11
-  completed_plans: 9
-  percent: 82
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 ## Current Position
 
 Phase: 61 of 62 (Runbook Engine & Editor)
-Plan: 1 of 3 plans in phase
+Plan: 2 of 3 plans in phase
 Status: In progress
-Last activity: 2026-04-09 -- Completed 61-01 (Runbook schema, parser, registry, example YAML)
+Last activity: 2026-04-09 -- Completed 61-02 (RunbookEngine with dry-run, confirm, subprocess execution)
 
-Progress: [████████░░] 82% (v3.1 Phase 61: 1/3 plans)
+Progress: [█████████░] 91% (v3.1 Phase 61: 2/3 plans)
 
 ## Accumulated Context
 
@@ -76,6 +76,9 @@ Progress: [████████░░] 82% (v3.1 Phase 61: 1/3 plans)
 - [Phase 61]: Runtime validation (validateRunbook) instead of Zod — avoids new dependency while providing equivalent validation
 - [Phase 61]: Five step action types (cli, mcp, open, note, confirm) as established in architecture decisions
 - [Phase 61]: RunbookRegistry uses sync fs reads internally with async public API for pattern consistency
+- [Phase 61]: RunbookEngine uses async generator to yield StepResult per step for real-time webview streaming
+- [Phase 61]: CLI steps use 60s timeout with SIGTERM; MCP steps use 30s timeout with SIGTERM then SIGKILL after 2s grace
+- [Phase 61]: resolveParams exported separately for direct testing and reuse outside RunbookEngine
 
 ### Blockers/Concerns
 
@@ -83,6 +86,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T22:08:08Z
-Stopped at: Completed 61-01-PLAN.md
-Resume: Phase 61 Plan 01 complete. Shared types (shared/runbook.ts), runtime validation + parser + registry (src/runbook.ts), example YAML, and 13 new unit tests. 379 total tests passing. Next: Plan 02 (RunbookEngine) and Plan 03 (RunbookPanel webview).
+Last session: 2026-04-09T22:14:17.679Z
+Stopped at: Completed 61-02-PLAN.md
+Resume: Phase 61 Plan 02 complete. RunbookEngine class with async generator executeRunbook, 5 step executors (cli/mcp/open/note/confirm), dry-run mode, confirm pause/abort, resolveParams helper. 390 total tests passing. Next: Plan 03 (RunbookPanel webview host).

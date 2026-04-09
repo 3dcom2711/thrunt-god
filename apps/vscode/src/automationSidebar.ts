@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import type { MCPStatusManager } from './mcpStatusManager';
+import type { RunbookRegistry } from './runbook';
 
 // ---------------------------------------------------------------------------
 // Node types for dispatch in getChildren
@@ -55,11 +57,13 @@ export class AutomationTreeDataProvider
   private runbookCount: number;
   private commandCount: number;
   private mcpStatus: MCPStatusManager | null;
+  private runbookRegistry: RunbookRegistry | null;
 
-  constructor(options?: { runbookCount?: number; commandCount?: number; mcpStatus?: MCPStatusManager }) {
+  constructor(options?: { runbookCount?: number; commandCount?: number; mcpStatus?: MCPStatusManager; runbookRegistry?: RunbookRegistry }) {
     this.runbookCount = options?.runbookCount ?? 0;
     this.commandCount = options?.commandCount ?? 0;
     this.mcpStatus = options?.mcpStatus ?? null;
+    this.runbookRegistry = options?.runbookRegistry ?? null;
   }
 
   refresh(): void {
@@ -76,6 +80,11 @@ export class AutomationTreeDataProvider
     this.refresh();
   }
 
+  setRunbookRegistry(registry: RunbookRegistry): void {
+    this.runbookRegistry = registry;
+    this.refresh();
+  }
+
   getTreeItem(element: AutomationTreeItem): vscode.TreeItem {
     return element;
   }
@@ -89,8 +98,50 @@ export class AutomationTreeDataProvider
       return this.getMcpChildren();
     }
 
-    // Real children will be added in phases 60-62
+    if (element.nodeType === 'runbooks') {
+      return this.getRunbookChildren();
+    }
+
     return [];
+  }
+
+  private getRunbookChildren(): AutomationTreeItem[] {
+    if (!this.runbookRegistry) {
+      return [
+        new AutomationTreeItem('No registry', vscode.TreeItemCollapsibleState.None, {
+          iconPath: new vscode.ThemeIcon('info'),
+          contextValue: 'automationRunbookChild',
+        }),
+      ];
+    }
+
+    const runbooks = this.runbookRegistry.getRunbooks();
+    if (runbooks.length === 0) {
+      return [
+        new AutomationTreeItem('No runbooks found', vscode.TreeItemCollapsibleState.None, {
+          iconPath: new vscode.ThemeIcon('info'),
+          contextValue: 'automationRunbookChild',
+        }),
+      ];
+    }
+
+    return runbooks.map((rb) => {
+      const label = rb.valid ? rb.name : path.basename(rb.path, path.extname(rb.path));
+      const description = rb.valid
+        ? rb.description
+        : (rb.errors[0] || 'Invalid').slice(0, 60);
+      const icon = rb.valid
+        ? new vscode.ThemeIcon('notebook')
+        : new vscode.ThemeIcon('warning');
+
+      return new AutomationTreeItem(label, vscode.TreeItemCollapsibleState.None, {
+        description,
+        iconPath: icon,
+        tooltip: rb.path,
+        contextValue: 'automationRunbookItem',
+        dataId: rb.path,
+      });
+    });
   }
 
   private getRootNodes(): AutomationTreeItem[] {
