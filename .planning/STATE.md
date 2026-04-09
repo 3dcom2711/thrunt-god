@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Sidebar Automation & Operations
 status: completed
-stopped_at: Completed 62-02-PLAN.md
-last_updated: "2026-04-09T23:03:39.827Z"
-last_activity: 2026-04-09 -- Completed 62-02 (Wiring, Recent Runs tree, confirmation gates, 419 tests)
+stopped_at: Completed 62-03-PLAN.md
+last_updated: "2026-04-09T23:24:19.055Z"
+last_activity: "2026-04-09 -- Completed 62-03 (GUARD-02 gap closure: Command Deck tree children, RunbookStep.mutating, runbook webview badges, 432 tests)"
 progress:
   total_phases: 5
   completed_phases: 5
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 ## Current Position
 
 Phase: 62 of 62 (Execution History & Guardrails)
-Plan: 2 of 2 plans in phase
+Plan: 3 of 3 plans in phase
 Status: Phase 62 complete -- v3.1 milestone complete
-Last activity: 2026-04-09 -- Completed 62-02 (Wiring, Recent Runs tree, confirmation gates, 419 tests)
+Last activity: 2026-04-09 -- Completed 62-03 (GUARD-02 gap closure: Command Deck tree children, RunbookStep.mutating, runbook webview badges, 432 tests)
 
-Progress: [██████████] 100% (v3.1 Phase 62: 2/2 plans)
+Progress: [██████████] 100% (v3.1 Phase 62: 3/3 plans)
 
 ## Accumulated Context
 
@@ -89,6 +89,8 @@ Progress: [██████████] 100% (v3.1 Phase 62: 2/2 plans)
 - [Phase 62]: No webview message protocol needed -- Recent Runs tree reads directly from ExecutionLogger in extension host
 - [Phase 62]: Event-driven tree refresh: ExecutionLogger fires onDidAppend event, extension.ts subscribes to refresh automationProvider
 - [Phase 62]: runCli returns {stdout, stderr, exitCode} tuple for full capture in ExecutionEntry logging
+- [Phase 62]: Mutating inference: cli and mcp default to mutating=true; open, note, confirm default to mutating=false
+- [Phase 62]: Command Deck tree children use codicon from CommandDef.icon and safety badge in description field
 
 ### Blockers/Concerns
 
@@ -96,6 +98,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T23:03:39.823Z
-Stopped at: Completed 62-02-PLAN.md
+Last session: 2026-04-09T23:24:19.053Z
+Stopped at: Completed 62-03-PLAN.md
 Resume: v3.1 milestone complete. Phase 62 Plan 02 wired ExecutionLogger into CommandDeckPanel, RunbookPanel, and Recent Runs tree. Mutating actions show confirmation with environment indicator. Recent Runs tree shows children with status icons and dynamic run count. 419 tests passing.
