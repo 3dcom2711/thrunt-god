@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Sidebar Automation & Operations
 status: executing
-stopped_at: Completed 59-02-PLAN.md
-last_updated: "2026-04-09T21:05:30.627Z"
-last_activity: 2026-04-09 -- Completed 59-02 (MCP context menu commands, MCPStatusManager lifecycle wiring)
+stopped_at: Completed 59-03-PLAN.md (Phase 59 complete)
+last_updated: "2026-04-09T21:12:19.000Z"
+last_activity: 2026-04-09 -- Completed 59-03 (MCP Control Panel webview, tool testing, profile selector)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 ## Current Position
 
 Phase: 59 of 62 (MCP Runtime Control Panel)
-Plan: 2 of 3 plans in phase
-Status: In progress
-Last activity: 2026-04-09 -- Completed 59-02 (MCP context menu commands, MCPStatusManager lifecycle wiring)
+Plan: 3 of 3 plans in phase (COMPLETE)
+Status: Phase complete
+Last activity: 2026-04-09 -- Completed 59-03 (MCP Control Panel webview, tool testing, profile selector)
 
-Progress: [████████░░] 80% (v3.1 Phase 59: 2/3 plans)
+Progress: [██████████] 100% (v3.1 Phase 59: 3/3 plans)
 
 ## Accumulated Context
 
@@ -59,6 +59,9 @@ Progress: [████████░░] 80% (v3.1 Phase 59: 2/3 plans)
 - [Phase 59]: dbOpts declaration moved before --health/--list-tools blocks to support early-exit paths
 - [Phase 59]: MCP server path resolution: prefer thruntGod.mcp.serverPath config, fall back to workspace-local apps/mcp/bin/server.cjs
 - [Phase 59]: MCP command handler pattern: async try/catch with showInformationMessage on success, showErrorMessage on failure
+- [Phase 59]: McpControlPanel follows ProgramDashboardPanel pattern exactly for webview host consistency
+- [Phase 59]: Tool testing via --run-tool subprocess flag with 30s timeout, keeping MCP SDK out of extension host
+- [Phase 59]: Profile switching updates workspace config then restarts MCPStatusManager
 
 ### Blockers/Concerns
 
@@ -66,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T21:05:30.624Z
-Stopped at: Completed 59-02-PLAN.md
-Resume: Phase 59 plan 2 of 3 complete. 5 MCP context menu commands registered and wired to MCPStatusManager. AutomationTreeDataProvider receives mcpStatus and auto-refreshes on changes. mcpControlPanel activation event registered. 310 total tests passing. Ready for 59-03 (MCP webview panel).
+Last session: 2026-04-09T21:12:19.000Z
+Stopped at: Completed 59-03-PLAN.md (Phase 59 complete)
+Resume: Phase 59 complete (3/3 plans). MCPStatusManager, 6 MCP commands, McpControlPanel webview with server status, tool inventory, tool test form, profile selector. --run-tool flag on MCP server for one-shot tool execution. 323 total tests passing. Phase 59 fully delivered. Ready for Phase 60.
