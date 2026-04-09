@@ -184,3 +184,198 @@ describe('RunbookRegistry', () => {
     assert.equal(registry.count, countBefore, 'count should be same after refresh');
   });
 });
+
+// ---------------------------------------------------------------------------
+// RunbookEngine tests
+// ---------------------------------------------------------------------------
+
+describe('RunbookEngine', () => {
+  // Helper to consume the async generator and collect results + final record
+  async function collectResults(gen) {
+    const results = [];
+    let record;
+    while (true) {
+      const { value, done } = await gen.next();
+      if (done) { record = value; break; }
+      results.push(value);
+    }
+    return { results, record };
+  }
+
+  // --- Export tests ---
+
+  it('RunbookEngine is exported from bundle', () => {
+    assert.equal(typeof ext.RunbookEngine, 'function');
+  });
+
+  it('resolveParams is exported from bundle', () => {
+    assert.equal(typeof ext.resolveParams, 'function');
+  });
+
+  // --- resolveParams tests ---
+
+  it('resolveParams replaces single placeholder', () => {
+    const result = ext.resolveParams({ command: 'query {domain}' }, { domain: 'evil.com' });
+    assert.deepEqual(result, { command: 'query evil.com' });
+  });
+
+  it('resolveParams replaces multiple placeholders', () => {
+    const result = ext.resolveParams(
+      { command: 'query {domain} --days {days}' },
+      { domain: 'evil.com', days: '30' },
+    );
+    assert.deepEqual(result, { command: 'query evil.com --days 30' });
+  });
+
+  it('resolveParams leaves unknown placeholders as empty string', () => {
+    const result = ext.resolveParams({ command: 'query {unknown}' }, {});
+    assert.deepEqual(result, { command: 'query ' });
+  });
+
+  it('resolveParams handles no placeholders', () => {
+    const result = ext.resolveParams({ command: 'echo hello' }, {});
+    assert.deepEqual(result, { command: 'echo hello' });
+  });
+
+  // --- Dry-run behavior tests ---
+
+  it('RunbookEngine dry-run produces dry-run status for all steps', async () => {
+    const engine = new ext.RunbookEngine('/tmp', '/tmp/fake');
+    const runbook = {
+      name: 'Test Runbook',
+      description: 'test',
+      inputs: [],
+      steps: [
+        { action: 'cli', params: { command: 'echo test' } },
+        { action: 'note', params: { file: 'test.md', content: 'hello' } },
+        { action: 'confirm', params: { message: 'Continue?' } },
+      ],
+      dry_run: true,
+      output_capture: 'all',
+      success_conditions: [],
+      failure_conditions: [],
+    };
+
+    const gen = engine.executeRunbook(runbook, '/tmp/test.yaml', {}, {
+      dryRun: true,
+      onConfirm: async () => true,
+    });
+
+    const { results, record } = await collectResults(gen);
+
+    assert.equal(results.length, 3, 'should have 3 step results');
+    for (const r of results) {
+      assert.equal(r.status, 'dry-run', `step ${r.stepIndex} should be dry-run`);
+    }
+    assert.equal(record.status, 'success', 'overall status should be success');
+    assert.equal(record.dryRun, true, 'record should indicate dry run');
+  });
+
+  it('RunbookEngine dry-run output describes planned CLI action', async () => {
+    const engine = new ext.RunbookEngine('/tmp', '/tmp/fake');
+    const runbook = {
+      name: 'CLI Test',
+      description: 'test',
+      inputs: [],
+      steps: [
+        { action: 'cli', params: { command: 'echo test' } },
+      ],
+      dry_run: true,
+      output_capture: 'all',
+      success_conditions: [],
+      failure_conditions: [],
+    };
+
+    const gen = engine.executeRunbook(runbook, '/tmp/test.yaml', {}, {
+      dryRun: true,
+      onConfirm: async () => true,
+    });
+
+    const { results } = await collectResults(gen);
+
+    assert.ok(results[0].output.includes('[DRY RUN]'), 'output should include [DRY RUN]');
+    assert.ok(results[0].output.includes('echo test'), 'output should include the command');
+  });
+
+  it('RunbookEngine dry-run output describes planned note action', async () => {
+    const engine = new ext.RunbookEngine('/tmp', '/tmp/fake');
+    const runbook = {
+      name: 'Note Test',
+      description: 'test',
+      inputs: [],
+      steps: [
+        { action: 'note', params: { file: 'test.md', content: 'hello' } },
+      ],
+      dry_run: true,
+      output_capture: 'all',
+      success_conditions: [],
+      failure_conditions: [],
+    };
+
+    const gen = engine.executeRunbook(runbook, '/tmp/test.yaml', {}, {
+      dryRun: true,
+      onConfirm: async () => true,
+    });
+
+    const { results } = await collectResults(gen);
+
+    assert.ok(results[0].output.includes('[DRY RUN]'), 'output should include [DRY RUN]');
+    assert.ok(results[0].output.includes('test.md'), 'output should include the file path');
+  });
+
+  it('RunbookEngine dry-run with input placeholders resolves correctly', async () => {
+    const engine = new ext.RunbookEngine('/tmp', '/tmp/fake');
+    const runbook = {
+      name: 'Placeholder Test',
+      description: 'test',
+      inputs: [],
+      steps: [
+        { action: 'cli', params: { command: 'query {domain}' } },
+      ],
+      dry_run: true,
+      output_capture: 'all',
+      success_conditions: [],
+      failure_conditions: [],
+    };
+
+    const gen = engine.executeRunbook(runbook, '/tmp/test.yaml', { domain: 'evil.com' }, {
+      dryRun: true,
+      onConfirm: async () => true,
+    });
+
+    const { results } = await collectResults(gen);
+
+    assert.ok(results[0].output.includes('query evil.com'), 'output should have resolved placeholder');
+  });
+
+  it('RunbookEngine dry-run record contains all step results', async () => {
+    const engine = new ext.RunbookEngine('/tmp', '/tmp/fake');
+    const runbook = {
+      name: 'Record Test',
+      description: 'test',
+      inputs: [],
+      steps: [
+        { action: 'cli', params: { command: 'echo a' } },
+        { action: 'mcp', params: { tool: 'test-tool', input: '{}' } },
+        { action: 'open', params: { file: 'test.txt' } },
+      ],
+      dry_run: true,
+      output_capture: 'all',
+      success_conditions: [],
+      failure_conditions: [],
+    };
+
+    const gen = engine.executeRunbook(runbook, '/tmp/test.yaml', {}, {
+      dryRun: true,
+      onConfirm: async () => true,
+    });
+
+    const { record } = await collectResults(gen);
+
+    assert.equal(record.stepResults.length, 3, 'record should contain all step results');
+    assert.equal(record.runbookName, 'Record Test');
+    assert.ok(record.id.startsWith('RUN-'), 'id should start with RUN-');
+    assert.ok(record.durationMs >= 0, 'durationMs should be non-negative');
+    assert.ok(record.startTime <= record.endTime, 'startTime should be <= endTime');
+  });
+});
