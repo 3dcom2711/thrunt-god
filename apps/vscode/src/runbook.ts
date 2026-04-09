@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import type { StepAction, RunbookDef, RunbookInput, RunbookStep } from '../shared/runbook';
+import { spawn } from 'child_process';
+import * as vscode from 'vscode';
+import type { StepAction, RunbookDef, RunbookInput, RunbookStep, StepResult, RunbookRunRecord } from '../shared/runbook';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -275,5 +277,342 @@ export class RunbookRegistry {
 
   get count(): number {
     return this.runbooks.size;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Input placeholder resolution
+// ---------------------------------------------------------------------------
+
+export function resolveParams(
+  params: Record<string, string>,
+  inputs: Record<string, string>,
+): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const [key, value] of Object.entries(params)) {
+    resolved[key] = value.replace(
+      /\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,
+      (_, name) => inputs[name] ?? '',
+    );
+  }
+  return resolved;
+}
+
+// ---------------------------------------------------------------------------
+// RunbookEngine — executes runbook steps sequentially with output capture
+// ---------------------------------------------------------------------------
+
+const CLI_TIMEOUT_MS = 60_000;
+const MCP_TIMEOUT_MS = 30_000;
+const MCP_KILL_GRACE_MS = 2_000;
+
+export class RunbookEngine {
+  constructor(
+    private readonly workspaceRoot: string,
+    private readonly mcpServerPath: string,
+  ) {}
+
+  async *executeRunbook(
+    runbook: RunbookDef,
+    runbookPath: string,
+    inputs: Record<string, string>,
+    options: { dryRun: boolean; onConfirm: () => Promise<boolean> },
+  ): AsyncGenerator<StepResult, RunbookRunRecord> {
+    const startTime = Date.now();
+    const stepResults: StepResult[] = [];
+    let aborted = false;
+
+    for (let i = 0; i < runbook.steps.length; i++) {
+      const step = runbook.steps[i];
+      const resolvedParams = resolveParams(step.params, inputs);
+      const description = step.description || `Step ${i + 1}: ${step.action}`;
+      const stepStart = Date.now();
+
+      // Dry-run mode: describe planned action without executing
+      if (options.dryRun) {
+        let output: string;
+        switch (step.action) {
+          case 'cli':
+            output = `[DRY RUN] Would execute: ${resolvedParams.command}`;
+            break;
+          case 'mcp':
+            output = `[DRY RUN] Would call MCP tool: ${resolvedParams.tool}`;
+            break;
+          case 'open':
+            output = `[DRY RUN] Would open: ${resolvedParams.file}`;
+            break;
+          case 'note':
+            output = `[DRY RUN] Would append to: ${resolvedParams.file}`;
+            break;
+          case 'confirm':
+            output = `[DRY RUN] Would ask: ${resolvedParams.message || 'Continue?'}`;
+            break;
+          default:
+            output = `[DRY RUN] Unknown action: ${step.action}`;
+        }
+
+        const result: StepResult = {
+          stepIndex: i,
+          action: step.action,
+          description,
+          status: 'dry-run',
+          output,
+          durationMs: Date.now() - stepStart,
+        };
+        stepResults.push(result);
+        yield result;
+        continue;
+      }
+
+      // Live execution
+      let result: StepResult;
+
+      switch (step.action) {
+        case 'cli': {
+          const cliResult = await this.executeCli(resolvedParams.command);
+          result = {
+            stepIndex: i,
+            action: 'cli',
+            description,
+            status: cliResult.exitCode === 0 ? 'success' : 'failure',
+            output: cliResult.output,
+            durationMs: Date.now() - stepStart,
+          };
+          break;
+        }
+        case 'mcp': {
+          const mcpResult = await this.executeMcp(
+            resolvedParams.tool,
+            resolvedParams.input || '{}',
+          );
+          result = {
+            stepIndex: i,
+            action: 'mcp',
+            description,
+            status: mcpResult.success ? 'success' : 'failure',
+            output: mcpResult.output,
+            durationMs: Date.now() - stepStart,
+          };
+          break;
+        }
+        case 'open': {
+          await this.executeOpen(resolvedParams.file);
+          result = {
+            stepIndex: i,
+            action: 'open',
+            description,
+            status: 'success',
+            output: `Opened: ${resolvedParams.file}`,
+            durationMs: Date.now() - stepStart,
+          };
+          break;
+        }
+        case 'note': {
+          const noteResult = await this.executeNote(
+            resolvedParams.file,
+            resolvedParams.content,
+          );
+          result = {
+            stepIndex: i,
+            action: 'note',
+            description,
+            status: noteResult.success ? 'success' : 'failure',
+            output: noteResult.output,
+            durationMs: Date.now() - stepStart,
+          };
+          break;
+        }
+        case 'confirm': {
+          const confirmed = await options.onConfirm();
+          if (confirmed) {
+            result = {
+              stepIndex: i,
+              action: 'confirm',
+              description,
+              status: 'success',
+              output: 'User confirmed: continue',
+              durationMs: Date.now() - stepStart,
+            };
+          } else {
+            result = {
+              stepIndex: i,
+              action: 'confirm',
+              description,
+              status: 'failure',
+              output: 'User aborted',
+              durationMs: Date.now() - stepStart,
+            };
+            aborted = true;
+          }
+          break;
+        }
+        default: {
+          result = {
+            stepIndex: i,
+            action: step.action,
+            description,
+            status: 'failure',
+            output: `Unknown action: ${step.action}`,
+            durationMs: Date.now() - stepStart,
+          };
+        }
+      }
+
+      stepResults.push(result);
+      yield result;
+
+      // Halt on failure (non-confirm) or abort
+      if (aborted || (result.status === 'failure' && step.action !== 'confirm')) {
+        break;
+      }
+      if (aborted) {
+        break;
+      }
+    }
+
+    const endTime = Date.now();
+    return {
+      id: `RUN-${Date.now()}`,
+      runbookName: runbook.name,
+      runbookPath,
+      startTime,
+      endTime,
+      durationMs: endTime - startTime,
+      status: aborted
+        ? 'aborted'
+        : stepResults.every((r) => r.status === 'success' || r.status === 'dry-run')
+          ? 'success'
+          : 'failure',
+      stepResults,
+      inputs,
+      dryRun: options.dryRun,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Step executors
+  // ---------------------------------------------------------------------------
+
+  private executeCli(command: string): Promise<{ output: string; exitCode: number }> {
+    const args = command.split(/\s+/);
+    const cliPath =
+      vscode.workspace.getConfiguration('thruntGod').get<string>('cli.path') ||
+      path.join(this.workspaceRoot, 'dist', 'thrunt-god', 'bin', 'thrunt-tools.cjs');
+
+    return new Promise((resolve) => {
+      let output = '';
+      let settled = false;
+
+      const child = spawn(process.execPath, [cliPath, ...args], {
+        cwd: this.workspaceRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        child.kill('SIGTERM');
+        resolve({ output: output + '\n[Timed out after 60s]', exitCode: 1 });
+      }, CLI_TIMEOUT_MS);
+
+      child.stdout.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+      child.stderr.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        resolve({ output, exitCode: code ?? 1 });
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        resolve({ output: err.message, exitCode: 1 });
+      });
+    });
+  }
+
+  private executeMcp(
+    toolName: string,
+    input: string,
+  ): Promise<{ output: string; success: boolean }> {
+    return new Promise((resolve) => {
+      let stdout = '';
+      let settled = false;
+      let killTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const child = spawn(
+        process.execPath,
+        [this.mcpServerPath, '--run-tool', toolName, '--input', input],
+        { stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        child.kill('SIGTERM');
+        killTimer = setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already dead */
+          }
+        }, MCP_KILL_GRACE_MS);
+        resolve({ output: `MCP tool timed out after ${MCP_TIMEOUT_MS}ms`, success: false });
+      }, MCP_TIMEOUT_MS);
+
+      child.stdout.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (killTimer) clearTimeout(killTimer);
+        if (settled) return;
+        settled = true;
+        resolve({ output: stdout, success: code === 0 });
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        if (killTimer) clearTimeout(killTimer);
+        if (settled) return;
+        settled = true;
+        resolve({ output: err.message, success: false });
+      });
+    });
+  }
+
+  private async executeOpen(filePath: string): Promise<void> {
+    const resolved = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(this.workspaceRoot, filePath);
+    const uri = vscode.Uri.file(resolved);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(doc);
+  }
+
+  private async executeNote(
+    filePath: string,
+    content: string,
+  ): Promise<{ success: boolean; output: string }> {
+    try {
+      const resolved = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(this.workspaceRoot, filePath);
+      fs.appendFileSync(resolved, '\n' + content + '\n');
+      return { success: true, output: 'Appended to ' + filePath };
+    } catch (err) {
+      return {
+        success: false,
+        output: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 }
