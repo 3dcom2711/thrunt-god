@@ -186,6 +186,87 @@ describe('RunbookRegistry', () => {
 });
 
 // ---------------------------------------------------------------------------
+// RunbookStep mutating field tests
+// ---------------------------------------------------------------------------
+
+describe('RunbookStep mutating field', () => {
+  function makeYaml(action, mutatingLine) {
+    return [
+      'name: Test Runbook',
+      'description: test',
+      'steps:',
+      `  - action: ${action}`,
+      '    description: test step',
+      '    params:',
+      '      cmd: echo hi',
+      mutatingLine ? `    ${mutatingLine}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  it('parseRunbook infers mutating=true for cli steps', () => {
+    const yaml = makeYaml('cli');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, true, 'cli should infer mutating=true');
+  });
+
+  it('parseRunbook infers mutating=true for mcp steps', () => {
+    const yaml = makeYaml('mcp');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, true, 'mcp should infer mutating=true');
+  });
+
+  it('parseRunbook infers mutating=false for open steps', () => {
+    const yaml = makeYaml('open');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, false, 'open should infer mutating=false');
+  });
+
+  it('parseRunbook infers mutating=false for note steps', () => {
+    const yaml = makeYaml('note');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, false, 'note should infer mutating=false');
+  });
+
+  it('parseRunbook infers mutating=false for confirm steps', () => {
+    const yaml = makeYaml('confirm');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, false, 'confirm should infer mutating=false');
+  });
+
+  it('parseRunbook honors explicit mutating=false on cli step', () => {
+    const yaml = makeYaml('cli', 'mutating: false');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, false, 'explicit false should override cli default');
+  });
+
+  it('parseRunbook honors explicit mutating=true on open step', () => {
+    const yaml = makeYaml('open', 'mutating: true');
+    const result = ext.parseRunbook(yaml);
+    assert.notEqual(result.runbook, null);
+    assert.equal(result.runbook.steps[0].mutating, true, 'explicit true should override open default');
+  });
+
+  it('validateRunbook rejects non-boolean mutating', () => {
+    const data = {
+      name: 'test',
+      description: 'test',
+      steps: [
+        { action: 'cli', description: 'test', params: { cmd: 'echo' }, mutating: 'yes' },
+      ],
+    };
+    const result = ext.validateRunbook(data);
+    assert.equal(result.valid, false, 'should be invalid');
+    assert.ok(result.errors.some(e => e.includes('mutating')), 'should have mutating error');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // RunbookEngine tests
 // ---------------------------------------------------------------------------
 

@@ -76,10 +76,10 @@ describe('AutomationTreeDataProvider', () => {
       assert.deepEqual(mcpChildren, []);
     });
 
-    it('returns empty array for Command Deck children (placeholder)', () => {
+    it('returns built-in commands for Command Deck children', () => {
       const roots = provider.getChildren(undefined);
       const deckChildren = provider.getChildren(roots[1]);
-      assert.deepEqual(deckChildren, []);
+      assert.ok(deckChildren.length >= 10, `expected >= 10 built-in commands, got ${deckChildren.length}`);
     });
 
     it('returns "No registry" placeholder for Runbooks children when no registry set', () => {
@@ -201,6 +201,57 @@ describe('AutomationTreeDataProvider', () => {
   describe('dispose', () => {
     it('can be called without error', () => {
       assert.doesNotThrow(() => provider.dispose());
+    });
+  });
+
+  describe('Command Deck children', () => {
+    it('Command Deck node expands to show built-in commands', () => {
+      const p = new ext.AutomationTreeDataProvider();
+      const roots = p.getChildren(undefined);
+      const deckNode = roots[1];
+      const children = p.getChildren(deckNode);
+      assert.ok(children.length >= 10, `expected >= 10 built-in commands, got ${children.length}`);
+    });
+
+    it('Command Deck children show $(eye) read-only for non-mutating commands', () => {
+      const p = new ext.AutomationTreeDataProvider();
+      const roots = p.getChildren(undefined);
+      const children = p.getChildren(roots[1]);
+      const runtimeDoctor = children.find(c => c.label === 'Runtime Doctor');
+      assert.ok(runtimeDoctor, 'Runtime Doctor should be in children');
+      assert.ok(runtimeDoctor.description.includes('$(eye)'), 'description should contain $(eye)');
+      assert.ok(runtimeDoctor.description.includes('read-only'), 'description should contain read-only');
+    });
+
+    it('Command Deck children show $(edit) mutating for mutating commands', () => {
+      const p = new ext.AutomationTreeDataProvider();
+      const roots = p.getChildren(undefined);
+      const children = p.getChildren(roots[1]);
+      const closeCase = children.find(c => c.label === 'Close Case');
+      assert.ok(closeCase, 'Close Case should be in children');
+      assert.ok(closeCase.description.includes('$(edit)'), 'description should contain $(edit)');
+      assert.ok(closeCase.description.includes('mutating'), 'description should contain mutating');
+    });
+
+    it('Command Deck children have contextValue automationCommandDeckItem', () => {
+      const p = new ext.AutomationTreeDataProvider();
+      const roots = p.getChildren(undefined);
+      const children = p.getChildren(roots[1]);
+      for (const child of children) {
+        assert.equal(child.contextValue, 'automationCommandDeckItem', `${child.label} should have contextValue automationCommandDeckItem`);
+      }
+    });
+
+    it('Command Deck children have correct icon from CommandDef', () => {
+      const p = new ext.AutomationTreeDataProvider();
+      const roots = p.getChildren(undefined);
+      const children = p.getChildren(roots[1]);
+      const runtimeDoctor = children.find(c => c.label === 'Runtime Doctor');
+      assert.ok(runtimeDoctor, 'Runtime Doctor should be in children');
+      assert.equal(runtimeDoctor.iconPath.id, 'heart', 'Runtime Doctor icon should be heart');
+      const runPack = children.find(c => c.label === 'Run Pack');
+      assert.ok(runPack, 'Run Pack should be in children');
+      assert.equal(runPack.iconPath.id, 'play', 'Run Pack icon should be play');
     });
   });
 
