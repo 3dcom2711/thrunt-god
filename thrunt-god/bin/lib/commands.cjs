@@ -3526,13 +3526,37 @@ function getCaseActivityDate(caseStatePath, rosterEntry = {}) {
   return parseActivityDate(rosterEntry.last_activity || rosterEntry.opened_at);
 }
 
-function updateCaseStateBody(content, fallbackTitle, opts = {}) {
+function replaceCaseStateLine(content, patterns, replacement) {
+  for (const pattern of patterns) {
+    if (pattern.test(content)) {
+      return content.replace(pattern, replacement);
+    }
+  }
+  return content;
+}
+
+function updateCaseStateBody(content, opts = {}) {
+  let next = content;
   if (!/## Current Position/m.test(content)) {
-    const fm = extractFrontmatter(content);
-    return buildStateDocument(fm, buildCaseStateBody(fallbackTitle, opts));
+    if (opts.activeSignal) {
+      next = replaceCaseStateLine(next, [/^\*\*Active signal:\*\* .+$/m], `**Active signal:** ${opts.activeSignal}`);
+    }
+    if (opts.currentFocus) {
+      next = replaceCaseStateLine(next, [/^\*\*Current focus:\*\* .+$/m], `**Current focus:** ${opts.currentFocus}`);
+    }
+    if (opts.status) {
+      next = replaceCaseStateLine(next, [/^Status:\s*.+$/m, /^\*\*Status:\*\*\s*.+$/m], match => (
+        match.startsWith('**Status:**') ? `**Status:** ${opts.status}` : `Status: ${opts.status}`
+      ));
+    }
+    if (opts.lastActivity) {
+      next = replaceCaseStateLine(next, [/^Last activity:\s*.+$/m, /^\*\*Last activity:\*\*\s*.+$/m], match => (
+        match.startsWith('**Last activity:**') ? `**Last activity:** ${opts.lastActivity}` : `Last activity: ${opts.lastActivity}`
+      ));
+    }
+    return next;
   }
 
-  let next = content;
   if (opts.activeSignal && /\*\*Active signal:\*\* .+/m.test(next)) {
     next = next.replace(/\*\*Active signal:\*\* .+/m, `**Active signal:** ${opts.activeSignal}`);
   }
@@ -3731,7 +3755,7 @@ function cmdCaseClose(cwd, slug, raw) {
     fm.status = 'closed';
     fm.closed_at = closedAt;
     let newContent = spliceFrontmatter(content, fm);
-    newContent = updateCaseStateBody(newContent, slug, {
+    newContent = updateCaseStateBody(newContent, {
       status: 'Closed',
       currentFocus: 'Closed and ready for follow-up as needed',
       lastActivity: `Closed ${closedAt}`,

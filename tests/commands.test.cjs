@@ -9,6 +9,7 @@ const Module = require('module');
 const fs = require('fs');
 const path = require('path');
 const { runThruntTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { extractFrontmatter } = require('../thrunt-god/bin/lib/frontmatter.cjs');
 
 describe('history-digest command', () => {
   let tmpDir;
@@ -2390,6 +2391,48 @@ describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
 
     assert.strictEqual(status.status, 'closed');
     assert.strictEqual(status.technique_count, '2');
+  });
+
+  test('cmdCaseClose preserves legacy case notes when STATE.md lacks Current Position', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'legacy-case', name: 'Legacy Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    const caseDir = createCaseDir(tmpDir, 'legacy-case', {
+      name: 'Legacy Case',
+      findings: '# Findings\n\nObserved T1059.001 execution.\n',
+    });
+    fs.writeFileSync(
+      path.join(caseDir, 'STATE.md'),
+      [
+        '---',
+        'status: active',
+        'opened_at: "2026-04-01"',
+        'title: "Legacy Case"',
+        '---',
+        '',
+        '# Legacy State',
+        '',
+        '## Analyst Notes',
+        '',
+        'Preserve this note when the case is closed.',
+        '',
+        '**Status:** In progress',
+      ].join('\n')
+    );
+
+    const closeResult = runThruntTools(['case', 'close', 'legacy-case'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    const statePath = path.join(caseDir, 'STATE.md');
+    const content = fs.readFileSync(statePath, 'utf-8');
+    const fm = extractFrontmatter(content);
+
+    assert.strictEqual(fm.status, 'closed');
+    assert.ok(fm.closed_at, 'frontmatter should record closed_at');
+    assert.ok(content.includes('## Analyst Notes'), 'custom notes header should be preserved');
+    assert.ok(content.includes('Preserve this note when the case is closed.'), 'custom notes content should be preserved');
+    assert.ok(content.includes('**Status:** Closed'), 'existing body status line should be updated in place');
+    assert.ok(!content.includes('## Current Position'), 'legacy state should not be rewritten to the template body');
   });
 
   test('cmdCaseClose rejects traversal slugs before mutating other planning scopes', () => {
