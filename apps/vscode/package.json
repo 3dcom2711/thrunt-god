@@ -71,12 +71,22 @@
           "id": "thruntGod.huntTree",
           "name": "Investigation",
           "when": "thruntGod.huntDetected"
+        },
+        {
+          "id": "thruntGod.automationTree",
+          "name": "Automation",
+          "when": "thruntGod.huntDetected"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "thruntGod.huntTree",
+        "contents": "No hunt detected in this workspace.\n\nOpen a folder containing .planning/MISSION.md or .hunt/MISSION.md to get started.\n[Open Folder](command:vscode.openFolder)",
+        "when": "!thruntGod.huntDetected"
+      },
+      {
+        "view": "thruntGod.automationTree",
         "contents": "No hunt detected in this workspace.\n\nOpen a folder containing .planning/MISSION.md or .hunt/MISSION.md to get started.\n[Open Folder](command:vscode.openFolder)",
         "when": "!thruntGod.huntDetected"
       }
@@ -242,13 +252,18 @@
       {
         "command": "thrunt-god.cancelCliCommand",
         "title": "THRUNT: Cancel Running Command"
+      },
+      {
+        "command": "thrunt-god.refreshAutomationSidebar",
+        "title": "THRUNT: Refresh Automation Sidebar",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/item/context": [
         {
           "command": "thrunt-god.runHuntPhase",
-          "when": "view == thruntGod.huntTree && viewItem == phase",
+          "when": "view == thruntGod.huntTree && viewItem == phase-runnable",
           "group": "execution@1"
         },
         {
@@ -377,8 +392,13 @@
         },
         {
           "command": "thrunt-god.runHuntPhase",
-          "when": "view == thruntGod.huntTree",
+          "when": "view == thruntGod.huntTree && thruntGod.hasRunnablePhases",
           "group": "navigation@7"
+        },
+        {
+          "command": "thrunt-god.refreshAutomationSidebar",
+          "when": "view == thruntGod.automationTree",
+          "group": "navigation"
         }
       ]
     },
