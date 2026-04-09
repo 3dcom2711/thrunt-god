@@ -70,7 +70,7 @@ describe('AutomationTreeDataProvider', () => {
   });
 
   describe('children of root nodes', () => {
-    it('returns empty array for MCP children (placeholder)', () => {
+    it('returns empty array for MCP children when no mcpStatus provided', () => {
       const roots = provider.getChildren(undefined);
       const mcpChildren = provider.getChildren(roots[0]);
       assert.deepEqual(mcpChildren, []);
@@ -164,6 +164,133 @@ describe('AutomationTreeDataProvider', () => {
   describe('dispose', () => {
     it('can be called without error', () => {
       assert.doesNotThrow(() => provider.dispose());
+    });
+  });
+
+  describe('MCP status rendering', () => {
+    function createMockMcpStatus(status) {
+      return { getStatus: () => ({ ...status }) };
+    }
+
+    it('MCP node shows "Disconnected" when mcpStatus has disconnected connection', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'disconnected',
+        profile: null,
+        lastHealthCheck: null,
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      assert.equal(roots[0].description, 'Disconnected');
+      assert.equal(roots[0].iconPath.color.id, 'charts.red');
+    });
+
+    it('MCP node shows "Connected" with green icon when mcpStatus is connected', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'connected',
+        profile: null,
+        lastHealthCheck: null,
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      assert.equal(roots[0].description, 'Connected');
+      assert.equal(roots[0].iconPath.color.id, 'charts.green');
+    });
+
+    it('MCP node shows profile name when connected with profile', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'connected',
+        profile: 'production',
+        lastHealthCheck: null,
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      assert.match(roots[0].description, /production/);
+    });
+
+    it('MCP node shows health check timestamp when lastHealthCheck present', () => {
+      const ts = Date.now();
+      const mockStatus = createMockMcpStatus({
+        connection: 'connected',
+        profile: null,
+        lastHealthCheck: { status: 'healthy', toolCount: 10, dbSizeBytes: 1024, dbTableCount: 5, uptimeMs: 50, timestamp: ts },
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      const expectedTime = new Date(ts).toLocaleTimeString();
+      assert.match(roots[0].description, new RegExp(expectedTime.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    });
+
+    it('MCP node shows "Checking..." with sync icon when checking', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'checking',
+        profile: null,
+        lastHealthCheck: null,
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      assert.equal(roots[0].description, 'Checking...');
+      assert.equal(roots[0].iconPath.id, 'sync~spin');
+    });
+
+    it('MCP children show health check details when lastHealthCheck is available', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'connected',
+        profile: null,
+        lastHealthCheck: { status: 'healthy', toolCount: 10, dbSizeBytes: 2048, dbTableCount: 7, uptimeMs: 100, timestamp: Date.now() },
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      const mcpNode = roots[0];
+      const children = p.getChildren(mcpNode);
+
+      assert.ok(children.length >= 3, 'should have at least 3 children (Status, Tools, DB)');
+      assert.equal(children[0].label, 'Status: healthy');
+      assert.equal(children[0].iconPath.id, 'pass');
+      assert.equal(children[1].label, 'Tools: 10');
+      assert.equal(children[1].iconPath.id, 'wrench');
+      assert.match(children[2].label, /DB:.*2\.0 KB.*7 tables/);
+      assert.equal(children[2].iconPath.id, 'database');
+    });
+
+    it('MCP children show error when lastHealthCheck has error', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'disconnected',
+        profile: null,
+        lastHealthCheck: { status: 'unhealthy', toolCount: 0, dbSizeBytes: 0, dbTableCount: 0, uptimeMs: 0, timestamp: Date.now(), error: 'DB not found' },
+        hasError: true,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      const mcpNode = roots[0];
+      const children = p.getChildren(mcpNode);
+
+      const errorChild = children.find(c => c.label.startsWith('Error:'));
+      assert.ok(errorChild, 'should have error child');
+      assert.match(errorChild.label, /DB not found/);
+      assert.equal(errorChild.iconPath.id, 'warning');
+    });
+
+    it('MCP children show placeholder when no lastHealthCheck', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'disconnected',
+        profile: null,
+        lastHealthCheck: null,
+        hasError: false,
+      });
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      const mcpNode = roots[0];
+      const children = p.getChildren(mcpNode);
+
+      assert.equal(children.length, 1);
+      assert.equal(children[0].label, 'Run health check to see status');
+      assert.equal(children[0].iconPath.id, 'info');
     });
   });
 });
