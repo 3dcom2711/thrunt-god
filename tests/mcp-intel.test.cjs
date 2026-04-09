@@ -472,6 +472,59 @@ describe('tool handlers with intel DB', () => {
       assert.ok(typeof data.gap_percent === 'number');
       assert.ok(data.gap_percent >= 0 && data.gap_percent <= 100);
     });
+
+    it('deduplicates repeated profile technique IDs before computing totals', async () => {
+      const toolsPath = require.resolve('../apps/mcp/lib/tools.cjs');
+      const coverage = require('../apps/mcp/lib/coverage.cjs');
+      const originalToolsCache = require.cache[toolsPath];
+      const originalGetThreatProfile = coverage.getThreatProfile;
+      const originalListThreatProfiles = coverage.listThreatProfiles;
+
+      coverage.getThreatProfile = (name) => {
+        if (String(name).toLowerCase() === 'dup-profile') {
+          return ['T1059', 'T1059'];
+        }
+        return originalGetThreatProfile(name);
+      };
+      coverage.listThreatProfiles = () => [...new Set([...originalListThreatProfiles(), 'dup-profile'])];
+
+      db.prepare(`
+        INSERT OR REPLACE INTO detections (
+          id, title, source_format, technique_ids, tactics, severity,
+          logsource, query, description, metadata, file_path
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'test:dup-profile-coverage',
+        'Duplicate Profile Coverage',
+        'test',
+        'T1059',
+        '',
+        'medium',
+        '',
+        '',
+        '',
+        '{}',
+        '/tmp/dup-profile'
+      );
+
+      delete require.cache[toolsPath];
+
+      try {
+        const { handleAnalyzeCoverage } = require(toolsPath);
+        const result = await handleAnalyzeCoverage(db, { profile: 'dup-profile', include_techniques: true });
+        const data = JSON.parse(result.content[0].text);
+
+        assert.equal(data.total_techniques, 1);
+        assert.equal(data.covered, 1);
+        assert.equal(data.uncovered, 0);
+        assert.equal(data.gap_percent, 0);
+      } finally {
+        coverage.getThreatProfile = originalGetThreatProfile;
+        coverage.listThreatProfiles = originalListThreatProfiles;
+        delete require.cache[toolsPath];
+        if (originalToolsCache) require.cache[toolsPath] = originalToolsCache;
+      }
+    });
   });
 
   describe('query_knowledge', () => {
@@ -498,38 +551,39 @@ describe('tool handlers with intel DB', () => {
 });
 
 describe('timeout enforcement', () => {
-  it('withTimeout aborts slow handlers', async () => {
-    const TIMEOUT_MS = 50;
-    function testWithTimeout(fn) {
-      return async (args) => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-        try {
-          return await fn(args, controller.signal);
-        } catch (err) {
-          if (err.name === 'AbortError') {
-            return { content: [{ type: 'text', text: `Tool timed out after ${TIMEOUT_MS}ms` }], isError: true };
-          }
-          throw err;
-        } finally {
-          clearTimeout(timer);
-        }
-      };
-    }
+  it('withTimeout aborts slow handlers that honor AbortSignal', async () => {
+    const toolsPath = require.resolve('../apps/mcp/lib/tools.cjs');
+    const originalToolsCache = require.cache[toolsPath];
+    const originalTimeout = process.env.THRUNT_MCP_TIMEOUT;
+    let aborted = false;
 
-    const slowHandler = testWithTimeout(async (_args, signal) => {
-      return new Promise((resolve, reject) => {
+    process.env.THRUNT_MCP_TIMEOUT = '50';
+    delete require.cache[toolsPath];
+
+    try {
+      const { withTimeout } = require(toolsPath);
+      const slowHandler = withTimeout(async (_args, signal) => new Promise((resolve, reject) => {
         const timer = setTimeout(() => resolve({ content: [{ type: 'text', text: 'done' }] }), 5000);
         signal.addEventListener('abort', () => {
+          aborted = true;
           clearTimeout(timer);
           reject(new DOMException('Aborted', 'AbortError'));
-        });
-      });
-    });
+        }, { once: true });
+      }));
 
-    const result = await slowHandler({});
-    assert.equal(result.isError, true);
-    assert.ok(result.content[0].text.includes('timed out'));
+      const result = await slowHandler({});
+      assert.equal(aborted, true);
+      assert.equal(result.isError, true);
+      assert.ok(result.content[0].text.includes('timed out after 50ms'));
+    } finally {
+      if (originalTimeout === undefined) {
+        delete process.env.THRUNT_MCP_TIMEOUT;
+      } else {
+        process.env.THRUNT_MCP_TIMEOUT = originalTimeout;
+      }
+      delete require.cache[toolsPath];
+      if (originalToolsCache) require.cache[toolsPath] = originalToolsCache;
+    }
   });
 });
 

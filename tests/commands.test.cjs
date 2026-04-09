@@ -5,6 +5,7 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { execSync } = require('node:child_process');
+const Module = require('module');
 const fs = require('fs');
 const path = require('path');
 const { runThruntTools, createTempProject, cleanup } = require('./helpers.cjs');
@@ -1988,6 +1989,52 @@ describe('cmdProgramRollup', () => {
     assert.ok(stateContent.includes('Techniques covered: T1059.001, T1078.004'));
     assert.ok(stateContent.includes('| artifact-case | Artifact Case | active | 2026-04-01 | - | 2 |'));
     assert.ok(!stateContent.includes('No technique data available.'));
+  });
+
+  test('programRollup: artifact fallback still works when db module is unavailable', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'artifact-case', name: 'Artifact Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    setupCaseState(tmpDir, 'artifact-case', []);
+
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'artifact-case');
+    fs.writeFileSync(
+      path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nObserved T1059.001 execution followed by T1078.004 credential use.\n'
+    );
+    fs.writeFileSync(
+      path.join(caseDir, 'HYPOTHESES.md'),
+      '# Hypotheses\n\n## Hypothesis 1\n\nT1059.001 likely enabled the follow-on access.\n'
+    );
+
+    const commandsPath = require.resolve('../thrunt-god/bin/lib/commands.cjs');
+    const originalLoad = Module._load;
+    const originalWriteSync = fs.writeSync;
+    let captured = '';
+
+    delete require.cache[commandsPath];
+    Module._load = function(request, parent, isMain) {
+      if (request === './db.cjs' && parent && parent.filename === commandsPath) {
+        throw new Error('better-sqlite3 unavailable');
+      }
+      return originalLoad.apply(this, arguments);
+    };
+    fs.writeSync = (fd, data) => {
+      if (fd === 1) captured += data;
+      return Buffer.byteLength(String(data));
+    };
+
+    try {
+      const { cmdProgramRollup } = require('../thrunt-god/bin/lib/commands.cjs');
+      cmdProgramRollup(tmpDir, false);
+    } finally {
+      Module._load = originalLoad;
+      fs.writeSync = originalWriteSync;
+      delete require.cache[commandsPath];
+    }
+
+    const parsed = JSON.parse(captured);
+    assert.strictEqual(parsed.techniques, 2, 'artifact-derived techniques should survive without db.cjs');
   });
 
   test('programRollup: idempotent - running twice does not duplicate Case Summary', () => {

@@ -30,24 +30,29 @@ const TIMEOUT_MS = parseInt(process.env.THRUNT_MCP_TIMEOUT, 10) || 30000;
 
 function withTimeout(fn) {
   return async (args) => {
-    const result = fn(args);
-    if (!result || typeof result.then !== 'function') {
-      return result;
-    }
+    const controller = new AbortController();
+    const result = fn(args, controller.signal);
+    if (!result || typeof result.then !== 'function') return result;
 
     let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new DOMException(`Tool timed out after ${TIMEOUT_MS}ms`, 'AbortError'));
+      }, TIMEOUT_MS);
+      controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+    });
+
     try {
-      return await Promise.race([
-        result,
-        new Promise(resolve => {
-          timer = setTimeout(() => {
-            resolve({
-              content: [{ type: 'text', text: `Tool timed out after ${TIMEOUT_MS}ms` }],
-              isError: true,
-            });
-          }, TIMEOUT_MS);
-        }),
-      ]);
+      return await Promise.race([result, timeout]);
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        return {
+          content: [{ type: 'text', text: `Tool timed out after ${TIMEOUT_MS}ms` }],
+          isError: true,
+        };
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
     }
@@ -275,6 +280,8 @@ function handleAnalyzeCoverage(db, args) {
       isError: true,
     };
   }
+
+  techIds = [...new Set((techIds || []).map(id => String(id || '').toUpperCase().trim()).filter(Boolean))];
 
   let detectedSet = new Set();
   try {

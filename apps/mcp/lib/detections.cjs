@@ -255,12 +255,22 @@ const MS_TABLE_REGEX = new RegExp(`\\b(${MS_TABLES.join('|')})\\b`, 'g');
 const TECHNIQUE_REGEX = /\bT\d{4}(?:\.\d{3})?\b/g;
 const KQL_HEURISTIC = /\b(where|project|summarize|extend|DeviceEvents|DeviceProcessEvents)\b/;
 
+function buildKqlRuleId(filePath, sourcePath) {
+  const digest = crypto
+    .createHash('sha1')
+    .update(path.resolve(String(sourcePath || filePath || '')))
+    .digest('hex')
+    .slice(0, 12);
+  return `kql:${filePath}:${digest}`;
+}
+
 /**
  * @param {string} mdText - Raw markdown text of a KQL detection
  * @param {string} filePath - File path (basename used for ID)
+ * @param {string} [sourcePath] - Source path used to make IDs unique across indexed roots
  * @returns {DetectionRow|null}
  */
-function parseKqlRule(mdText, filePath) {
+function parseKqlRule(mdText, filePath, sourcePath) {
   try {
     const headingMatch = mdText.match(/^#{1,2}\s+(.+)$/m);
     let title = headingMatch ? headingMatch[1].trim() : null;
@@ -300,7 +310,7 @@ function parseKqlRule(mdText, filePath) {
     const stripped = mdText.replace(/```[\s\S]*?```/g, '').trim();
     const description = stripped.substring(0, 500).trim();
 
-    const id = `kql:${filePath}`;
+    const id = buildKqlRuleId(filePath, sourcePath);
 
     return {
       id,
@@ -504,7 +514,7 @@ function indexDirectory(db, dirPath, extPattern, parseFn, format) {
 
       try {
         const content = fs.readFileSync(fullPath, 'utf8');
-        const row = parseFn(content, rel);
+        const row = parseFn(content, rel, fullPath);
 
         if (!row) continue;
         // Skip empty IDs (e.g., sigma: with no actual id)

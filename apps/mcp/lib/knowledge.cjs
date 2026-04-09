@@ -105,12 +105,7 @@ function ensureKnowledgeSchema(db) {
       case_slug TEXT DEFAULT ''
     );
   `);
-
-  db.exec(`
-    DROP TRIGGER IF EXISTS kg_entities_ai;
-    DROP TRIGGER IF EXISTS kg_entities_ad;
-    DROP TRIGGER IF EXISTS kg_entities_au;
-  `);
+  const entityCount = db.prepare('SELECT COUNT(*) AS cnt FROM kg_entities').get()?.cnt || 0;
 
   const ftsRow = db.prepare(
     "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'kg_entities_fts'"
@@ -123,6 +118,11 @@ function ensureKnowledgeSchema(db) {
   );
 
   if (!usesExternalContent) {
+    db.exec(`
+      DROP TRIGGER IF EXISTS kg_entities_ai;
+      DROP TRIGGER IF EXISTS kg_entities_ad;
+      DROP TRIGGER IF EXISTS kg_entities_au;
+    `);
     db.exec('DROP TABLE IF EXISTS kg_entities_fts;');
   }
 
@@ -153,7 +153,18 @@ function ensureKnowledgeSchema(db) {
     END;
   `);
 
-  db.prepare("INSERT INTO kg_entities_fts(kg_entities_fts) VALUES('rebuild')").run();
+  const triggerCount = db.prepare(
+    `SELECT COUNT(*) AS cnt
+     FROM sqlite_master
+     WHERE type = 'trigger'
+       AND name IN ('kg_entities_ai', 'kg_entities_ad', 'kg_entities_au')`
+  ).get()?.cnt || 0;
+  const ftsCount = db.prepare('SELECT COUNT(*) AS cnt FROM kg_entities_fts').get()?.cnt || 0;
+  const needsRebuild = entityCount > 0 && (!usesExternalContent || triggerCount < 3 || ftsCount !== entityCount);
+
+  if (needsRebuild) {
+    db.prepare("INSERT INTO kg_entities_fts(kg_entities_fts) VALUES('rebuild')").run();
+  }
 }
 
 /**

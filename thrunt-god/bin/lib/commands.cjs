@@ -9,6 +9,8 @@ const { extractFrontmatter, spliceFrontmatter, reconstructFrontmatter } = requir
 const { addCaseToRoster, updateCaseInRoster, getCaseRoster } = require('./state.cjs');
 const { MODEL_PROFILES } = require('./model-profiles.cjs');
 
+const TECHNIQUE_ID_RE = /T\d{4}(?:\.\d{3})?/gi;
+
 // Lazy-require db.cjs: better-sqlite3 native module may not be available in all environments
 // (e.g., install manifest tests that copy files to temp dirs without node_modules)
 let dbModule;
@@ -44,6 +46,17 @@ function collectPackHuntExecutionIds(results = []) {
       null
     )
     .filter(Boolean);
+}
+
+function extractTechniqueIdsFallback(text) {
+  if (!text) return [];
+
+  if (extractTechniqueIds) {
+    return extractTechniqueIds(text);
+  }
+
+  const matches = text.match(TECHNIQUE_ID_RE) || [];
+  return [...new Set(matches.map(id => id.toUpperCase()))];
 }
 
 function cmdGenerateSlug(text, raw) {
@@ -3846,8 +3859,6 @@ function cmdCaseSearch(cwd, query, options, raw) {
 // ─── Program commands ────────────────────────────────────────────────────────
 
 function readCaseArtifactTechniqueIds(caseDir) {
-  if (!extractTechniqueIds) return [];
-
   let combined = '';
   const findingsPath = path.join(caseDir, 'FINDINGS.md');
   if (fs.existsSync(findingsPath)) {
@@ -3858,7 +3869,7 @@ function readCaseArtifactTechniqueIds(caseDir) {
     combined += fs.readFileSync(hypothesesPath, 'utf-8') + '\n';
   }
 
-  return combined ? extractTechniqueIds(combined) : [];
+  return combined ? extractTechniqueIdsFallback(combined) : [];
 }
 
 function readIndexedCaseTechniqueIds(db, slug) {

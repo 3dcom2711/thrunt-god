@@ -844,10 +844,40 @@ describe('detections.cjs - env var path indexing', () => {
     populateDetectionsIfEmpty(db);
 
     const row = db.prepare(
-      "SELECT * FROM detections WHERE id = 'kql:custom-kql.md'"
+      "SELECT * FROM detections WHERE id LIKE 'kql:custom-kql.md:%'"
     ).get();
     assert.ok(row);
     assert.equal(row.source_format, 'kql');
+  });
+
+  it('keeps KQL detection IDs unique across directories with matching relative paths', () => {
+    const customDirA = path.join(tmpDir, 'custom-kql-a', 'rules');
+    const customDirB = path.join(tmpDir, 'custom-kql-b', 'rules');
+    fs.mkdirSync(customDirA, { recursive: true });
+    fs.mkdirSync(customDirB, { recursive: true });
+    fs.writeFileSync(path.join(customDirA, 'network.md'), `${kqlMd}\n\nA variant.`);
+    fs.writeFileSync(path.join(customDirB, 'network.md'), `${kqlMd}\n\nB variant.`);
+
+    process.env.KQL_PATHS = `${path.dirname(customDirA)}${path.delimiter}${path.dirname(customDirB)}`;
+
+    const { ensureDetectionsSchema, populateDetectionsIfEmpty } = loadDet();
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(tmpDir, 'kql-collision-test.db');
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    ensureDetectionsSchema(db);
+    populateDetectionsIfEmpty(db);
+
+    const rows = db.prepare(`
+      SELECT id, file_path
+      FROM detections
+      WHERE source_format = 'kql' AND file_path = 'rules/network.md'
+      ORDER BY id
+    `).all();
+
+    assert.equal(rows.length, 2);
+    assert.notEqual(rows[0].id, rows[1].id);
   });
 
   it('indexes custom paths on later startups after bundled detections already exist', () => {

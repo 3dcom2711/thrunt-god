@@ -150,6 +150,35 @@ describe('knowledge.cjs - ensureKnowledgeSchema', () => {
     assert.ok(tables.includes('kg_learnings'));
   });
 
+  it('does not rebuild an in-sync external-content FTS index on later schema checks', () => {
+    const { ensureKnowledgeSchema, addEntity, searchEntities } = loadKnowledge();
+    ensureKnowledgeSchema(db);
+    addEntity(db, {
+      type: 'threat_actor',
+      name: 'APT29',
+      description: 'APT29 description',
+    });
+
+    const originalPrepare = db.prepare.bind(db);
+    let rebuildCalls = 0;
+    db.prepare = (sql) => {
+      if (sql === "INSERT INTO kg_entities_fts(kg_entities_fts) VALUES('rebuild')") {
+        rebuildCalls++;
+      }
+      return originalPrepare(sql);
+    };
+
+    try {
+      ensureKnowledgeSchema(db);
+    } finally {
+      db.prepare = originalPrepare;
+    }
+
+    assert.equal(rebuildCalls, 0);
+    const results = searchEntities(db, 'APT29');
+    assert.ok(results.some(result => result.name === 'APT29'));
+  });
+
   it('migrates legacy standalone kg_entities_fts tables and rebuilds search data', () => {
     db.exec(`
       CREATE TABLE kg_entities (
