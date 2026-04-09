@@ -53,20 +53,53 @@ describe('extension manifest', () => {
     const titleState = findMenuEntry('view/title', 'thrunt-god.showStateJson');
     const titleHuntmap = findMenuEntry('view/title', 'thrunt-god.analyzeHuntmap');
     const titleCli = findMenuEntry('view/title', 'thrunt-god.runThruntCli');
+    const titleRunPhase = findMenuEntry('view/title', 'thrunt-god.runHuntPhase');
     const missionState = findMenuEntry('view/item/context', 'thrunt-god.showStateJson');
     const phasesHuntmap = findMenuEntry('view/item/context', 'thrunt-god.analyzeHuntmap');
+    const phaseRun = findMenuEntry('view/item/context', 'thrunt-god.runHuntPhase');
 
     assert.ok(titleState, 'showStateJson should appear in the sidebar title');
     assert.ok(titleHuntmap, 'analyzeHuntmap should appear in the sidebar title');
     assert.ok(titleCli, 'runThruntCli should appear in the sidebar title');
+    assert.ok(titleRunPhase, 'runHuntPhase should appear in the sidebar title');
     assert.ok(missionState, 'showStateJson should appear on the mission node');
     assert.ok(phasesHuntmap, 'analyzeHuntmap should appear on the phases group node');
+    assert.ok(phaseRun, 'runHuntPhase should appear on runnable phase nodes');
 
     assert.match(titleState.when, /view == thruntGod\.huntTree/);
     assert.match(titleHuntmap.when, /view == thruntGod\.huntTree/);
     assert.match(titleCli.when, /view == thruntGod\.huntTree/);
+    assert.match(titleRunPhase.when, /thruntGod\.hasRunnablePhases/);
     assert.match(missionState.when, /viewItem == mission/);
     assert.match(phasesHuntmap.when, /viewItem == phases-group/);
+    assert.match(phaseRun.when, /viewItem == phase-runnable/);
+  });
+
+  it('registers automation tree view alongside investigation tree', () => {
+    const views = manifest.contributes.views.thruntGodSidebar;
+    assert.equal(views.length, 2, 'should have two sidebar views');
+
+    const huntView = views.find((v) => v.id === 'thruntGod.huntTree');
+    const automationView = views.find((v) => v.id === 'thruntGod.automationTree');
+
+    assert.ok(huntView, 'huntTree view should exist');
+    assert.ok(automationView, 'automationTree view should exist');
+
+    assert.equal(huntView.name, 'Investigation');
+    assert.equal(automationView.name, 'Automation');
+
+    assert.equal(huntView.when, 'thruntGod.huntDetected');
+    assert.equal(automationView.when, 'thruntGod.huntDetected');
+  });
+
+  it('contributes automation sidebar refresh command and toolbar button', () => {
+    const refreshCmd = findCommand('thrunt-god.refreshAutomationSidebar');
+    assert.ok(refreshCmd, 'refreshAutomationSidebar command should be contributed');
+    assert.equal(refreshCmd.icon, '$(refresh)');
+
+    const titleMenu = findMenuEntry('view/title', 'thrunt-god.refreshAutomationSidebar');
+    assert.ok(titleMenu, 'refresh should appear in automation tree toolbar');
+    assert.match(titleMenu.when, /view == thruntGod\.automationTree/);
   });
 
   it('keeps built assets while excluding dist sourcemaps from packaged VSIX output', () => {
