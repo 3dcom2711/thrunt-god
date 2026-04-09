@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Sidebar Automation & Operations
-status: in_progress
-stopped_at: Completed 60-03-PLAN.md
-last_updated: "2026-04-09T21:47:36Z"
-last_activity: 2026-04-09 -- Completed 60-03 (Parameterized templates, full command execution bridge)
+status: in-progress
+stopped_at: Completed 61-01-PLAN.md
+last_updated: "2026-04-09T22:08:08Z"
+last_activity: 2026-04-09 -- Completed 61-01 (Runbook schema, parser, registry, example YAML)
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 11
+  completed_plans: 9
+  percent: 82
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-09)
 
 **Core value:** Hunters can move from signal intake to executable hunts, evidence-grade receipts, publishable findings, promotable detections, and data-backed hunt recommendations inside one consistent workflow surface.
-**Current focus:** v3.1 Sidebar Automation & Operations — Phase 60: Command Deck Webview
+**Current focus:** v3.1 Sidebar Automation & Operations — Phase 61: Runbook Engine & Editor
 
 ## Current Milestone: v3.1 Sidebar Automation & Operations
 
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-04-09)
 
 ## Current Position
 
-Phase: 60 of 62 (Command Deck Webview)
-Plan: 3 of 3 plans in phase (complete)
-Status: Phase complete
-Last activity: 2026-04-09 -- Completed 60-03 (Parameterized templates, full command execution bridge)
+Phase: 61 of 62 (Runbook Engine & Editor)
+Plan: 1 of 3 plans in phase
+Status: In progress
+Last activity: 2026-04-09 -- Completed 61-01 (Runbook schema, parser, registry, example YAML)
 
-Progress: [██████████] 100% (v3.1 Phase 60: 3/3 plans)
+Progress: [████████░░] 82% (v3.1 Phase 61: 1/3 plans)
 
 ## Accumulated Context
 
@@ -73,12 +73,16 @@ Progress: [██████████] 100% (v3.1 Phase 60: 3/3 plans)
 - [Phase 60]: resolveCliPath prefers thruntGod.cli.path config, falls back to workspace-local dist/thrunt-god/bin/thrunt-tools.cjs
 - [Phase 60]: Template IDs generated from label via slugification with tpl- prefix for namespace separation from built-in commands
 
+- [Phase 61]: Runtime validation (validateRunbook) instead of Zod — avoids new dependency while providing equivalent validation
+- [Phase 61]: Five step action types (cli, mcp, open, note, confirm) as established in architecture decisions
+- [Phase 61]: RunbookRegistry uses sync fs reads internally with async public API for pattern consistency
+
 ### Blockers/Concerns
 
 None.
 
 ## Session Continuity
 
-Last session: 2026-04-09T21:47:36Z
-Stopped at: Completed 60-03-PLAN.md
-Resume: Phase 60 complete. All 3 plans delivered: foundation (01), context-aware highlighting (02), and parameterized templates with full CLI execution (03). 364 total tests passing. Phase 60 Command Deck Webview is done.
+Last session: 2026-04-09T22:08:08Z
+Stopped at: Completed 61-01-PLAN.md
+Resume: Phase 61 Plan 01 complete. Shared types (shared/runbook.ts), runtime validation + parser + registry (src/runbook.ts), example YAML, and 13 new unit tests. 379 total tests passing. Next: Plan 02 (RunbookEngine) and Plan 03 (RunbookPanel webview).

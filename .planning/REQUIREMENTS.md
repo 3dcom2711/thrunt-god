@@ -76,9 +76,9 @@ Requirements for Sidebar Automation & Operations release. Each maps to roadmap p
 | CMD-04 | Phase 60 | Planned |
 | CMD-05 | Phase 60 | Planned |
 | CMD-06 | Phase 60 | Planned |
-| RUN-01 | Phase 61 | Planned |
-| RUN-02 | Phase 61 | Planned |
-| RUN-03 | Phase 61 | Planned |
+| RUN-01 | Phase 61 | Complete |
+| RUN-02 | Phase 61 | Complete |
+| RUN-03 | Phase 61 | Complete |
 | RUN-04 | Phase 61 | Planned |
 | RUN-05 | Phase 61 | Planned |
 | RUN-06 | Phase 61 | Planned |
