@@ -11,6 +11,11 @@ const { createShutdownHandler } = require('../lib/lifecycle.cjs');
 const { registerTools } = require('../lib/tools.cjs');
 const { registerPrompts } = require('../lib/prompts.cjs');
 
+const dbOpts = {};
+if (process.env.THRUNT_INTEL_DB_DIR) {
+  dbOpts.dbDir = process.env.THRUNT_INTEL_DB_DIR;
+}
+
 // --- Health check mode (no MCP server, no transport) ---
 if (process.argv.includes('--health')) {
   const startTime = Date.now();
@@ -75,10 +80,6 @@ const server = new McpServer({
   version: '0.1.0',
 });
 
-const dbOpts = {};
-if (process.env.THRUNT_INTEL_DB_DIR) {
-  dbOpts.dbDir = process.env.THRUNT_INTEL_DB_DIR;
-}
 log('Opening intel database...');
 const db = openIntelDb(dbOpts);
 log('Intel database ready');
