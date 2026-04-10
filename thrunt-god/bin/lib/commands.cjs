@@ -3623,6 +3623,8 @@ function cmdCaseNew(cwd, name, options, raw) {
   const caseStateFm = {
     title: name,
     status: 'active',
+    phase: 0,
+    totalPhases: 0,
     opened_at: today,
     technique_ids: [],
   };
