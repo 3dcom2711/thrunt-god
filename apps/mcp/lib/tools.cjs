@@ -39,6 +39,18 @@ function collectTechniqueIds(set, techniqueIds) {
   }
 }
 
+/**
+ * Wrap a tool handler with a timeout guard.
+ *
+ * Limitation: the AbortController signal is passed to `fn`, but none of the
+ * current tool handlers consume it because they perform synchronous SQLite
+ * calls via better-sqlite3. The timeout therefore only protects against
+ * genuinely async operations (e.g., network fetches added in the future).
+ * For synchronous work the timeout fires after the sync call completes,
+ * which still caps overall wall-clock time on the Promise.race path.
+ * Refactoring synchronous SQLite calls to respect the signal is not
+ * worthwhile given the current architecture.
+ */
 function withTimeout(fn) {
   return async (args) => {
     const controller = new AbortController();
