@@ -592,6 +592,21 @@ Check ~/.claude/settings and run thrunt:health.`;
     assert.ok(result.includes('thrunt:test'), 'plain text label preserved');
     assert.ok(!result.includes('---'), 'no frontmatter added');
   });
+
+  test('preserves anti-simulation evidence rules in agent body', () => {
+    const input = `---
+name: thrunt-telemetry-executor
+description: Executes THRUNT plans
+tools: Read, Bash
+---
+
+Do not simulate enterprise telemetry, synthetic detections, hypothetical query results, or placeholder receipts.
+Only write query logs and receipts from actual runtime output, checked-in artifacts that already exist in the workspace, or operator-provided evidence.`;
+
+    const result = convertClaudeAgentToCopilotAgent(input);
+    assert.ok(result.includes('Do not simulate enterprise telemetry, synthetic detections, hypothetical query results, or placeholder receipts.'), 'anti-simulation rule preserved');
+    assert.ok(result.includes('Only write query logs and receipts from actual runtime output, checked-in artifacts that already exist in the workspace, or operator-provided evidence.'), 'evidence-source rule preserved');
+  });
 });
 
 // ─── copyCommandsAsCopilotSkills (integration) ─────────────────────────────────

@@ -190,18 +190,27 @@ describe('hunt docs', () => {
     const validateCommand = readRepoFile('commands', 'hunt', 'validate-findings.md');
     const runCommand = readRepoFile('commands', 'hunt', 'run.md');
     const runWorkflow = readRepoFile('thrunt-god', 'workflows', 'hunt-run.md');
+    const executorAgent = readRepoFile('agents', 'thrunt-telemetry-executor.md');
 
     assert.match(planCommand, /`HUNTMAP\.md` remains the source of truth/);
     assert.match(validateCommand, /`FINDINGS\.md` and `EVIDENCE_REVIEW\.md` remain the source of truth/);
     assert.match(runCommand, /If the requested phase has not been planned yet, stop and instruct the operator to run `\/hunt:plan <phase>` first/);
+    assert.match(runCommand, /Never simulate enterprise telemetry, synthetic detections, hypothetical query results, or sample receipts during `\/hunt:run`/);
+    assert.match(runCommand, /If the runtime cannot execute against a real telemetry surface, a checked-in artifact, or operator-provided evidence, stop and report the blocker instead of inventing evidence/);
     assert.match(runCommand, /Keep query-log `related_receipts` and receipt `related_queries` links exact and bidirectional/);
     assert.match(runCommand, /update `HYPOTHESES\.md`, `STATE\.md`, and `HUNTMAP\.md`/);
     assert.match(runCommand, /sync all affected surfaces: phase checkbox, per-plan checklist entries, and the progress table row/);
     assert.match(runWorkflow, /If the requested phase has no `PLAN\.md` files, stop and tell the operator to run `\/hunt:plan <phase>` first/);
+    assert.match(runWorkflow, /Do not simulate enterprise telemetry, synthetic detections, hypothetical query results, or placeholder receipts/);
+    assert.match(runWorkflow, /If a connector is unavailable, authentication is missing, the runtime cannot execute, or the required evidence source does not exist, stop and report the blocker/);
+    assert.match(runWorkflow, /A receipt must be backed by actual execution output, a checked-in artifact, or operator-supplied evidence/);
     assert.match(runWorkflow, /Keep query and receipt cross-references exact/);
     assert.match(runWorkflow, /`\.planning\/HYPOTHESES\.md` whenever a hypothesis is confirmed, disproved, or left inconclusive/);
     assert.match(runWorkflow, /`\.planning\/HUNTMAP\.md` when phase or plan completion changes/);
     assert.match(runWorkflow, /keep all three representations in sync: the phase checkbox list, the specific plan checklist entry or entries, and the `## Progress` table row/);
+    assert.match(executorAgent, /\*\*CRITICAL: No simulated evidence\*\*/);
+    assert.match(executorAgent, /Do not simulate enterprise telemetry, synthetic detections, hypothetical query results, or placeholder receipts/);
+    assert.match(executorAgent, /Only write query logs and receipts from actual runtime output, checked-in artifacts that already exist in the workspace, or operator-provided evidence/);
     assert.doesNotMatch(planCommand, /ROADMAP\.md/);
     assert.doesNotMatch(validateCommand, /VERIFICATION\.md/);
   });

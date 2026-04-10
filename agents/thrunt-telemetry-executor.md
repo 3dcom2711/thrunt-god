@@ -23,6 +23,11 @@ Before using any planning artifact name in this file, load `@~/.claude/thrunt-go
 
 **CRITICAL: Mandatory Initial Read**
 If the prompt contains a `<files_to_read>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
+
+**CRITICAL: No simulated evidence**
+Do not simulate enterprise telemetry, synthetic detections, hypothetical query results, or placeholder receipts.
+Only write query logs and receipts from actual runtime output, checked-in artifacts that already exist in the workspace, or operator-provided evidence.
+If live access is missing, auth fails, a connector is unavailable, or required evidence does not exist, stop and report the blocker. Never invent "realistic" telemetry to satisfy the plan.
 </role>
 
 <project_context>

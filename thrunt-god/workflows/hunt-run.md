@@ -23,17 +23,28 @@ Do not start hunting from memory.
 Read the phase `CONTEXT.md` and each `PLAN.md` file.
 If the requested phase has no `PLAN.md` files, stop and tell the operator to run `/hunt:plan <phase>` first instead of hanging or improvising execution.
 
+## 1a. Evidence must be real
+
+Do not simulate enterprise telemetry, synthetic detections, hypothetical query results, or placeholder receipts.
+Only collect evidence from:
+
+- real runtime executions against configured telemetry sources
+- checked-in artifacts that already exist in the workspace
+- operator-provided evidence explicitly supplied for this hunt
+
+If a connector is unavailable, authentication is missing, the runtime cannot execute, or the required evidence source does not exist, stop and report the blocker. Do not invent "realistic" results to keep the phase moving.
+
 Every material telemetry action should be representable as a shared runtime `QuerySpec`.
 Backend-specific request shapes belong inside connector adapters, not in the workflow narrative.
 When a connector-backed execution path is needed, hand off through `thrunt-tools runtime execute` rather than inventing ad hoc request code in the workflow.
 When the phase is driven by a selected hunt pack, use `thrunt-tools pack render-targets <id>` to inspect the generated `QuerySpec` set and `thrunt-tools runtime execute --pack <id>` to execute it through the shared runtime contract.
 
-## 1a. Parse Active Flags
+## 1b. Parse Active Flags
 
 Optional `--wave N` restricts execution to a single wave.
 Set `WAVE_FILTER` from `$ARGUMENTS` when present. Leave it empty otherwise.
 
-## 1b. Wave safety check
+## 1c. Wave safety check
 
 If `WAVE_FILTER` targets a later wave while earlier waves remain incomplete, stop and tell the operator to finish earlier waves first.
 
@@ -56,6 +67,7 @@ For each meaningful query or search:
 - Create or update a file in `.planning/QUERIES/`
 - Record intent, target source, query text or procedure, time window, and observed result
 - Include the runtime metadata that produced the query: connector id, dataset, execution profile, pagination mode, and result status
+- If the query was blocked by auth, missing access, or missing telemetry, record the real failure state. Never replace a blocked execution with simulated results.
 
 For each material claim or evidence item:
 
@@ -63,6 +75,7 @@ For each material claim or evidence item:
 - Record identifiers, timestamps, source, claim, confidence, and chain-of-custody details
 - Include the runtime metadata needed to reconstruct or audit the execution later
 - Keep query and receipt cross-references exact: every `related_receipts` entry in a query log must match a real receipt ID written in this run, and every receipt `related_queries` entry must point back to the real query log ID that produced it
+- A receipt must be backed by actual execution output, a checked-in artifact, or operator-supplied evidence. Simulated telemetry cannot produce a receipt.
 
 Never summarize a claim without a receipt.
 

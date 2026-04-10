@@ -23,6 +23,9 @@ The execution boundary is the shared THRUNT runtime contract:
 - query logs and receipts are emitted from runtime metadata, not connector-specific ad hoc blobs
 - connector-backed execution can be inspected locally with `thrunt-tools runtime list-connectors`, `thrunt-tools runtime doctor`, `thrunt-tools runtime smoke`, `thrunt-tools pack render-targets`, and `thrunt-tools runtime execute`
 
+Never simulate enterprise telemetry, synthetic detections, hypothetical query results, or sample receipts during `/hunt:run`.
+If the runtime cannot execute against a real telemetry surface, a checked-in artifact, or operator-provided evidence, stop and report the blocker instead of inventing evidence.
+
 `--wave N` executes only a single wave and must not mark the whole phase complete until no incomplete plans remain.
 
 **Creates or updates:**
@@ -59,6 +62,7 @@ If none of these tokens appear, run the standard full-phase execution flow.
 Execute the hunt run workflow from @~/.claude/thrunt-god/workflows/hunt-run.md.
 Every non-trivial claim must cite receipts. Parallelize by telemetry domain when it helps.
 When query execution occurs, treat `/hunt:run` as a `QuerySpec` producer and normalized-result consumer.
+Do not fabricate "realistic" enterprise telemetry or receipts to satisfy the workflow. If access is missing, auth fails, or no real result set is available, stop and surface that gap explicitly.
 If the requested phase has not been planned yet, stop and instruct the operator to run `/hunt:plan <phase>` first instead of improvising execution.
 Keep query-log `related_receipts` and receipt `related_queries` links exact and bidirectional for artifacts created in the run.
 Before closing out, update `HYPOTHESES.md`, `STATE.md`, and `HUNTMAP.md` so hypothesis confidence and phase completion match the receipts actually collected.
