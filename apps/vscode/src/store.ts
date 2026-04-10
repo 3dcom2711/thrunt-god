@@ -20,6 +20,7 @@ import type {
   EvidenceBoardEdge,
   EvidenceBoardMatrixCell,
 } from '../shared/evidence-board';
+import type { ProgramDashboardViewModel, CaseCard } from '../shared/program-dashboard';
 import type {
   QueryAnalysisViewModel,
   QueryAnalysisMode,
@@ -110,6 +111,25 @@ function tokenizeMatchText(value: string): string[] {
 
 function normalizeFsPath(value: string): string {
   return value.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+function parseDashboardDateMs(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const directMs = new Date(value).getTime();
+  if (!Number.isNaN(directMs)) {
+    return directMs;
+  }
+
+  const match = value.match(/\b\d{4}-\d{2}-\d{2}(?:T[0-9:.+-]+(?:Z|[+-]\d{2}:\d{2})?)?\b/);
+  if (!match) {
+    return null;
+  }
+
+  const embeddedMs = new Date(match[0]).getTime();
+  return Number.isNaN(embeddedMs) ? null : embeddedMs;
 }
 
 /** Internal type for the watcher's onDidChange event shape */
@@ -1102,6 +1122,97 @@ export class HuntDataStore implements vscode.Disposable {
   }
 
   // ---------------------------------------------------------------------------
+  // Program Dashboard
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Derive a ProgramDashboardViewModel from child hunts and mission data.
+   * Called by ProgramDashboardPanel on init, store change, etc.
+   */
+  deriveProgramDashboard(): ProgramDashboardViewModel {
+    const hunt = this.getHunt();
+    const childHunts = typeof this.getChildHunts === 'function' ? this.getChildHunts() : [];
+
+    const programName = hunt?.mission.status === 'loaded' ? hunt.mission.data.signal : 'Program';
+    const missionSnippet = hunt?.mission.status === 'loaded'
+      ? (hunt.mission.data.scope || hunt.mission.data.signal)
+      : '';
+
+    const STALE_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    const cases: CaseCard[] = childHunts.map((child) => {
+      const lowerStatus = child.status.toLowerCase();
+      const isClosed = lowerStatus === 'closed' || lowerStatus === 'complete';
+      const lastActivityMs = parseDashboardDateMs(child.lastActivity)
+        ?? parseDashboardDateMs(child.opened);
+      const isStale = !isClosed
+        && lastActivityMs !== null
+        && (now - lastActivityMs > STALE_THRESHOLD_MS);
+
+      let status: CaseCard['status'];
+      if (isClosed) {
+        status = 'closed';
+      } else if (isStale) {
+        status = 'stale';
+      } else {
+        status = 'active';
+      }
+
+      return {
+        id: child.id,
+        slug: child.name,
+        name: child.name,
+        kind: child.kind,
+        status,
+        openedAt: child.opened,
+        closedAt: isClosed ? child.lastActivity : null,
+        techniqueCount: child.techniqueIds.length,
+        signal: child.signal,
+        currentPhase: child.currentPhase,
+        totalPhases: child.totalPhases,
+        phaseName: child.phaseName,
+        lastActivity: child.lastActivity,
+        findingsPublished: child.findingsPublished,
+      };
+    });
+
+    const active = cases.filter((c) => c.status === 'active').length;
+    const closed = cases.filter((c) => c.status === 'closed').length;
+    const stale = cases.filter((c) => c.status === 'stale').length;
+
+    const allTechniques = new Set<string>();
+    for (const child of childHunts) {
+      for (const tid of child.techniqueIds) {
+        allTechniques.add(tid);
+      }
+    }
+
+    const timeline = [...childHunts]
+      .filter((child) => child.opened)
+      .sort((a, b) => new Date(a.opened).getTime() - new Date(b.opened).getTime())
+      .map((child) => ({
+        date: child.opened,
+        event: `Opened: ${child.name}`,
+        slug: child.name,
+      }));
+
+    return {
+      programName,
+      missionSnippet,
+      cases,
+      aggregates: {
+        total: cases.length,
+        active,
+        closed,
+        stale,
+        uniqueTechniques: allTechniques.size,
+      },
+      timeline,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // File change handling
   // ---------------------------------------------------------------------------
 
@@ -1702,6 +1813,19 @@ export class HuntDataStore implements vscode.Disposable {
         .map((line) => line.trim())
         .filter((line) => line.length > 0).length ?? 0;
 
+    // Extract technique_ids from STATE.md frontmatter (written by CLI as YAML array)
+    let techniqueIds: string[] = [];
+    try {
+      const stateUri = vscode.Uri.joinPath(huntRoot, 'STATE.md');
+      const stateRaw = new TextDecoder().decode(await vscode.workspace.fs.readFile(stateUri));
+      const fm = extractFrontmatter(stateRaw);
+      if (Array.isArray(fm.technique_ids)) {
+        techniqueIds = fm.technique_ids.filter((id): id is string => typeof id === 'string');
+      }
+    } catch {
+      // STATE.md may not exist or have no technique_ids — that's fine
+    }
+
     return {
       id: `${kind}:${name}`,
       name,
@@ -1719,6 +1843,7 @@ export class HuntDataStore implements vscode.Disposable {
       lastActivity: stateData?.lastActivity ?? mission.data.opened,
       blockerCount,
       findingsPublished,
+      techniqueIds,
     };
   }
 

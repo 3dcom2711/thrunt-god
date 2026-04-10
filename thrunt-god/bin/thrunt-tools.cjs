@@ -244,6 +244,53 @@ function parseMultiwordArg(args, flag) {
   return tokens.length > 0 ? tokens.join(' ') : null;
 }
 
+function parseCaseSearchArgs(args) {
+  const positionals = [];
+  let limit;
+  let technique;
+  let program;
+
+  for (let i = 1; i < args.length; i++) {
+    const token = args[i];
+
+    if (token === '--limit' || token.startsWith('--limit=')) {
+      const rawValue = token.includes('=') ? token.slice('--limit='.length) : args[++i];
+      if (!rawValue || String(rawValue).startsWith('--')) error('Missing value for --limit');
+      const parsed = parseInt(rawValue, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) error('Invalid value for --limit: must be a positive integer');
+      limit = parsed;
+      continue;
+    }
+
+    if (token === '--technique' || token.startsWith('--technique=')) {
+      const rawValue = token.includes('=') ? token.slice('--technique='.length) : args[++i];
+      if (!rawValue || String(rawValue).startsWith('--')) error('Missing value for --technique');
+      technique = rawValue;
+      continue;
+    }
+
+    if (token === '--program' || token.startsWith('--program=')) {
+      const rawValue = token.includes('=') ? token.slice('--program='.length) : args[++i];
+      if (!rawValue || String(rawValue).startsWith('--')) error('Missing value for --program');
+      program = rawValue;
+      continue;
+    }
+
+    if (token.startsWith('--')) {
+      error(`Unknown case-search option: ${token}`);
+    }
+
+    positionals.push(token);
+  }
+
+  return {
+    query: positionals.join(' ').trim() || null,
+    limit,
+    technique,
+    program,
+  };
+}
+
 // ─── CLI Router ───────────────────────────────────────────────────────────────
 
 async function main() {
@@ -269,22 +316,12 @@ async function main() {
     error(`Invalid --cwd: ${cwd}`);
   }
 
-  // Resolve worktree root: in a linked worktree, .planning/ lives in the main worktree.
-  // However, in monorepo worktrees where the subdirectory itself owns .planning/,
-  // skip worktree resolution — the CWD is already the correct project root.
-  const { resolveWorktreeRoot } = require('./lib/core.cjs');
-  if (!fs.existsSync(path.join(cwd, core.PLANNING_DIR_NAME))) {
-    const worktreeRoot = resolveWorktreeRoot(cwd);
-    if (worktreeRoot !== cwd) {
-      cwd = worktreeRoot;
-    }
-  }
-
   // Optional workstream override for parallel milestone work.
   // Priority: --ws flag > THRUNT_WORKSTREAM env var > active-workstream file > null (flat mode)
   const wsEqArg = args.find(arg => arg.startsWith('--ws='));
   const wsIdx = args.indexOf('--ws');
   let ws = null;
+  const wsProvided = !!wsEqArg || wsIdx !== -1;
   if (wsEqArg) {
     ws = wsEqArg.slice('--ws='.length).trim();
     if (!ws) error('Missing value for --ws');
@@ -307,6 +344,27 @@ async function main() {
     process.env.THRUNT_WORKSTREAM = ws;
   }
 
+  // Optional case override for program/case hierarchy.
+  // Priority: --case flag > THRUNT_CASE env var > .active-case file > null
+  const caseEqArg = args.find(arg => arg.startsWith('--case='));
+  const caseIdx = args.indexOf('--case');
+  let caseSlug = null;
+  const explicitCaseProvided = !!caseEqArg || caseIdx !== -1;
+  if (caseEqArg) {
+    caseSlug = caseEqArg.slice('--case='.length).trim();
+    if (!caseSlug) error('Missing value for --case');
+    args.splice(args.indexOf(caseEqArg), 1);
+  } else if (caseIdx !== -1) {
+    caseSlug = args[caseIdx + 1];
+    if (!caseSlug || caseSlug.startsWith('--')) error('Missing value for --case');
+    args.splice(caseIdx, 2);
+  } else if (!wsProvided && process.env.THRUNT_CASE) {
+    caseSlug = process.env.THRUNT_CASE.trim();
+  }
+  if (caseSlug && !/^[a-zA-Z0-9_-]+$/.test(caseSlug)) {
+    error('Invalid case slug: must be alphanumeric, hyphens, and underscores only');
+  }
+
   const rawIndex = args.indexOf('--raw');
   const raw = rawIndex !== -1;
   if (rawIndex !== -1) args.splice(rawIndex, 1);
@@ -325,7 +383,18 @@ async function main() {
   const command = args[0];
 
   if (!command) {
-    error('Usage: thrunt-tools <command> [args] [--raw] [--pick <field>] [--cwd <path>] [--ws <name>]\nCommands: state, resolve-model, find-phase, commit, validate-summary, validate, frontmatter, template, generate-slug, current-timestamp, list-todos, check-path-exists, pack, runtime, config-ensure-section, config-new-program, init, workstream');
+    error('Usage: thrunt-tools <command> [args] [--raw] [--pick <field>] [--cwd <path>] [--ws <name>] [--case <slug>]\nCommands: state, resolve-model, find-phase, commit, validate-summary, validate, frontmatter, template, generate-slug, current-timestamp, list-todos, check-path-exists, pack, runtime, config-ensure-section, config-new-program, init, workstream, case, migrate-case');
+  }
+
+  // Linked worktrees inherit .planning/ from the main checkout only for commands
+  // that actually depend on planning state. Utility commands should stay anchored
+  // to the current worktree even before any .planning/ exists there.
+  if (shouldResolvePlanningWorktree(command, args) &&
+      !fs.existsSync(path.join(cwd, core.PLANNING_DIR_NAME))) {
+    const worktreeRoot = core.resolveWorktreeRoot(cwd);
+    if (worktreeRoot !== cwd) {
+      cwd = worktreeRoot;
+    }
   }
 
   // Multi-repo guard: resolve project root for commands that read/write .planning/.
@@ -337,6 +406,21 @@ async function main() {
   ]);
   if (!SKIP_ROOT_RESOLUTION.has(command)) {
     cwd = findProjectRoot(cwd);
+  }
+
+  if (wsProvided && !explicitCaseProvided) {
+    delete process.env.THRUNT_CASE;
+  }
+
+  if (!caseSlug && !wsProvided) {
+    const { getActiveCase } = require('./lib/core.cjs');
+    caseSlug = getActiveCase(cwd);
+  }
+  if (caseSlug && !/^[a-zA-Z0-9_-]+$/.test(caseSlug)) {
+    error('Invalid case slug: must be alphanumeric, hyphens, and underscores only');
+  }
+  if (caseSlug) {
+    process.env.THRUNT_CASE = caseSlug;
   }
 
   // When --pick is active, intercept stdout to extract the requested field.
@@ -397,6 +481,47 @@ function extractField(obj, fieldPath) {
     }
   }
   return current;
+}
+
+function shouldResolvePlanningWorktree(command, args) {
+  switch (command) {
+    case 'state':
+    case 'find-phase':
+    case 'commit':
+    case 'commit-to-subrepo':
+    case 'template':
+    case 'list-todos':
+    case 'history-digest':
+    case 'phases':
+    case 'huntmap':
+    case 'hypotheses':
+    case 'phase':
+    case 'milestone':
+    case 'validate':
+    case 'progress':
+    case 'audit-evidence':
+    case 'evidence':
+    case 'bundle':
+    case 'detection':
+    case 'metrics':
+    case 'score':
+    case 'feedback':
+    case 'recommend':
+    case 'planning-hints':
+    case 'stats':
+    case 'todo':
+    case 'scaffold':
+    case 'phase-plan-index':
+    case 'state-snapshot':
+    case 'workstream':
+    case 'case':
+    case 'migrate-case':
+      return true;
+    case 'init':
+      return !['connector', 'new-workspace', 'list-workspaces', 'remove-workspace'].includes(args[1]);
+    default:
+      return false;
+  }
 }
 
 async function runCommand(command, args, cwd, raw) {
@@ -964,6 +1089,9 @@ async function runCommand(command, args, cwd, raw) {
         case 'new-program':
           init.cmdInitNewProgram(cwd, raw);
           break;
+        case 'new-case':
+          init.cmdInitNewCase(cwd, raw);
+          break;
         case 'new-milestone':
           init.cmdInitNewMilestone(cwd, raw);
           break;
@@ -1007,7 +1135,7 @@ async function runCommand(command, args, cwd, raw) {
           await commands.cmdInitConnector(cwd, args.slice(2), raw);
           break;
         default:
-          error(`Unknown init workflow: ${workflow}\nAvailable: run, plan, new-program, new-milestone, quick, resume, validate-findings, phase-op, todos, milestone-op, map-environment, progress, manager, new-workspace, list-workspaces, remove-workspace, connector`);
+          error(`Unknown init workflow: ${workflow}\nAvailable: run, plan, new-program, new-case, new-milestone, quick, resume, validate-findings, phase-op, todos, milestone-op, map-environment, progress, manager, new-workspace, list-workspaces, remove-workspace, connector`);
       }
       break;
     }
@@ -1153,6 +1281,46 @@ async function runCommand(command, args, cwd, raw) {
       } else {
         error('Unknown workstream subcommand. Available: create, list, status, complete, set, get, progress');
       }
+      break;
+    }
+
+    case 'case': {
+      const subcommand = args[1];
+      if (subcommand === 'new') {
+        commands.cmdCaseNew(cwd, args.slice(2).join(' '), {}, raw);
+      } else if (subcommand === 'list') {
+        commands.cmdCaseList(cwd, raw);
+      } else if (subcommand === 'close') {
+        commands.cmdCaseClose(cwd, args[2], raw);
+      } else if (subcommand === 'status') {
+        commands.cmdCaseStatus(cwd, args[2], raw);
+      } else {
+        error('Unknown case subcommand. Available: new, list, close, status');
+      }
+      break;
+    }
+
+    case 'migrate-case': {
+      commands.cmdMigrateCase(cwd, args[1], raw);
+      break;
+    }
+
+    case 'program': {
+      const subcommand = args[1];
+      if (subcommand === 'rollup') {
+        commands.cmdProgramRollup(cwd, raw);
+      } else {
+        error('Unknown program subcommand. Available: rollup');
+      }
+      break;
+    }
+
+    case 'case-search': {
+      const { query, limit, technique, program } = parseCaseSearchArgs(args);
+      const resolvedProgram = program
+        ? (path.isAbsolute(program) ? program : path.resolve(cwd, program))
+        : null;
+      commands.cmdCaseSearch(resolvedProgram || cwd, query, { limit, technique, program: resolvedProgram }, raw);
       break;
     }
 

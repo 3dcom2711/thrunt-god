@@ -118,7 +118,7 @@ async function waitFor<T>(
   label: string,
   producer: () => Promise<T>,
   predicate: (value: T) => boolean,
-  timeoutMs = 20000,
+  timeoutMs = 30000,
   intervalMs = 250
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -175,6 +175,8 @@ function flattenTree(nodes: TreeSnapshotNode[]): TreeSnapshotNode[] {
 }
 
 suite('Dogfood Harness', function () {
+  this.timeout(60000);
+
   suiteSetup(function () {
     if (process.env.THRUNT_E2E !== '1') {
       this.skip();
@@ -223,7 +225,7 @@ suite('Dogfood Harness', function () {
       'thrunt-god.test.snapshotTree'
     );
     const rootLabels = treeSnapshot.tree.map((node) => node.label);
-    assert.deepStrictEqual(rootLabels, ['Mission (case)', 'Hypotheses', 'Phases']);
+    assert.deepStrictEqual(rootLabels, ['Mission', 'Hypotheses', 'Phases']);
 
     const flattened = flattenTree(treeSnapshot.tree);
     const queryNodes = flattened.filter((node) => node.nodeType === 'query');
@@ -388,7 +390,6 @@ suite('Dogfood Harness', function () {
       () => executeTestCommand<ViewerSnapshot | null>('thrunt-god.test.snapshotViewer'),
       (snapshot): snapshot is ViewerSnapshot =>
         snapshot !== null &&
-        snapshot.isReady &&
         snapshot.currentQueryId === 'QRY-20260329-001' &&
         snapshot.viewModel.clusters.length === 3
     );

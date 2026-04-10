@@ -1,12 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { HUNT_MARKERS, OUTPUT_CHANNEL_NAME } from './constants';
 import { ArtifactWatcher } from './watcher';
 import { HuntDataStore } from './store';
 import { HuntTreeDataProvider, HuntTreeItem } from './sidebar';
+import { AutomationTreeDataProvider, AutomationTreeItem } from './automationSidebar';
+import { MCPStatusManager } from './mcpStatusManager';
 import { HuntStatusBar } from './statusBar';
 import { HuntCodeLensProvider } from './codeLens';
 import { EvidenceIntegrityDiagnostics } from './diagnostics';
@@ -33,13 +35,26 @@ import {
 } from './huntOverviewPanel';
 import { EvidenceBoardPanel, EVIDENCE_BOARD_VIEW_TYPE } from './evidenceBoardPanel';
 import { QueryAnalysisPanel, QUERY_ANALYSIS_VIEW_TYPE } from './queryAnalysisPanel';
+import { ProgramDashboardPanel, PROGRAM_DASHBOARD_VIEW_TYPE } from './programDashboardPanel';
+import { McpControlPanel, MCP_CONTROL_VIEW_TYPE } from './mcpControlPanel';
+import { CommandDeckRegistry, CommandDeckPanel, COMMAND_DECK_VIEW_TYPE, BUILT_IN_COMMANDS } from './commandDeck';
+import { RunbookPanel } from './runbookPanel';
+import { RunbookRegistry, RunbookEngine, RUNBOOK_PANEL_VIEW_TYPE } from './runbook';
+import { ExecutionLogger } from './executionLogger';
+import type { CommandDeckContext } from '../shared/command-deck';
 import type { SessionDiff } from '../shared/hunt-overview';
 import { resolveArtifactType } from './watcher';
 
 const CLI_OUTPUT_CHANNEL_NAME = `${OUTPUT_CHANNEL_NAME} CLI`;
 const LAST_CLI_COMMAND_KEY = 'thruntGod.lastCliCommand';
 const LAST_PHASE_COMMAND_KEY = 'thruntGod.lastPhaseCommand';
+const HAS_RUNNABLE_PHASES_CONTEXT = 'thruntGod.hasRunnablePhases';
+const MCP_AVAILABLE_CONTEXT = 'thruntGod.mcpAvailable';
 const DEFAULT_PHASE_COMMAND_TEMPLATE = 'runtime execute --pack {packId} --phase {phase}';
+const MANAGED_MCP_DIRNAME = 'mcp-runtime';
+const MANAGED_MCP_SERVER_RELATIVE_PATHS = [
+  path.join('node_modules', '@thrunt', 'mcp', 'bin', 'server.cjs'),
+] as const;
 
 interface RenderedMarkdownResult {
   rendered: string;
@@ -349,6 +364,25 @@ function resolvePhaseCommandTemplate(
   };
 }
 
+function isPhaseComplete(status: string | undefined): boolean {
+  return (status ?? '').trim().toLowerCase() === 'complete';
+}
+
+function updateRunnablePhaseContext(store?: HuntDataStore | null): void {
+  const hunt = store?.getHunt();
+  const hasRunnablePhases = Boolean(
+    hunt &&
+      hunt.huntMap.status === 'loaded' &&
+      hunt.huntMap.data.phases.some((phase) => !isPhaseComplete(phase.status))
+  );
+
+  void vscode.commands.executeCommand(
+    'setContext',
+    HAS_RUNNABLE_PHASES_CONTEXT,
+    hasRunnablePhases
+  );
+}
+
 function formatCliArg(arg: string): string {
   return /\s/.test(arg) ? JSON.stringify(arg) : arg;
 }
@@ -572,6 +606,189 @@ function resolveThruntCliPath(context: vscode.ExtensionContext): string {
   }
 
   throw new Error(`Unable to locate THRUNT CLI. Checked: ${candidates.join(', ')}`);
+}
+
+function resolveConfiguredPath(candidate: string, workspaceRoot?: string): string {
+  if (path.isAbsolute(candidate)) {
+    return candidate;
+  }
+  return workspaceRoot ? path.resolve(workspaceRoot, candidate) : path.resolve(candidate);
+}
+
+function getManagedMcpInstallRoot(context: vscode.ExtensionContext): string {
+  return path.join(context.globalStorageUri.fsPath, MANAGED_MCP_DIRNAME);
+}
+
+function getManagedMcpServerCandidates(context: vscode.ExtensionContext): string[] {
+  const installRoot = getManagedMcpInstallRoot(context);
+  return MANAGED_MCP_SERVER_RELATIVE_PATHS.map((relativePath) =>
+    path.join(installRoot, relativePath)
+  );
+}
+
+function resolveManagedMcpServerPath(context: vscode.ExtensionContext): string {
+  for (const candidate of getManagedMcpServerCandidates(context)) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+function resolveMcpServerPath(
+  context: vscode.ExtensionContext,
+  workspaceRoot?: string
+): string {
+  const override = process.env.THRUNT_TEST_MCP_SERVER_PATH?.trim();
+  if (override) {
+    return resolveConfiguredPath(override, workspaceRoot);
+  }
+
+  let configuredCandidate = '';
+  const configuredPath =
+    vscode.workspace.getConfiguration('thruntGod').get<string>('mcp.serverPath')?.trim() || '';
+  if (configuredPath) {
+    configuredCandidate = resolveConfiguredPath(configuredPath, workspaceRoot);
+    if (fs.existsSync(configuredCandidate)) {
+      return configuredCandidate;
+    }
+  }
+
+  const candidates = [
+    workspaceRoot ? path.join(workspaceRoot, 'apps', 'mcp', 'bin', 'server.cjs') : null,
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  const managedServerPath = resolveManagedMcpServerPath(context);
+  if (managedServerPath) {
+    return managedServerPath;
+  }
+
+  return configuredCandidate;
+}
+
+function hasResolvedMcpServer(
+  context: vscode.ExtensionContext,
+  workspaceRoot?: string
+): boolean {
+  const serverPath = resolveMcpServerPath(context, workspaceRoot);
+  return Boolean(serverPath && fs.existsSync(serverPath));
+}
+
+async function updateMcpAvailabilityContext(
+  context: vscode.ExtensionContext,
+  workspaceRoot?: string
+): Promise<void> {
+  await vscode.commands.executeCommand(
+    'setContext',
+    MCP_AVAILABLE_CONTEXT,
+    hasResolvedMcpServer(context, workspaceRoot)
+  );
+}
+
+function getNpmExecutable(): string {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+function ensureManagedMcpInstallRoot(context: vscode.ExtensionContext): string {
+  const installRoot = getManagedMcpInstallRoot(context);
+  fs.mkdirSync(installRoot, { recursive: true });
+  const packageJsonPath = path.join(installRoot, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    fs.writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify({ name: 'thrunt-god-mcp-runtime', private: true }, null, 2)}\n`
+    );
+  }
+  return installRoot;
+}
+
+async function runLoggedCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    child.stdout.on('data', (data: Buffer) => {
+      const text = data.toString();
+      stdout += text;
+      const trimmed = text.trimEnd();
+      if (trimmed) {
+        outputChannel.appendLine(trimmed);
+      }
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      const text = data.toString();
+      stderr += text;
+      const trimmed = text.trimEnd();
+      if (trimmed) {
+        outputChannel.appendLine(trimmed);
+      }
+    });
+
+    child.on('error', (err) => {
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const message = stderr.trim() || stdout.trim() || `${command} exited with code ${code ?? 'null'}`;
+      reject(new Error(message));
+    });
+  });
+}
+
+async function installManagedMcpRuntime(
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel,
+): Promise<string> {
+  const installRoot = ensureManagedMcpInstallRoot(context);
+  const installPackage =
+    vscode.workspace.getConfiguration('thruntGod').get<string>('mcp.installPackage')?.trim()
+    || '@thrunt/mcp';
+  outputChannel.show(true);
+  outputChannel.appendLine(`[MCP] Installing managed runtime into ${installRoot}`);
+  outputChannel.appendLine(`[MCP] Installing package spec ${installPackage}`);
+
+  try {
+    await runLoggedCommand(
+      getNpmExecutable(),
+      ['install', '--prefix', installRoot, '--no-audit', '--no-fund', installPackage],
+      installRoot,
+      outputChannel
+    );
+  } catch (err) {
+    throw err instanceof Error ? err : new Error(String(err));
+  }
+
+  const serverPath = resolveManagedMcpServerPath(context);
+  if (!serverPath) {
+    throw new Error(
+      `Install completed, but no MCP server entry was found under ${installRoot}. ` +
+      'Verify that the installed package exposes @thrunt/mcp/bin/server.cjs or configure thruntGod.mcp.serverPath.'
+    );
+  }
+
+  outputChannel.appendLine(`[MCP] Managed runtime ready at ${serverPath}`);
+  return serverPath;
 }
 
 async function runThruntCli(
@@ -884,6 +1101,14 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     })
   );
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer(PROGRAM_DASHBOARD_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+        const store = await waitForStore();
+        ProgramDashboardPanel.restorePanel(context, store, panel);
+      },
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('thrunt-god.showInfo', () => {
@@ -1033,7 +1258,98 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('thrunt-god.closeCase', async () => {
+      const huntRoot = activeHuntRoot;
+      const workspaceRoot = resolveWorkspaceRoot(huntRoot);
+      if (!huntRoot || !workspaceRoot) {
+        await vscode.window.showWarningMessage(
+          'Open a THRUNT hunt workspace with an active or existing case before closing a case.'
+        );
+        return undefined;
+      }
+
+      const activeCasePath = path.join(huntRoot.fsPath, '.active-case');
+      const casesDir = path.join(huntRoot.fsPath, 'cases');
+      let activeSlug: string | null = null;
+
+      try {
+        const slug = fs.readFileSync(activeCasePath, 'utf-8').trim();
+        if (slug) {
+          activeSlug = slug;
+        }
+      } catch {
+        activeSlug = null;
+      }
+
+      let availableSlugs: string[] = [];
+      try {
+        availableSlugs = fs.readdirSync(casesDir, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .sort((left, right) => left.localeCompare(right));
+      } catch {
+        availableSlugs = [];
+      }
+
+      const slugSet = new Set<string>();
+      if (activeSlug) {
+        slugSet.add(activeSlug);
+      }
+      for (const slug of availableSlugs) {
+        slugSet.add(slug);
+      }
+
+      if (slugSet.size === 0) {
+        await vscode.window.showInformationMessage('No cases are available to close in this workspace.');
+        return undefined;
+      }
+
+      const selected = await vscode.window.showQuickPick(
+        [...slugSet].map((slug) => ({
+          label: slug,
+          description: slug === activeSlug ? 'active case' : undefined,
+          slug,
+        })),
+        {
+          title: 'Close Case',
+          placeHolder: activeSlug ? `Select a case to close (active: ${activeSlug})` : 'Select a case to close',
+          ignoreFocusOut: true,
+        }
+      );
+
+      if (!selected) {
+        return undefined;
+      }
+
+      const confirmation = await vscode.window.showWarningMessage(
+        `Close case "${selected.slug}"?`,
+        { modal: true },
+        'Close Case'
+      );
+      if (confirmation !== 'Close Case') {
+        return undefined;
+      }
+
+      const result = await runThruntCliCommand(
+        context,
+        cliOutputChannel,
+        workspaceRoot,
+        ['case', 'close', selected.slug],
+        huntRoot
+      );
+
+      if (result?.parsed) {
+        await openJsonResultDocument(result.parsed);
+      }
+      await vscode.commands.executeCommand('thrunt-god.refreshSidebar');
+      await vscode.commands.executeCommand('thrunt-god.refreshAutomationSidebar');
+      return result;
+    })
+  );
+
   vscode.commands.executeCommand('setContext', 'thruntGod.huntDetected', false);
+  updateRunnablePhaseContext(null);
 
   findHuntRoot().then((huntRoot) => {
     if (!huntRoot) {
@@ -1067,8 +1383,13 @@ export function activate(context: vscode.ExtensionContext): void {
         outputChannel.appendLine(
           `[Store] ${event.type}: ${event.artifactType} ${event.id}`
         );
+        updateRunnablePhaseContext(store);
       })
     );
+
+    void store.initialScanComplete().then(() => {
+      updateRunnablePhaseContext(store);
+    });
 
     vscode.commands.executeCommand('setContext', 'thruntGod.huntDetected', true);
 
@@ -1077,9 +1398,154 @@ export function activate(context: vscode.ExtensionContext): void {
       cliBridge,
     });
     context.subscriptions.push(treeProvider);
+    const huntTreeView = vscode.window.createTreeView('thruntGod.huntTree', {
+      treeDataProvider: treeProvider,
+    });
+    context.subscriptions.push(huntTreeView);
+
+    // MCP output channel and status manager
+    const mcpOutputChannel = vscode.window.createOutputChannel('THRUNT MCP');
+    context.subscriptions.push(mcpOutputChannel);
+
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const resolveCurrentMcpServerPath = () => resolveMcpServerPath(context, workspaceRoot);
+    void updateMcpAvailabilityContext(context, workspaceRoot);
+
+    const mcpStatus = new MCPStatusManager(mcpOutputChannel, resolveCurrentMcpServerPath);
+    context.subscriptions.push(mcpStatus);
+
+    // Execution history logger
+    const executionLogger = new ExecutionLogger(workspaceRoot || '');
+    context.subscriptions.push(executionLogger);
+
+    // Automation sidebar tree
+    const automationProvider = new AutomationTreeDataProvider({ mcpStatus });
+    context.subscriptions.push(automationProvider);
     context.subscriptions.push(
-      vscode.window.registerTreeDataProvider('thruntGod.huntTree', treeProvider)
+      vscode.window.registerTreeDataProvider('thruntGod.automationTree', automationProvider)
     );
+
+    // Wire execution logger to automation tree for auto-refresh on new entries
+    automationProvider.setExecutionLogger(executionLogger);
+    context.subscriptions.push(executionLogger.onDidAppend(() => {
+      automationProvider.refresh();
+    }));
+
+    // Runbook registry and engine
+    const runbookRegistry = new RunbookRegistry(workspaceRoot || '');
+    void runbookRegistry.discover().then(() => {
+      automationProvider.setRunbookRegistry(runbookRegistry);
+    });
+
+    const runbookEngine = new RunbookEngine(
+      workspaceRoot || '',
+      resolveCurrentMcpServerPath,
+    );
+
+    // Watch .planning/runbooks/ for YAML runbook files
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (workspaceFolder) {
+      const runbookPattern = new vscode.RelativePattern(
+        workspaceFolder,
+        '.planning/runbooks/*.{yaml,yml}'
+      );
+      const runbookWatcher = vscode.workspace.createFileSystemWatcher(
+        runbookPattern,
+        false,
+        false,
+        false
+      );
+
+      const updateRunbookCount = async () => {
+        try {
+          const files = await vscode.workspace.findFiles(runbookPattern);
+          automationProvider.setRunbookCount(files.length);
+          await runbookRegistry.refresh();
+          automationProvider.refresh();
+        } catch {
+          automationProvider.setRunbookCount(0);
+        }
+      };
+
+      runbookWatcher.onDidCreate(() => updateRunbookCount());
+      runbookWatcher.onDidDelete(() => updateRunbookCount());
+      runbookWatcher.onDidChange(() => updateRunbookCount());
+      context.subscriptions.push(runbookWatcher);
+
+      // Initial count on activation
+      void updateRunbookCount();
+    }
+
+    // Runbook commands and panel serializer
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.openRunbook', (item?: AutomationTreeItem) => {
+        const runbookPath = item?.dataId;
+        RunbookPanel.createOrShow(context, runbookRegistry, runbookEngine, executionLogger, mcpStatus, runbookPath);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.window.registerWebviewPanelSerializer(RUNBOOK_PANEL_VIEW_TYPE, {
+        deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+          RunbookPanel.restorePanel(context, runbookRegistry, runbookEngine, executionLogger, mcpStatus, panel);
+          return Promise.resolve();
+        },
+      })
+    );
+
+    // Command Deck
+    const commandDeckRegistry = new CommandDeckRegistry(context.workspaceState);
+    automationProvider.setCommandCount(BUILT_IN_COMMANDS.length);
+    automationProvider.setCommandTemplates(commandDeckRegistry.getTemplates());
+
+    // Update automation sidebar whenever templates change
+    context.subscriptions.push(
+      commandDeckRegistry.onDidChangeTemplates((templates) => {
+        automationProvider.setCommandTemplates(templates);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.openCommandDeck', (item?: AutomationTreeItem) => {
+        const panel = CommandDeckPanel.createOrShow(
+          context,
+          commandDeckRegistry,
+          executionLogger,
+          mcpStatus
+        );
+        if (item?.dataId) {
+          panel.openTemplate(item.dataId);
+        }
+      })
+    );
+
+    // Command Deck panel serializer for restoration
+    context.subscriptions.push(
+      vscode.window.registerWebviewPanelSerializer(COMMAND_DECK_VIEW_TYPE, {
+        deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+          CommandDeckPanel.restorePanel(context, commandDeckRegistry, executionLogger, mcpStatus, panel);
+          return Promise.resolve();
+        },
+      })
+    );
+
+    // Wire investigation tree selection to Command Deck context
+    if (huntTreeView) {
+      context.subscriptions.push(
+        huntTreeView.onDidChangeSelection((e) => {
+          const selected = e.selection[0];
+          if (selected && CommandDeckPanel.currentPanel) {
+            const ctx: CommandDeckContext = {
+              nodeType: selected.nodeType ?? '',
+              dataId: typeof selected.dataId === 'string' ? selected.dataId : undefined,
+            };
+            CommandDeckPanel.currentPanel.setContext(ctx);
+          } else if (CommandDeckPanel.currentPanel) {
+            CommandDeckPanel.currentPanel.setContext(null);
+          }
+        })
+      );
+    }
 
     // Sidebar commands
     context.subscriptions.push(
@@ -1367,13 +1833,41 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const requestedPhase = extractPhaseNumberFromTarget(target);
-        let selectedPhase = hunt.huntMap.data.phases.find(
+        const allPhases = hunt.huntMap.data.phases;
+        const runnablePhases = allPhases.filter(
+          (phase) => !isPhaseComplete(phase.status)
+        );
+        let selectedPhase = allPhases.find(
           (phase) => phase.number === requestedPhase
         );
 
+        if (selectedPhase && isPhaseComplete(selectedPhase.status)) {
+          const childHuntCount = store.getChildHunts().length;
+          const detail =
+            childHuntCount > 0
+              ? ' Open a child case to inspect its existing evidence.'
+              : '';
+          await vscode.window.showInformationMessage(
+            `Phase ${selectedPhase.number} is already complete in this workspace.${detail}`
+          );
+          return undefined;
+        }
+
+        if (!selectedPhase && runnablePhases.length === 0) {
+          const childHuntCount = store.getChildHunts().length;
+          const detail =
+            childHuntCount > 0
+              ? ' Open a child case to inspect its existing evidence.'
+              : '';
+          await vscode.window.showInformationMessage(
+            `All hunt phases are already complete in this workspace.${detail}`
+          );
+          return undefined;
+        }
+
         if (!selectedPhase) {
           const picked = await vscode.window.showQuickPick(
-            hunt.huntMap.data.phases.map((phase) => ({
+            runnablePhases.map((phase) => ({
               label: `Phase ${phase.number}: ${phase.name}`,
               description: `[${phase.status}]`,
               phase,
@@ -1525,6 +2019,150 @@ export function activate(context: vscode.ExtensionContext): void {
       })
     );
 
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.refreshAutomationSidebar', () => {
+        automationProvider.refresh();
+      })
+    );
+
+    // Refresh automation tree when MCP status changes
+    context.subscriptions.push(
+      mcpStatus.onDidChange(() => automationProvider.refresh())
+    );
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('thruntGod.mcp')) {
+          void updateMcpAvailabilityContext(context, workspaceRoot);
+          automationProvider.refresh();
+        }
+      })
+    );
+
+    // MCP commands
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpInstall', async () => {
+        try {
+          const serverPath = await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Installing THRUNT MCP runtime',
+              cancellable: false,
+            },
+            async () => installManagedMcpRuntime(context, mcpOutputChannel)
+          );
+          await updateMcpAvailabilityContext(context, workspaceRoot);
+          const result = await mcpStatus.runHealthCheck();
+          automationProvider.refresh();
+          if (result.status === 'healthy') {
+            vscode.window.showInformationMessage(
+              `MCP runtime installed and verified at ${serverPath}`
+            );
+          } else {
+            vscode.window.showWarningMessage(
+              `MCP runtime installed, but health check ${result.status}: ${result.error || 'Unknown error'}`
+            );
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to install MCP runtime: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpStart', async () => {
+        try {
+          await mcpStatus.start();
+          const result = await mcpStatus.runHealthCheck();
+          if (result.status === 'healthy') {
+            vscode.window.showInformationMessage('MCP server started and is healthy');
+          } else {
+            vscode.window.showWarningMessage(
+              `MCP server started, but health check ${result.status}: ${result.error || 'Unknown error'}`
+            );
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to start MCP: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpRestart', async () => {
+        try {
+          await mcpStatus.restart();
+          const result = await mcpStatus.runHealthCheck();
+          if (result.status === 'healthy') {
+            vscode.window.showInformationMessage('MCP server restarted and is healthy');
+          } else {
+            vscode.window.showWarningMessage(
+              `MCP server restarted, but health check ${result.status}: ${result.error || 'Unknown error'}`
+            );
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to restart MCP: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpHealthCheck', async () => {
+        const result = await mcpStatus.runHealthCheck();
+        if (result.status === 'healthy') {
+          const dbKb = (result.dbSizeBytes / 1024).toFixed(1);
+          vscode.window.showInformationMessage(
+            `MCP healthy: ${result.toolCount} tools, DB ${dbKb} KB (${result.dbTableCount} tables), uptime ${(result.uptimeMs / 1000).toFixed(1)}s`
+          );
+        } else {
+          vscode.window.showErrorMessage(
+            `MCP health check ${result.status}: ${result.error || 'Unknown error'}`
+          );
+        }
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpListTools', async () => {
+        const tools = await mcpStatus.listTools();
+        if (tools.length === 0) {
+          vscode.window.showWarningMessage('No MCP tools found or server not reachable');
+          return;
+        }
+        mcpOutputChannel.clear();
+        mcpOutputChannel.appendLine('=== MCP Tool Inventory ===\n');
+        for (const tool of tools) {
+          mcpOutputChannel.appendLine(`${tool.name}`);
+          mcpOutputChannel.appendLine(`  ${tool.description}`);
+          mcpOutputChannel.appendLine(`  Input: ${JSON.stringify(tool.inputSchema)}`);
+          mcpOutputChannel.appendLine('');
+        }
+        mcpOutputChannel.show(true);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpOpenLogs', () => {
+        mcpOutputChannel.show(true);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpOpenPanel', () => {
+        McpControlPanel.createOrShow(context, mcpStatus);
+      })
+    );
+
+    // MCP Control Panel serializer for panel restoration
+    context.subscriptions.push(
+      vscode.window.registerWebviewPanelSerializer(MCP_CONTROL_VIEW_TYPE, {
+        deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+          McpControlPanel.restorePanel(context, mcpStatus, panel);
+          return Promise.resolve();
+        },
+      })
+    );
+
     const statusBar = new HuntStatusBar(store);
     context.subscriptions.push(statusBar);
 
@@ -1593,6 +2231,12 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.commands.registerCommand('thrunt-god.openReceiptInspector', (receiptId?: string) => {
         QueryAnalysisPanel.createOrShow(context, store, typeof receiptId === 'string' ? receiptId : undefined);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.openProgramDashboard', () => {
+        ProgramDashboardPanel.createOrShow(context, store);
       })
     );
 
@@ -1674,6 +2318,8 @@ export { parseCliInput, resolvePhaseCommandTemplate };
 export { HuntDataStore } from './store';
 export { ArtifactWatcher, resolveArtifactType } from './watcher';
 export { HuntTreeDataProvider, HuntTreeItem } from './sidebar';
+export { AutomationTreeDataProvider, AutomationTreeItem } from './automationSidebar';
+export { MCPStatusManager, type MCPHealthResult, type MCPConnectionStatus, type MCPStatus } from './mcpStatusManager';
 export { HuntStatusBar } from './statusBar';
 export { HuntCodeLensProvider } from './codeLens';
 export { EvidenceIntegrityDiagnostics } from './diagnostics';
@@ -1733,3 +2379,21 @@ export {
   QUERY_ANALYSIS_VIEW_TYPE,
   QA_STATE_KEY,
 } from './queryAnalysisPanel';
+export {
+  ProgramDashboardPanel,
+  PROGRAM_DASHBOARD_VIEW_TYPE,
+} from './programDashboardPanel';
+export {
+  McpControlPanel,
+  MCP_CONTROL_VIEW_TYPE,
+} from './mcpControlPanel';
+export {
+  CommandDeckRegistry,
+  CommandDeckPanel,
+  COMMAND_DECK_VIEW_TYPE,
+  BUILT_IN_COMMANDS,
+  getContextRelevantIds,
+} from './commandDeck';
+export { validateRunbook, parseRunbook, RunbookRegistry, RunbookEngine, resolveParams, tokenizeRunbookCommand, RUNBOOK_PANEL_VIEW_TYPE, VALID_STEP_ACTIONS } from './runbook';
+export { RunbookPanel } from './runbookPanel';
+export { ExecutionLogger, confirmMutatingAction, buildCommandEntry, buildRunbookEntry } from './executionLogger';

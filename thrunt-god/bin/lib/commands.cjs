@@ -4,9 +4,32 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync, execFileSync } = require('child_process');
-const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, getMilestonePhaseFilter, resolveModelInternal, stripShippedMilestones, extractCurrentMilestone, planningDir, planningPaths, toPosixPath, output, error, findPhaseInternal, extractOneLinerFromBody, getHuntmapPhaseInternal, getHuntmapDocInfo, PLANNING_DIR_NAME } = require('./core.cjs');
-const { extractFrontmatter } = require('./frontmatter.cjs');
+const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, getMilestonePhaseFilter, resolveModelInternal, stripShippedMilestones, extractCurrentMilestone, planningDir, planningRoot, planningPaths, toPosixPath, output, error, findPhaseInternal, extractOneLinerFromBody, getHuntmapPhaseInternal, getHuntmapDocInfo, getActiveCase, setActiveCase, PLANNING_DIR_NAME } = require('./core.cjs');
+const { extractFrontmatter, spliceFrontmatter, reconstructFrontmatter } = require('./frontmatter.cjs');
+const { addCaseToRoster, updateCaseInRoster, getCaseRoster } = require('./state.cjs');
 const { MODEL_PROFILES } = require('./model-profiles.cjs');
+
+const TECHNIQUE_ID_RE = /T\d{4}(?:\.\d{3})?/gi;
+
+// Lazy-require db.cjs: better-sqlite3 native module may not be available in all environments
+// (e.g., install manifest tests that copy files to temp dirs without node_modules)
+let dbModule;
+try {
+  dbModule = require('./db.cjs');
+} catch {
+  dbModule = null;
+}
+const { openProgramDb, indexCase, searchCases, findTechniqueOverlap, extractTechniqueIds } = dbModule || {};
+
+// Lazy-require @thrunt/mcp modules: may not be available in all environments
+let intelModule, coverageModule;
+try {
+  intelModule = require('../../../apps/mcp/lib/intel.cjs');
+  coverageModule = require('../../../apps/mcp/lib/coverage.cjs');
+} catch {
+  intelModule = null;
+  coverageModule = null;
+}
 
 // Lazy-require tenant module to avoid circular deps at load time
 function getTenant() { return require('./tenant.cjs'); }
@@ -23,6 +46,17 @@ function collectPackHuntExecutionIds(results = []) {
       null
     )
     .filter(Boolean);
+}
+
+function extractTechniqueIdsFallback(text) {
+  if (!text) return [];
+
+  if (extractTechniqueIds) {
+    return extractTechniqueIds(text);
+  }
+
+  const matches = text.match(TECHNIQUE_ID_RE) || [];
+  return [...new Set(matches.map(id => id.toUpperCase()))];
 }
 
 function cmdGenerateSlug(text, raw) {
@@ -3366,6 +3400,880 @@ async function cmdConnectorsInit(cwd, args, raw) {
   }, raw);
 }
 
+// ─── Case commands ───────────────────────────────────────────────────────────
+
+function buildStateDocument(frontmatter, body) {
+  return `---\n${reconstructFrontmatter(frontmatter)}\n---\n\n${body.trimEnd()}\n`;
+}
+
+function buildCaseStateBody(title, opts = {}) {
+  const status = opts.status || 'Active';
+  const activeSignal = opts.activeSignal || `${title} opened for investigation`;
+  const currentFocus = opts.currentFocus || 'Initial triage and evidence collection';
+  const lastActivity = opts.lastActivity || status;
+  const scope = opts.scope || 'Validate the case signal, collect first evidence, and decide the next investigation step.';
+  const confidence = opts.confidence || 'Low';
+  const blockers = opts.blockers || 'None.';
+
+  return [
+    `# Case: ${title}`,
+    '',
+    '## Current Position',
+    '',
+    `**Active signal:** ${activeSignal}`,
+    `**Current focus:** ${currentFocus}`,
+    'Phase: 1 of 1',
+    'Plan: 1 of 1',
+    `Status: ${status}`,
+    `Last activity: ${lastActivity}`,
+    '',
+    '### Current Scope',
+    '',
+    scope,
+    '',
+    '### Confidence',
+    '',
+    confidence,
+    '',
+    '### Blockers',
+    '',
+    blockers,
+    '',
+  ].join('\n');
+}
+
+function titleizeSlug(slug) {
+  return String(slug || '')
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function extractMissionContext(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let body = raw.trim();
+  body = body.replace(/^#\s+.+$/m, '').trim();
+  body = body.replace(/^#{2,}\s+/gm, '');
+  body = body.replace(/\*\*/g, '');
+  const paragraphs = body
+    .split(/\n\s*\n/)
+    .map(part => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  return paragraphs.slice(0, 2).join('\n\n');
+}
+
+function buildCaseMissionContent(title, openedAt, opts = {}) {
+  const owner = opts.owner || '_unassigned_';
+  const status = opts.status || 'Active';
+  const signal = opts.signal || '_Describe the initial signal or hypothesis._';
+  const desiredOutcome = opts.desiredOutcome || '_What does success look like for this case?_';
+  const scope = opts.scope || '_Define the boundaries of the investigation._';
+  return [
+    `# ${title}`,
+    '',
+    '**Mode:** case',
+    `**Opened:** ${openedAt}`,
+    `**Owner:** ${owner}`,
+    `**Status:** ${status}`,
+    '',
+    '## Signal',
+    '',
+    signal,
+    '',
+    '## Desired Outcome',
+    '',
+    desiredOutcome,
+    '',
+    '## Scope',
+    '',
+    scope,
+    '',
+  ].join('\n');
+}
+
+function parseActivityDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/\d{4}-\d{2}-\d{2}/);
+  if (!match) return null;
+  const date = new Date(match[0]);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getLatestArtifactMtime(rootDir) {
+  const stack = [rootDir];
+  let latestMtime = null;
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(currentDir, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          stack.push(entryPath);
+          continue;
+        }
+
+        if (!entry.isFile()) {
+          continue;
+        }
+
+        const stat = fs.statSync(entryPath);
+        if (!Number.isNaN(stat.mtime.getTime()) && (!latestMtime || stat.mtime > latestMtime)) {
+          latestMtime = stat.mtime;
+        }
+      } catch {
+        // Skip unreadable entries and continue scanning sibling artifacts.
+      }
+    }
+  }
+
+  return latestMtime;
+}
+
+function getCaseActivityDate(caseStatePath, rosterEntry = {}) {
+  if (fs.existsSync(caseStatePath)) {
+    try {
+      const content = fs.readFileSync(caseStatePath, 'utf-8');
+      const fm = extractFrontmatter(content);
+      const activityMatch = content.match(/^last_activity:\s*(.+)$/im)
+        || content.match(/^Last Activity:\s*(.+)$/im)
+        || content.match(/^Last activity:\s*(.+)$/im);
+      const explicitActivity = fm.last_activity || (activityMatch ? activityMatch[1].trim() : null);
+      const explicitDate = parseActivityDate(explicitActivity);
+      if (explicitDate) {
+        return explicitDate;
+      }
+
+      // Use the most recent mtime from any file in the case directory as fallback
+      const caseDir = path.dirname(caseStatePath);
+      const latestMtime = getLatestArtifactMtime(caseDir);
+      if (latestMtime) {
+        return latestMtime;
+      }
+    } catch {
+      // Fall back to roster timestamps below.
+    }
+  }
+
+  // Guard against undefined roster values — prefer opened_at as a safe default
+  const rosterDate = (rosterEntry && rosterEntry.last_activity) || (rosterEntry && rosterEntry.opened_at) || null;
+  return parseActivityDate(rosterDate);
+}
+
+function replaceCaseStateLine(content, patterns, replacement) {
+  for (const pattern of patterns) {
+    if (pattern.test(content)) {
+      return content.replace(pattern, replacement);
+    }
+  }
+  return content;
+}
+
+function updateCaseStateBody(content, opts = {}) {
+  let next = content;
+  if (!/## Current Position/m.test(content)) {
+    if (opts.activeSignal) {
+      next = replaceCaseStateLine(next, [/^\*\*Active signal:\*\* .+$/m], `**Active signal:** ${opts.activeSignal}`);
+    }
+    if (opts.currentFocus) {
+      next = replaceCaseStateLine(next, [/^\*\*Current focus:\*\* .+$/m], `**Current focus:** ${opts.currentFocus}`);
+    }
+    if (opts.status) {
+      next = replaceCaseStateLine(next, [/^Status:\s*.+$/m, /^\*\*Status:\*\*\s*.+$/m], match => (
+        match.startsWith('**Status:**') ? `**Status:** ${opts.status}` : `Status: ${opts.status}`
+      ));
+    }
+    if (opts.lastActivity) {
+      next = replaceCaseStateLine(next, [/^Last activity:\s*.+$/m, /^\*\*Last activity:\*\*\s*.+$/m], match => (
+        match.startsWith('**Last activity:**') ? `**Last activity:** ${opts.lastActivity}` : `Last activity: ${opts.lastActivity}`
+      ));
+    }
+    return next;
+  }
+
+  if (opts.activeSignal && /\*\*Active signal:\*\* .+/m.test(next)) {
+    next = next.replace(/\*\*Active signal:\*\* .+/m, `**Active signal:** ${opts.activeSignal}`);
+  }
+  if (opts.currentFocus && /\*\*Current focus:\*\* .+/m.test(next)) {
+    next = next.replace(/\*\*Current focus:\*\* .+/m, `**Current focus:** ${opts.currentFocus}`);
+  }
+  if (opts.status && /^Status:\s*.+$/m.test(next)) {
+    next = next.replace(/^Status:\s*.+$/m, `Status: ${opts.status}`);
+  }
+  if (opts.lastActivity) {
+    if (/^Last activity:\s*.+$/m.test(next)) {
+      next = next.replace(/^Last activity:\s*.+$/m, `Last activity: ${opts.lastActivity}`);
+    } else if (/^Status:\s*.+$/m.test(next)) {
+      next = next.replace(/^Status:\s*.+$/m, match => `${match}\nLast activity: ${opts.lastActivity}`);
+    }
+  }
+  return next;
+}
+
+function expandTechniqueOverlapIds(db, techniqueIds) {
+  const expanded = new Set(
+    (techniqueIds || [])
+      .map((techniqueId) => String(techniqueId || '').trim().toUpperCase())
+      .filter(Boolean)
+  );
+
+  if (!db || expanded.size === 0) return [...expanded];
+
+  for (const techniqueId of [...expanded]) {
+    if (techniqueId.includes('.')) continue;
+    try {
+      const rows = db.prepare('SELECT DISTINCT technique_id FROM case_techniques WHERE technique_id LIKE ?').all(`${techniqueId}.%`);
+      for (const row of rows) {
+        if (row.technique_id) expanded.add(String(row.technique_id).trim().toUpperCase());
+      }
+    } catch {
+      // Best-effort expansion only.
+    }
+  }
+
+  return [...expanded];
+}
+
+function cmdCaseNew(cwd, name, options, raw) {
+  if (!name) {
+    error('Case name required. Usage: case new <name>');
+  }
+
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!slug) {
+    error('Invalid case name — must contain at least one alphanumeric character');
+  }
+
+  // Check slug uniqueness
+  const roster = getCaseRoster(cwd);
+  if (roster.some(c => c.slug === slug)) {
+    output({ success: false, error: `Case slug "${slug}" already exists` }, raw);
+    return;
+  }
+
+  const root = planningRoot(cwd);
+
+  // Validate program STATE.md exists before creating case artifacts
+  const programState = path.join(root, 'STATE.md');
+  if (!fs.existsSync(programState)) {
+    error('Program not initialized. Run `thrunt new-program` first.');
+  }
+
+  const caseDir = path.join(root, 'cases', slug);
+  if (fs.existsSync(caseDir)) {
+    error(`Case directory already exists: cases/${slug}`);
+  }
+  fs.mkdirSync(caseDir, { recursive: true });
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // Create MISSION.md (required by VS Code store for case discovery).
+  // parseMission requires bold metadata fields and ## Signal, ## Desired Outcome, ## Scope sections.
+  const missionContent = buildCaseMissionContent(name, today, { signal: options.signal });
+  fs.writeFileSync(path.join(caseDir, 'MISSION.md'), missionContent, 'utf-8');
+
+  const huntmapFm = `---\ntitle: ${name}\nstatus: active\ncreated: ${today}\n---\n\n`;
+  const huntmapBody = `# Huntmap\n\n## Hypotheses\n\nSee HYPOTHESES.md\n`;
+  fs.writeFileSync(path.join(caseDir, 'HUNTMAP.md'), huntmapFm + huntmapBody, 'utf-8');
+
+  fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'), `# Hypotheses\n\n_No hypotheses yet._\n`, 'utf-8');
+
+  const caseStateFm = {
+    title: name,
+    status: 'active',
+    phase: 0,
+    totalPhases: 0,
+    opened_at: today,
+    technique_ids: [],
+  };
+  const caseStateBody = buildCaseStateBody(name, {
+    activeSignal: `${name} opened for investigation`,
+    currentFocus: 'Initial triage and evidence collection',
+    lastActivity: `Opened ${today}`,
+  });
+  fs.writeFileSync(path.join(caseDir, 'STATE.md'), buildStateDocument(caseStateFm, caseStateBody), 'utf-8');
+
+  // Create QUERIES/ and RECEIPTS/ directories
+  fs.mkdirSync(path.join(caseDir, 'QUERIES'), { recursive: true });
+  fs.mkdirSync(path.join(caseDir, 'RECEIPTS'), { recursive: true });
+
+  // Add to program roster
+  addCaseToRoster(cwd, { slug, name, status: 'active', opened_at: today, technique_count: '0' });
+
+  // Set active case pointer
+  setActiveCase(cwd, slug);
+
+  // Auto-search past cases for similar signals (silent failure)
+  let past_case_matches = [];
+  if (dbModule) try {
+    const db = openProgramDb(cwd);
+    if (db) {
+      try {
+        // Search using case name — OR-join words for broader FTS matching
+        const nameTokens = name.split(/\s+/).filter(w => w.length > 1);
+        const ftsQuery = nameTokens.length > 1 ? nameTokens.join(' OR ') : name;
+        const nameResults = searchCases(db, ftsQuery, { limit: 5 });
+        // Also check technique overlap from case name
+        const techIds = extractTechniqueIds(name);
+        let overlapResults = [];
+        if (techIds.length > 0) {
+          overlapResults = findTechniqueOverlap(db, expandTechniqueOverlapIds(db, techIds));
+        }
+        // Merge: name matches first, then technique overlaps not already in name results
+        const seen = new Set(nameResults.map(r => r.slug));
+        past_case_matches = [
+          ...nameResults,
+          ...overlapResults.filter(r => !seen.has(r.slug))
+        ].slice(0, 5);
+      } finally {
+        db.close();
+      }
+    }
+  } catch {
+    past_case_matches = [];
+  }
+
+  // Auto-detect coverage for technique IDs in case name (silent failure)
+  let detection_coverage = [];
+  if (intelModule && coverageModule) try {
+    const techIds = extractTechniqueIds(name);
+    if (techIds.length > 0) {
+      const intelDb = intelModule.openIntelDb();
+      try {
+        for (const tid of techIds) {
+          const result = coverageModule.compareDetections(intelDb, tid);
+          if (result && result.technique_id) {
+            detection_coverage.push({
+              technique_id: result.technique_id,
+              technique_name: result.technique_name,
+              source_count: result.source_count,
+              sources: result.sources.map(s => s.format),
+            });
+          }
+        }
+      } finally {
+        intelDb.close();
+      }
+    }
+  } catch {
+    detection_coverage = [];
+  }
+
+  const caseDirRel = toPosixPath(path.relative(cwd, caseDir));
+  output({ success: true, slug, name, case_dir: caseDirRel, message: `Case created: ${slug}`, past_case_matches, detection_coverage }, raw);
+}
+
+function cmdCaseList(cwd, raw) {
+  const roster = getCaseRoster(cwd);
+  output({
+    cases: roster,
+    total: roster.length,
+    active: roster.filter(c => c.status === 'active').length,
+    closed: roster.filter(c => c.status === 'closed').length,
+  }, raw);
+}
+
+function validateCaseSlug(slug, { usageMessage, invalidTraversalMessage = 'Invalid case slug' } = {}) {
+  if (!slug) {
+    error(usageMessage || 'Case slug required.');
+  }
+  if (/[/\\]/.test(slug) || slug === '.' || slug === '..') {
+    error(invalidTraversalMessage);
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+    error('Invalid case slug: must be alphanumeric, hyphens, and underscores only');
+  }
+  return slug;
+}
+
+function cmdCaseClose(cwd, slug, raw) {
+  validateCaseSlug(slug, { usageMessage: 'Case slug required. Usage: case close <slug>' });
+
+  const closedAt = new Date().toISOString().split('T')[0];
+  const root = planningRoot(cwd);
+  const caseDir = path.join(root, 'cases', slug);
+  const caseStatePath = path.join(caseDir, 'STATE.md');
+  let techniqueIds = [];
+
+  // Update case-level STATE.md
+  if (fs.existsSync(caseStatePath)) {
+    const content = fs.readFileSync(caseStatePath, 'utf-8');
+    const fm = extractFrontmatter(content);
+    fm.status = 'closed';
+    fm.closed_at = closedAt;
+    let newContent = spliceFrontmatter(content, fm);
+    newContent = updateCaseStateBody(newContent, {
+      status: 'Closed',
+      currentFocus: 'Closed and ready for follow-up as needed',
+      lastActivity: `Closed ${closedAt}`,
+    });
+    fs.writeFileSync(caseStatePath, newContent, 'utf-8');
+  }
+
+  // Index case artifacts into program.db (non-fatal)
+  if (dbModule) try {
+    const db = openProgramDb(cwd);
+    if (db) {
+      try {
+        indexCase(db, slug, caseDir);
+        techniqueIds = readCaseTechniqueIds(caseDir, slug, db);
+      } finally {
+        db.close();
+      }
+    }
+  } catch (err) {
+    // Non-fatal: case is closed even if indexing fails
+    if (!raw) console.error(`Warning: case indexing failed: ${err.message}`);
+  }
+
+  if (techniqueIds.length === 0) {
+    techniqueIds = readCaseTechniqueIds(caseDir, slug, null);
+  }
+
+  persistCaseStateTechniqueIds(caseStatePath, techniqueIds);
+
+  // Update program roster
+  updateCaseInRoster(cwd, slug, {
+    status: 'closed',
+    closed_at: closedAt,
+    technique_count: String(techniqueIds.length),
+  });
+
+  // Clear active case if it matches
+  const activeCase = getActiveCase(cwd);
+  if (activeCase === slug) {
+    setActiveCase(cwd, null);
+  }
+
+  output({ success: true, slug, message: `Case closed: ${slug}` }, raw);
+}
+
+function cmdCaseStatus(cwd, slug, raw) {
+  let targetSlug = slug;
+  if (!targetSlug) {
+    targetSlug = getActiveCase(cwd);
+    if (!targetSlug) {
+      error('No case specified and no active case. Usage: case status <slug>');
+    }
+  }
+
+  const roster = getCaseRoster(cwd);
+  const entry = roster.find(c => c.slug === targetSlug);
+  if (!entry) {
+    output({ error: `Case "${targetSlug}" not found in roster` }, raw);
+    return;
+  }
+
+  const activeCase = getActiveCase(cwd);
+  output({
+    slug: entry.slug,
+    name: entry.name,
+    status: entry.status,
+    opened_at: entry.opened_at,
+    closed_at: entry.closed_at || null,
+    technique_count: entry.technique_count || '0',
+    is_active: entry.slug === activeCase,
+  }, raw);
+}
+
+// ─── Case search ─────────────────────────────────────────────────────────────
+
+function cmdCaseSearch(cwd, query, options, raw) {
+  if (!query) {
+    output({ success: false, error: 'Query required. Usage: thrunt-tools case-search <query>' }, raw);
+    return;
+  }
+
+  const searchCwd = options.program || cwd;
+  let db;
+  if (dbModule) {
+    try {
+      db = openProgramDb(searchCwd);
+    } catch {
+      db = null;
+    }
+  }
+
+  if (!db) {
+    output({ success: true, query, results: [], total: 0, message: 'No program database found' }, raw);
+    return;
+  }
+
+  try {
+    const limit = options.limit || 10;
+    let results = searchCases(db, query, { limit });
+
+    // If --technique specified, filter results to those with matching techniques
+    if (options.technique) {
+      const techIds = expandTechniqueOverlapIds(db, [...new Set(
+        (Array.isArray(options.technique) ? options.technique : [options.technique])
+          .map((techId) => String(techId || '').trim().toUpperCase())
+          .filter(Boolean)
+      )]);
+      const overlap = findTechniqueOverlap(db, techIds);
+      const overlapMap = new Map(overlap.map(o => [o.slug, o]));
+      // Filter to only results with technique overlap
+      results = results.filter(r => overlapMap.has(r.slug));
+      // Enrich with overlap data
+      results = results.map(r => ({
+        ...r,
+        technique_overlap: (overlapMap.get(r.slug)?.overlapping_techniques || '').split(',').filter(Boolean),
+      }));
+    }
+
+    // For results without explicit technique enrichment, fetch technique data
+    if (!options.technique) {
+      results = results.map(r => {
+        const caseRow = db.prepare('SELECT id FROM case_index WHERE slug = ?').get(r.slug);
+        if (caseRow) {
+          const techs = db.prepare('SELECT technique_id FROM case_techniques WHERE case_id = ?').all(caseRow.id);
+          return { ...r, technique_overlap: techs.map(t => t.technique_id) };
+        }
+        return { ...r, technique_overlap: [] };
+      });
+    }
+
+    output({
+      success: true,
+      query,
+      results: results.map(r => ({
+        slug: r.slug,
+        name: r.name,
+        status: r.status,
+        opened_at: r.opened_at || null,
+        closed_at: r.closed_at || null,
+        match_snippet: r.match_snippet,
+        technique_overlap: r.technique_overlap || [],
+        outcome_summary: r.outcome_summary || null,
+        relevance_score: r.relevance_score,
+      })),
+      total: results.length,
+    }, raw);
+  } finally {
+    db.close();
+  }
+}
+
+// ─── Program commands ────────────────────────────────────────────────────────
+
+function readCaseArtifactTechniqueIds(caseDir) {
+  let combined = '';
+  const findingsPath = path.join(caseDir, 'FINDINGS.md');
+  if (fs.existsSync(findingsPath)) {
+    combined += fs.readFileSync(findingsPath, 'utf-8') + '\n';
+  }
+  const hypothesesPath = path.join(caseDir, 'HYPOTHESES.md');
+  if (fs.existsSync(hypothesesPath)) {
+    combined += fs.readFileSync(hypothesesPath, 'utf-8') + '\n';
+  }
+
+  return combined ? extractTechniqueIdsFallback(combined) : [];
+}
+
+function readCaseStateTechniqueIds(caseStatePath) {
+  if (!fs.existsSync(caseStatePath)) return [];
+
+  const content = fs.readFileSync(caseStatePath, 'utf-8');
+  const fm = extractFrontmatter(content);
+  if (!Array.isArray(fm.technique_ids) || fm.technique_ids.length === 0) return [];
+
+  return [...new Set(
+    fm.technique_ids
+      .map(id => String(id || '').trim().toUpperCase())
+      .filter(Boolean)
+  )];
+}
+
+function persistCaseStateTechniqueIds(caseStatePath, techniqueIds) {
+  if (!fs.existsSync(caseStatePath)) return;
+
+  const content = fs.readFileSync(caseStatePath, 'utf-8');
+  const fm = extractFrontmatter(content);
+  fm.technique_ids = [...new Set(
+    (techniqueIds || [])
+      .map(id => String(id || '').trim().toUpperCase())
+      .filter(Boolean)
+  )];
+  fs.writeFileSync(caseStatePath, spliceFrontmatter(content, fm), 'utf-8');
+}
+
+function readIndexedCaseTechniqueIds(db, slug) {
+  if (!db) return [];
+
+  const rows = db.prepare(`
+    SELECT ct.technique_id
+    FROM case_techniques ct
+    JOIN case_index ci ON ci.id = ct.case_id
+    WHERE ci.slug = ?
+    ORDER BY ct.technique_id
+  `).all(slug);
+
+  return rows.map(row => row.technique_id).filter(Boolean);
+}
+
+function readCaseTechniqueIds(caseDir, slug, db) {
+  const caseStatePath = path.join(caseDir, 'STATE.md');
+  let techniqueIds = readCaseStateTechniqueIds(caseStatePath);
+
+  if (techniqueIds.length === 0) {
+    techniqueIds = readIndexedCaseTechniqueIds(db, slug);
+  }
+
+  if (techniqueIds.length === 0) {
+    techniqueIds = readCaseArtifactTechniqueIds(caseDir);
+  }
+
+  return [...new Set(techniqueIds.map(id => String(id).trim().toUpperCase()).filter(Boolean))];
+}
+
+function cmdProgramRollup(cwd, raw) {
+  const roster = getCaseRoster(cwd);
+  const root = planningRoot(cwd);
+  const statePath = planningPaths(cwd).programState;
+
+  if (!fs.existsSync(statePath)) {
+    error('No program STATE.md found. Run new-program first.');
+  }
+
+  const allTechniques = new Set();
+  const today = new Date();
+  const STALE_DAYS = 14;
+  const events = [];
+  let caseDb = null;
+
+  if (openProgramDb) {
+    const dbPath = path.join(root, 'program.db');
+    if (fs.existsSync(dbPath)) {
+      try {
+        caseDb = openProgramDb(cwd);
+      } catch {
+        caseDb = null;
+      }
+    }
+  }
+
+  try {
+    // Enrich roster entries with technique data and stale detection
+    const enriched = roster.map(entry => {
+      const caseDir = path.join(root, 'cases', entry.slug);
+      const caseStatePath = path.join(caseDir, 'STATE.md');
+      const techniqueIds = readCaseTechniqueIds(caseDir, entry.slug, caseDb);
+
+      for (const t of techniqueIds) allTechniques.add(t);
+
+      // Determine stale status
+      let isStale = false;
+      if (entry.status === 'active') {
+        const activityDate = getCaseActivityDate(caseStatePath, entry);
+        if (activityDate) {
+          const diffDays = Math.floor((today - activityDate) / (1000 * 60 * 60 * 24));
+          if (diffDays > STALE_DAYS) isStale = true;
+        }
+      }
+
+      // Collect timeline events
+      if (entry.opened_at) {
+        events.push({ date: entry.opened_at, text: `Opened: ${entry.name}` });
+      }
+      if (entry.closed_at) {
+        events.push({ date: entry.closed_at, text: `Closed: ${entry.name}` });
+      }
+
+      const displayStatus = isStale ? 'stale' : entry.status;
+      return { ...entry, techniqueIds, isStale, displayStatus };
+    });
+
+    // Compute counts
+    const activeCount = enriched.filter(e => e.status === 'active' && !e.isStale).length;
+    const staleCount = enriched.filter(e => e.isStale).length;
+    const closedCount = enriched.filter(e => e.status === 'closed').length;
+    const uniqueCount = allTechniques.size;
+
+    // Build case table
+    const tableRows = enriched.map(e => {
+      const tc = e.techniqueIds.length || e.technique_count || '0';
+      return `| ${e.slug} | ${e.name} | ${e.displayStatus} | ${e.opened_at || '-'} | ${e.closed_at || '-'} | ${tc} |`;
+    }).join('\n');
+
+    // Build coverage gaps
+    let coverageSection;
+    if (allTechniques.size === 0) {
+      coverageSection = 'No technique data available.';
+    } else {
+      const sorted = [...allTechniques].sort();
+      coverageSection = `Techniques covered: ${sorted.join(', ')}`;
+    }
+
+    // Build timeline (last 10 events, chronological)
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    const timelineEvents = events.slice(-10);
+    const timelineSection = timelineEvents.length > 0
+      ? timelineEvents.map(e => `- ${e.date}: ${e.text}`).join('\n')
+      : 'No case events yet.';
+
+    // Generate rollup body
+    const rollupBody = `## Case Summary
+
+**Cases:** ${activeCount} active, ${closedCount} closed, ${staleCount} stale | **Techniques:** ${uniqueCount} unique across all cases
+
+| Slug | Name | Status | Opened | Closed | Techniques |
+|------|------|--------|--------|--------|------------|
+${tableRows}
+
+### Coverage Gaps
+
+${coverageSection}
+
+### Timeline
+
+${timelineSection}
+`;
+
+    // Write to program STATE.md: preserve frontmatter, replace body
+    const stateContent = fs.readFileSync(statePath, 'utf-8');
+    const fm = extractFrontmatter(stateContent);
+    const yamlStr = reconstructFrontmatter(fm);
+    const newContent = `---\n${yamlStr}\n---\n\n${rollupBody}`;
+    fs.writeFileSync(statePath, newContent, 'utf-8');
+
+    output({
+      success: true,
+      total: roster.length,
+      active: activeCount,
+      closed: closedCount,
+      stale: staleCount,
+      techniques: uniqueCount,
+    }, raw);
+  } finally {
+    if (caseDb) caseDb.close();
+  }
+}
+
+// ─── Migration commands ─────────────────────────────────────────────────────
+
+function cmdMigrateCase(cwd, slug, raw) {
+  // Validation
+  validateCaseSlug(slug, {
+    usageMessage: 'Case slug required. Usage: migrate-case <slug>',
+    invalidTraversalMessage: 'Invalid case slug for migration',
+  });
+
+  // Pre-flight checks
+  const baseDir = planningRoot(cwd);
+  const caseDir = path.join(baseDir, 'cases', slug);
+
+  if (fs.existsSync(caseDir)) {
+    error('Case directory already exists: cases/' + slug);
+  }
+  if (!fs.existsSync(path.join(baseDir, 'STATE.md'))) {
+    error('No program found. Run new-program first.');
+  }
+
+  // Artifact list (case-scoped, to be moved)
+  const toMove = [
+    { name: 'HUNTMAP.md', type: 'file' },
+    { name: 'HYPOTHESES.md', type: 'file' },
+    { name: 'SUCCESS_CRITERIA.md', type: 'file' },
+    { name: 'FINDINGS.md', type: 'file' },
+    { name: 'EVIDENCE_REVIEW.md', type: 'file' },
+    { name: 'phases', type: 'dir' },
+    { name: 'QUERIES', type: 'dir' },
+    { name: 'RECEIPTS', type: 'dir' },
+    { name: 'MANIFESTS', type: 'dir' },
+    { name: 'DETECTIONS', type: 'dir' },
+    { name: 'published', type: 'dir' },
+  ];
+
+  // Migration with rollback
+  fs.mkdirSync(caseDir, { recursive: true });
+  const filesMoved = [];
+  const rollbackMigration = (reason) => {
+    for (const name of filesMoved) {
+      try { fs.renameSync(path.join(caseDir, name), path.join(baseDir, name)); } catch (_e) { /* best effort */ }
+    }
+    try { fs.rmSync(caseDir, { recursive: true }); } catch (_e) { /* best effort */ }
+    error('Migration failed (rolled back): ' + reason);
+  };
+
+  const openedAt = new Date().toISOString().split('T')[0];
+  const caseTitle = titleizeSlug(slug);
+  try {
+    for (const item of toMove) {
+      const src = path.join(baseDir, item.name);
+      if (fs.existsSync(src)) {
+        const dest = path.join(caseDir, item.name);
+        fs.renameSync(src, dest);
+        filesMoved.push(item.name);
+      }
+    }
+
+    // Create case-level STATE.md
+    const caseStatePath = path.join(caseDir, 'STATE.md');
+    if (!fs.existsSync(caseStatePath)) {
+      const caseFm = {
+        title: caseTitle,
+        status: 'active',
+        opened_at: openedAt,
+        technique_ids: [],
+      };
+      const caseBody = buildCaseStateBody(slug, {
+        activeSignal: `${slug} migrated from flat .planning/ layout`,
+        currentFocus: 'Resume triage from migrated artifacts',
+        lastActivity: `Migrated ${openedAt}`,
+        scope: 'Review migrated artifacts and normalize any remaining case state for continued investigation.',
+      });
+      fs.writeFileSync(caseStatePath, buildStateDocument(caseFm, caseBody), 'utf-8');
+    }
+
+    const caseMissionPath = path.join(caseDir, 'MISSION.md');
+    if (!fs.existsSync(caseMissionPath)) {
+      const rootMissionPath = path.join(baseDir, 'MISSION.md');
+      const missionContext = fs.existsSync(rootMissionPath)
+        ? extractMissionContext(fs.readFileSync(rootMissionPath, 'utf-8'))
+        : '';
+      const signal = missionContext
+        ? `This case was migrated from the flat .planning/ layout.\n\nExisting mission context: ${missionContext}`
+        : 'This case was migrated from the flat .planning/ layout.';
+      const desiredOutcome = 'Resume the migrated investigation without losing existing context or artifacts.';
+      const scope = 'Review the migrated case artifacts, validate current hypotheses, and continue triage from the child case directory.';
+      fs.writeFileSync(caseMissionPath, buildCaseMissionContent(caseTitle, openedAt, { signal, desiredOutcome, scope }), 'utf-8');
+    }
+
+    // Update program roster
+    const techniqueCount = String(readCaseTechniqueIds(caseDir, slug, null).length);
+    addCaseToRoster(cwd, {
+      slug,
+      name: caseTitle,
+      status: 'active',
+      opened_at: openedAt,
+      technique_count: techniqueCount,
+    });
+  } catch (err) {
+    rollbackMigration(err.message);
+    return;
+  }
+
+  // Set active case pointer
+  try { setActiveCase(cwd, slug); } catch (_e) { /* non-fatal */ }
+
+  // Output result
+  output({
+    success: true,
+    slug,
+    case_dir: toPosixPath(path.relative(cwd, caseDir)),
+    files_moved: filesMoved,
+    message: 'Migrated to cases/' + slug + ' (' + filesMoved.length + ' artifacts moved)',
+  }, raw);
+}
+
 module.exports = {
   cmdGenerateSlug,
   cmdCurrentTimestamp,
@@ -3416,4 +4324,11 @@ module.exports = {
   cmdConnectorsInit,
   escapeJsString,
   renderTemplate,
+  cmdCaseNew,
+  cmdCaseList,
+  cmdCaseClose,
+  cmdCaseStatus,
+  cmdCaseSearch,
+  cmdProgramRollup,
+  cmdMigrateCase,
 };

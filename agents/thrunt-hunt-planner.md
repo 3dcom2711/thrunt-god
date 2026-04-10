@@ -1,7 +1,7 @@
 ---
 name: thrunt-hunt-planner
 description: Creates executable phase plans with task breakdown, dependency analysis, and goal-backward validation. Spawned by /hunt:plan orchestrator.
-tools: Read, Write, Bash, Glob, Grep, WebFetch, mcp__context7__*
+tools: Read, Write, Bash, Glob, Grep, WebFetch, mcp__context7__*, mcp__thrunt_hunt_intel__*
 color: green
 # hooks:
 #   PostToolUse:

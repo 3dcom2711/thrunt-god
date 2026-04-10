@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const { skipIfNoDocker, waitForHealthy, ELASTIC_URL } = require('./helpers.cjs');
+const { skipIfNoDocker, waitForHealthy, ELASTIC_URL, SEARCH_BACKEND_READY_TIMEOUT_MS } = require('./helpers.cjs');
 const { seedElastic } = require('./fixtures/seed-data.cjs');
 
 // is_partial behavior validated in unit tests (connectors-siem.test.cjs);
@@ -15,7 +15,7 @@ describe('elastic integration', async (t) => {
   let queryResult;
 
   test('seeds Elasticsearch and confirms ES|QL readiness', async () => {
-    await waitForHealthy(ELASTIC_URL, { timeout: 60000 });
+    await waitForHealthy(ELASTIC_URL, { timeout: SEARCH_BACKEND_READY_TIMEOUT_MS });
     seedResult = await seedElastic(ELASTIC_URL);
     assert.ok(seedResult.indexed >= 3, `Expected at least 3 indexed documents, got ${seedResult.indexed}`);
   });

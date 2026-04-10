@@ -31,6 +31,10 @@ const {
   findProjectRoot,
   detectSubRepos,
   planningPaths,
+  planningDir,
+  getActiveCase,
+  setActiveCase,
+  resolveHuntContext,
 } = require('../thrunt-god/bin/lib/core.cjs');
 
 // ─── loadConfig ────────────────────────────────────────────────────────────────
@@ -191,6 +195,175 @@ describe('planningPaths', () => {
     assert.strictEqual(paths.receipts, path.join(wsRoot, 'RECEIPTS'));
     assert.strictEqual(paths.mission, path.join(tmpDir, '.planning', 'MISSION.md'));
     assert.strictEqual(paths.environmentMap, path.join(tmpDir, '.planning', 'environment', 'ENVIRONMENT.md'));
+  });
+});
+
+// ─── planningPaths / planningDir case-scoped resolution ─────────────────────
+
+describe('planningPaths case-scoped resolution', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('planningPaths(tmpDir, { case: "alpha-apt" }) returns case-scoped paths under .planning/cases/alpha-apt/', () => {
+    const paths = planningPaths(tmpDir, { case: 'alpha-apt' });
+    const caseRoot = path.join(tmpDir, '.planning', 'cases', 'alpha-apt');
+
+    assert.strictEqual(paths.planning, caseRoot);
+    assert.strictEqual(paths.huntmap, path.join(caseRoot, 'HUNTMAP.md'));
+    assert.strictEqual(paths.state, path.join(caseRoot, 'STATE.md'));
+    assert.strictEqual(paths.hypotheses, path.join(caseRoot, 'HYPOTHESES.md'));
+    assert.strictEqual(paths.successCriteria, path.join(caseRoot, 'SUCCESS_CRITERIA.md'));
+    assert.strictEqual(paths.findings, path.join(caseRoot, 'FINDINGS.md'));
+    assert.strictEqual(paths.evidenceReview, path.join(caseRoot, 'EVIDENCE_REVIEW.md'));
+    assert.strictEqual(paths.queries, path.join(caseRoot, 'QUERIES'));
+    assert.strictEqual(paths.receipts, path.join(caseRoot, 'RECEIPTS'));
+    assert.strictEqual(paths.manifests, path.join(caseRoot, 'MANIFESTS'));
+    assert.strictEqual(paths.detections, path.join(caseRoot, 'DETECTIONS'));
+    assert.strictEqual(paths.published, path.join(caseRoot, 'published'));
+    assert.strictEqual(paths.phases, path.join(caseRoot, 'phases'));
+  });
+
+  test('planningPaths(tmpDir, { case: "alpha-apt" }) still returns program-root for shared artifacts', () => {
+    const paths = planningPaths(tmpDir, { case: 'alpha-apt' });
+    const root = path.join(tmpDir, '.planning');
+
+    assert.strictEqual(paths.mission, path.join(root, 'MISSION.md'));
+    assert.strictEqual(paths.config, path.join(root, 'config.json'));
+    assert.strictEqual(paths.environment, path.join(root, 'environment'));
+    assert.strictEqual(paths.environmentMap, path.join(root, 'environment', 'ENVIRONMENT.md'));
+  });
+
+  test('planningPaths(tmpDir, { case: "slug" }).programState always equals path.join(tmpDir, ".planning", "STATE.md")', () => {
+    const paths = planningPaths(tmpDir, { case: 'slug' });
+    assert.strictEqual(paths.programState, path.join(tmpDir, '.planning', 'STATE.md'));
+  });
+
+  test('planningPaths(tmpDir, { case: "slug" }).cases always equals path.join(tmpDir, ".planning", "cases")', () => {
+    const paths = planningPaths(tmpDir, { case: 'slug' });
+    assert.strictEqual(paths.cases, path.join(tmpDir, '.planning', 'cases'));
+  });
+
+  test('planningPaths(tmpDir).programState equals planningPaths(tmpDir).state in flat mode', () => {
+    const paths = planningPaths(tmpDir);
+    assert.strictEqual(paths.programState, paths.state);
+  });
+
+  test('planningPaths(tmpDir, { workstream: "alpha" }) works the same as planningPaths(tmpDir, "alpha")', () => {
+    const pathsObj = planningPaths(tmpDir, { workstream: 'alpha' });
+    const pathsStr = planningPaths(tmpDir, 'alpha');
+
+    assert.strictEqual(pathsObj.planning, pathsStr.planning);
+    assert.strictEqual(pathsObj.huntmap, pathsStr.huntmap);
+    assert.strictEqual(pathsObj.state, pathsStr.state);
+    assert.strictEqual(pathsObj.mission, pathsStr.mission);
+  });
+
+  test('planningPaths(tmpDir, { case: "foo", workstream: "bar" }) uses case (case takes precedence)', () => {
+    const paths = planningPaths(tmpDir, { case: 'foo', workstream: 'bar' });
+    const caseRoot = path.join(tmpDir, '.planning', 'cases', 'foo');
+
+    assert.strictEqual(paths.planning, caseRoot);
+    assert.strictEqual(paths.huntmap, path.join(caseRoot, 'HUNTMAP.md'));
+  });
+
+  test('planningDir(tmpDir, { case: "alpha-apt" }) returns path.join(tmpDir, ".planning", "cases", "alpha-apt")', () => {
+    assert.strictEqual(
+      planningDir(tmpDir, { case: 'alpha-apt' }),
+      path.join(tmpDir, '.planning', 'cases', 'alpha-apt')
+    );
+  });
+
+  test('planningDir(tmpDir, "alpha") still returns workstream path (backward compat)', () => {
+    assert.strictEqual(
+      planningDir(tmpDir, 'alpha'),
+      path.join(tmpDir, '.planning', 'workstreams', 'alpha')
+    );
+  });
+});
+
+// ─── getActiveCase / setActiveCase / resolveHuntContext ──────────────────────
+
+describe('getActiveCase / setActiveCase / resolveHuntContext', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('getActiveCase returns null when .active-case file does not exist', () => {
+    assert.strictEqual(getActiveCase(tmpDir), null);
+  });
+
+  test('getActiveCase returns slug when .active-case contains valid slug and cases/slug/ directory exists', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'cases', 'alpha-apt'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'alpha-apt\n', 'utf-8');
+    assert.strictEqual(getActiveCase(tmpDir), 'alpha-apt');
+  });
+
+  test('getActiveCase returns null when .active-case contains slug but cases/slug/ directory does NOT exist', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'nonexistent\n', 'utf-8');
+    assert.strictEqual(getActiveCase(tmpDir), null);
+  });
+
+  test('getActiveCase returns null when .active-case contains invalid characters', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), '../etc\n', 'utf-8');
+    assert.strictEqual(getActiveCase(tmpDir), null);
+  });
+
+  test('setActiveCase(cwd, "alpha-apt") creates .planning/.active-case with content "alpha-apt\\n"', () => {
+    setActiveCase(tmpDir, 'alpha-apt');
+    const content = fs.readFileSync(path.join(tmpDir, '.planning', '.active-case'), 'utf-8');
+    assert.strictEqual(content, 'alpha-apt\n');
+  });
+
+  test('setActiveCase(cwd, null) removes .planning/.active-case file', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'alpha-apt\n', 'utf-8');
+    setActiveCase(tmpDir, null);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', '.active-case')));
+  });
+
+  test('setActiveCase(cwd, "../escape") throws Error with message containing "Invalid case slug"', () => {
+    assert.throws(
+      () => setActiveCase(tmpDir, '../escape'),
+      (err) => err instanceof Error && err.message.includes('Invalid case slug')
+    );
+  });
+
+  test('resolveHuntContext returns { workstream: null, case: null } when no pointers exist', () => {
+    const ctx = resolveHuntContext(tmpDir);
+    assert.strictEqual(ctx.workstream, null);
+    assert.strictEqual(ctx.case, null);
+  });
+
+  test('resolveHuntContext returns { workstream: null, case: "alpha-apt" } when only .active-case exists', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'cases', 'alpha-apt'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', '.active-case'), 'alpha-apt\n', 'utf-8');
+    const ctx = resolveHuntContext(tmpDir);
+    assert.strictEqual(ctx.workstream, null);
+    assert.strictEqual(ctx.case, 'alpha-apt');
+  });
+
+  test('planningDir auto-resolves THRUNT_CASE env var when no explicit case argument is provided', () => {
+    const orig = process.env.THRUNT_CASE;
+    try {
+      process.env.THRUNT_CASE = 'env-case';
+      const result = planningDir(tmpDir);
+      assert.strictEqual(result, path.join(tmpDir, '.planning', 'cases', 'env-case'));
+    } finally {
+      if (orig === undefined) delete process.env.THRUNT_CASE;
+      else process.env.THRUNT_CASE = orig;
+    }
   });
 });
 

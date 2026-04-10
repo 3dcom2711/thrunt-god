@@ -1,7 +1,7 @@
 ---
 name: thrunt-query-writer
 description: Researches how to implement a phase before planning. Produces RESEARCH.md consumed by thrunt-hunt-planner. Spawned by /hunt:plan orchestrator.
-tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*
+tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__thrunt_hunt_intel__*
 color: cyan
 # hooks:
 #   PostToolUse:

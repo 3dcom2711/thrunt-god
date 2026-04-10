@@ -21,16 +21,17 @@ export interface ArtifactSelection {
 export function inferSelectableArtifactType(
   artifactId: string
 ): SelectableArtifactType | null {
-  if (artifactId === 'MISSION') {
+  const key = artifactId.split('/').pop() ?? artifactId;
+  if (key === 'MISSION') {
     return 'mission';
   }
-  if (artifactId.startsWith('HYP-')) {
+  if (key.startsWith('HYP-')) {
     return 'hypothesis';
   }
-  if (artifactId.startsWith('QRY-')) {
+  if (key.startsWith('QRY-')) {
     return 'query';
   }
-  if (artifactId.startsWith('RCT-')) {
+  if (key.startsWith('RCT-')) {
     return 'receipt';
   }
   return null;

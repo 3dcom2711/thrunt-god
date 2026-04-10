@@ -1,0 +1,24 @@
+{
+  "name": "@thrunt/mcp",
+  "version": "0.3.1",
+  "description": "MCP server for ATT&CK intelligence, detection coverage, knowledge graph, and hunt workflow prompts",
+  "bin": {
+    "thrunt-mcp": "bin/server.cjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "data"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.8.0",
+    "js-yaml": "^4.1.1",
+    "smol-toml": "^1.6.1",
+    "zod": "^3.23.0"
+  },
+  "license": "MIT"
+}

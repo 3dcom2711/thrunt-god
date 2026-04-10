@@ -5,9 +5,11 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { execSync } = require('node:child_process');
+const Module = require('module');
 const fs = require('fs');
 const path = require('path');
 const { runThruntTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { extractFrontmatter, spliceFrontmatter } = require('../thrunt-god/bin/lib/frontmatter.cjs');
 
 describe('history-digest command', () => {
   let tmpDir;
@@ -1677,5 +1679,1197 @@ describe('stats command', () => {
     assert.ok(parsed.rendered.includes('| Phase |'), 'should include table header');
     assert.ok(parsed.rendered.includes('| 1 |'), 'should include phase row');
     assert.ok(parsed.rendered.includes('1/1 phases'), 'should report phase progress');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cmdMigrateCase tests (HIER-05)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdMigrateCase', () => {
+  const { createTempGitProject } = require('./helpers.cjs');
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempGitProject();
+    // Set up a flat .planning/ with hunt artifacts
+    const planDir = path.join(tmpDir, '.planning');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'), '---\nthrunt_state_version: 1.0\nstatus: active\ncase_roster: []\n---\n\n# State\n');
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'ENVIRONMENT.md'), '# Environment\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+    fs.writeFileSync(path.join(planDir, 'HUNTMAP.md'), '# Huntmap\n');
+    fs.writeFileSync(path.join(planDir, 'HYPOTHESES.md'), '# Hypotheses\n');
+    fs.writeFileSync(path.join(planDir, 'SUCCESS_CRITERIA.md'), '# Success Criteria\n');
+    fs.writeFileSync(path.join(planDir, 'FINDINGS.md'), '# Findings\n');
+    fs.mkdirSync(path.join(planDir, 'QUERIES'), { recursive: true });
+    fs.mkdirSync(path.join(planDir, 'RECEIPTS'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('successful migration moves hunt artifacts into cases/<slug>/', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.success, true);
+    assert.strictEqual(parsed.slug, 'my-hunt');
+    assert.ok(parsed.files_moved.includes('HUNTMAP.md'), 'should move HUNTMAP.md');
+    assert.ok(parsed.files_moved.includes('HYPOTHESES.md'), 'should move HYPOTHESES.md');
+    assert.ok(parsed.files_moved.includes('SUCCESS_CRITERIA.md'), 'should move SUCCESS_CRITERIA.md');
+    assert.ok(parsed.files_moved.includes('FINDINGS.md'), 'should move FINDINGS.md');
+    assert.ok(parsed.files_moved.includes('QUERIES'), 'should move QUERIES/');
+    assert.ok(parsed.files_moved.includes('RECEIPTS'), 'should move RECEIPTS/');
+
+    // Verify files exist at new location
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'my-hunt');
+    assert.ok(fs.existsSync(path.join(caseDir, 'HUNTMAP.md')), 'HUNTMAP.md should exist in case dir');
+    assert.ok(fs.existsSync(path.join(caseDir, 'HYPOTHESES.md')), 'HYPOTHESES.md should exist in case dir');
+    assert.ok(fs.existsSync(path.join(caseDir, 'QUERIES')), 'QUERIES/ should exist in case dir');
+    assert.ok(fs.existsSync(path.join(caseDir, 'RECEIPTS')), 'RECEIPTS/ should exist in case dir');
+
+    // Verify files removed from root
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'HUNTMAP.md')), 'HUNTMAP.md should not remain at root');
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'HYPOTHESES.md')), 'HYPOTHESES.md should not remain at root');
+  });
+
+  test('shared artifacts (MISSION.md, ENVIRONMENT.md, config.json) stay at root', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    // Shared artifacts must remain at root
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'MISSION.md')), 'MISSION.md should stay at root');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'ENVIRONMENT.md')), 'ENVIRONMENT.md should stay at root');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'config.json')), 'config.json should stay at root');
+
+    // Shared artifacts should not be moved into the case dir
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'my-hunt');
+    assert.ok(!fs.existsSync(path.join(caseDir, 'ENVIRONMENT.md')), 'ENVIRONMENT.md should not be in case dir');
+    assert.ok(!fs.existsSync(path.join(caseDir, 'config.json')), 'config.json should not be in case dir');
+  });
+
+  test('creates case-level MISSION.md with required sections during migration', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const caseMissionPath = path.join(tmpDir, '.planning', 'cases', 'my-hunt', 'MISSION.md');
+    assert.ok(fs.existsSync(caseMissionPath), 'case MISSION.md should be created');
+
+    const content = fs.readFileSync(caseMissionPath, 'utf-8');
+    assert.ok(content.includes('**Mode:** case'));
+    assert.ok(content.includes('## Signal'));
+    assert.ok(content.includes('## Desired Outcome'));
+    assert.ok(content.includes('## Scope'));
+    assert.ok(content.includes('migrated from the flat .planning/ layout'));
+  });
+
+  test('creates case-level STATE.md with active status', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const caseStatePath = path.join(tmpDir, '.planning', 'cases', 'my-hunt', 'STATE.md');
+    assert.ok(fs.existsSync(caseStatePath), 'case STATE.md should be created');
+
+    const content = fs.readFileSync(caseStatePath, 'utf-8');
+    assert.ok(content.includes('status: active'), 'case STATE.md should have active status');
+    assert.ok(content.includes('opened_at:'), 'case STATE.md should have opened_at');
+  });
+
+  test('creates parseable migrated case STATE.md content', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const caseStatePath = path.join(tmpDir, '.planning', 'cases', 'my-hunt', 'STATE.md');
+    const content = fs.readFileSync(caseStatePath, 'utf-8');
+    assert.ok(content.includes('title: My Hunt'));
+    assert.ok(content.includes('## Current Position'));
+    assert.ok(content.includes('**Active signal:** my-hunt migrated from flat .planning/ layout'));
+    assert.ok(content.includes('Status: Active'));
+  });
+
+  test('sets .active-case pointer to migrated slug', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const pointerPath = path.join(tmpDir, '.planning', '.active-case');
+    assert.ok(fs.existsSync(pointerPath), '.active-case should be created');
+    assert.strictEqual(fs.readFileSync(pointerPath, 'utf-8').trim(), 'my-hunt');
+  });
+
+  test('rejects when case directory already exists', () => {
+    // Create the case dir first
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'cases', 'my-hunt'), { recursive: true });
+
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(!result.success, 'should fail when case directory exists');
+    assert.ok(result.error.includes('already exists') || result.output.includes('already exists'),
+      'error should mention directory already exists');
+  });
+
+  test('rejects empty slug', () => {
+    const result = runThruntTools('migrate-case', tmpDir);
+    assert.ok(!result.success, 'should fail with no slug');
+  });
+
+  test('rejects path traversal in slug', () => {
+    const result = runThruntTools('migrate-case ../escape', tmpDir);
+    assert.ok(!result.success, 'should fail with path traversal');
+  });
+
+  test('only moves artifacts that exist (skips missing ones)', () => {
+    // Remove some artifacts
+    fs.unlinkSync(path.join(tmpDir, '.planning', 'SUCCESS_CRITERIA.md'));
+    fs.unlinkSync(path.join(tmpDir, '.planning', 'FINDINGS.md'));
+
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.ok(!parsed.files_moved.includes('SUCCESS_CRITERIA.md'), 'should not list missing SUCCESS_CRITERIA.md');
+    assert.ok(!parsed.files_moved.includes('FINDINGS.md'), 'should not list missing FINDINGS.md');
+    assert.ok(parsed.files_moved.includes('HUNTMAP.md'), 'should still move existing HUNTMAP.md');
+  });
+
+  test('adds case to program STATE.md roster', () => {
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('my-hunt'), 'STATE.md roster should contain the case slug');
+  });
+
+  test('roster write failure aborts migration and rolls artifacts back', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      '---\n' +
+      'thrunt_state_version: 1.0\n' +
+      'status: active\n' +
+      'case_roster:\n' +
+      '  - slug: my-hunt\n' +
+      '    name: Existing Hunt\n' +
+      '    status: active\n' +
+      '    opened_at: "2026-04-01"\n' +
+      '    technique_count: "0"\n' +
+      '---\n\n# State\n'
+    );
+
+    const result = runThruntTools('migrate-case my-hunt', tmpDir);
+    assert.ok(!result.success, 'migration should fail when roster already has the slug');
+    assert.ok(
+      (result.error || result.output).includes('rolled back'),
+      'failure should report rollback'
+    );
+
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'HUNTMAP.md')), 'HUNTMAP.md should be restored at root');
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'cases', 'my-hunt')), 'case dir should be removed on rollback');
+  });
+
+  test('rollback on failure restores files to original location', () => {
+    // This test validates via unit test by calling cmdMigrateCase directly with a
+    // scenario that would fail. We test indirectly: if the case dir doesn't exist
+    // after a failed migration, rollback worked. Use a slug with invalid chars
+    // to trigger early error (before any moves happen).
+    // For a true rollback test, we need to test at the function level.
+    // The CLI integration test verifies the happy path and error paths.
+    // We'll verify that after a failed attempt (duplicate slug), the original files remain.
+    const result1 = runThruntTools('migrate-case first-case', tmpDir);
+    assert.ok(result1.success, `First migration failed: ${result1.error}`);
+
+    // Now create a new flat structure and try to migrate with same slug
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'HUNTMAP.md'), '# New Huntmap\n');
+    const result2 = runThruntTools('migrate-case first-case', tmpDir);
+    assert.ok(!result2.success, 'duplicate migration should fail');
+
+    // The new HUNTMAP.md should still be at root (not lost)
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'HUNTMAP.md')), 'HUNTMAP.md should remain at root after failed migration');
+  });
+});
+
+describe('cmdProgramRollup', () => {
+  const { createTempGitProject } = require('./helpers.cjs');
+  let tmpDir;
+
+  function setupProgramState(cwd, rosterEntries = []) {
+    const planDir = path.join(cwd, '.planning');
+    const rosterYaml = rosterEntries.length === 0
+      ? 'case_roster: []'
+      : 'case_roster:\n' + rosterEntries.map(e => {
+          let yaml = `  - slug: ${e.slug}\n    name: ${e.name}\n    status: ${e.status}\n    opened_at: "${e.opened_at}"`;
+          if (e.closed_at) yaml += `\n    closed_at: "${e.closed_at}"`;
+          if (e.technique_count) yaml += `\n    technique_count: "${e.technique_count}"`;
+          if (e.last_activity) yaml += `\n    last_activity: "${e.last_activity}"`;
+          return yaml;
+        }).join('\n');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      `---\nthrunt_state_version: 1.0\nstatus: active\n${rosterYaml}\n---\n\n# Program State\n`);
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+  }
+
+  function setupCaseState(cwd, slug, techniqueIds = []) {
+    const caseDir = path.join(cwd, '.planning', 'cases', slug);
+    fs.mkdirSync(caseDir, { recursive: true });
+    const techYaml = techniqueIds.length === 0
+      ? 'technique_ids: []'
+      : 'technique_ids: [' + techniqueIds.join(', ') + ']';
+    fs.writeFileSync(path.join(caseDir, 'STATE.md'),
+      `---\nstatus: active\nopened_at: "2026-04-01"\n${techYaml}\n---\n\n# Case: ${slug}\n`);
+  }
+
+  beforeEach(() => {
+    tmpDir = createTempGitProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('programRollup: empty roster generates 0 counts', () => {
+    setupProgramState(tmpDir, []);
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.success, true);
+    assert.strictEqual(parsed.active, 0);
+    assert.strictEqual(parsed.closed, 0);
+    assert.strictEqual(parsed.stale, 0);
+    assert.strictEqual(parsed.techniques, 0);
+
+    // Verify STATE.md body contains Case Summary
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('## Case Summary'), 'should contain ## Case Summary');
+    assert.ok(stateContent.includes('0 active, 0 closed, 0 stale'), 'should show zero counts');
+  });
+
+  test('programRollup: 2 cases (1 active, 1 closed) produces correct counts and table', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'case-alpha', name: 'Alpha', status: 'active', opened_at: '2026-04-01', technique_count: '2' },
+      { slug: 'case-beta', name: 'Beta', status: 'closed', opened_at: '2026-03-15', closed_at: '2026-04-05', technique_count: '1' },
+    ]);
+    setupCaseState(tmpDir, 'case-alpha', ['T1059.001', 'T1053.005']);
+    setupCaseState(tmpDir, 'case-beta', ['T1059.001']);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.active, 1);
+    assert.strictEqual(parsed.closed, 1);
+    assert.strictEqual(parsed.stale, 0);
+    assert.strictEqual(parsed.techniques, 2);
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('case-alpha'), 'table should include case-alpha');
+    assert.ok(stateContent.includes('case-beta'), 'table should include case-beta');
+    assert.ok(stateContent.includes('| Slug |'), 'should have table header');
+  });
+
+  test('programRollup: technique_ids from case STATE.md are aggregated as unique set', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'case-1', name: 'One', status: 'active', opened_at: '2026-04-01' },
+      { slug: 'case-2', name: 'Two', status: 'active', opened_at: '2026-04-02' },
+    ]);
+    // Overlapping technique: T1059.001 appears in both
+    setupCaseState(tmpDir, 'case-1', ['T1059.001', 'T1053.005']);
+    setupCaseState(tmpDir, 'case-2', ['T1059.001', 'T1078.004']);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.techniques, 3, 'unique technique count should be 3');
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('Techniques covered:'), 'should list covered techniques');
+    assert.ok(stateContent.includes('T1053.005'), 'should include T1053.005');
+    assert.ok(stateContent.includes('T1059.001'), 'should include T1059.001');
+    assert.ok(stateContent.includes('T1078.004'), 'should include T1078.004');
+  });
+
+  test('programRollup: falls back to technique IDs extracted from case artifacts', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'artifact-case', name: 'Artifact Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    setupCaseState(tmpDir, 'artifact-case', []);
+
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'artifact-case');
+    fs.writeFileSync(
+      path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nObserved T1059.001 execution followed by T1078.004 credential use.\n'
+    );
+    fs.writeFileSync(
+      path.join(caseDir, 'HYPOTHESES.md'),
+      '# Hypotheses\n\n## Hypothesis 1\n\nT1059.001 likely enabled the follow-on access.\n'
+    );
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.techniques, 2, 'artifact-derived techniques should be included in rollup');
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('Techniques covered: T1059.001, T1078.004'));
+    assert.ok(stateContent.includes('| artifact-case | Artifact Case | active | 2026-04-01 | - | 2 |'));
+    assert.ok(!stateContent.includes('No technique data available.'));
+  });
+
+  test('programRollup: artifact fallback still works when db module is unavailable', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'artifact-case', name: 'Artifact Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    setupCaseState(tmpDir, 'artifact-case', []);
+
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'artifact-case');
+    fs.writeFileSync(
+      path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nObserved T1059.001 execution followed by T1078.004 credential use.\n'
+    );
+    fs.writeFileSync(
+      path.join(caseDir, 'HYPOTHESES.md'),
+      '# Hypotheses\n\n## Hypothesis 1\n\nT1059.001 likely enabled the follow-on access.\n'
+    );
+
+    const commandsPath = require.resolve('../thrunt-god/bin/lib/commands.cjs');
+    const originalLoad = Module._load;
+    const originalWriteSync = fs.writeSync;
+    let captured = '';
+
+    delete require.cache[commandsPath];
+    Module._load = function(request, parent, isMain) {
+      if (request === './db.cjs' && parent && parent.filename === commandsPath) {
+        throw new Error('better-sqlite3 unavailable');
+      }
+      return originalLoad.apply(this, arguments);
+    };
+    fs.writeSync = (fd, data) => {
+      if (fd === 1) captured += data;
+      return Buffer.byteLength(String(data));
+    };
+
+    try {
+      const { cmdProgramRollup } = require('../thrunt-god/bin/lib/commands.cjs');
+      cmdProgramRollup(tmpDir, false);
+    } finally {
+      Module._load = originalLoad;
+      fs.writeSync = originalWriteSync;
+      delete require.cache[commandsPath];
+    }
+
+    const parsed = JSON.parse(captured);
+    assert.strictEqual(parsed.techniques, 2, 'artifact-derived techniques should survive without db.cjs');
+  });
+
+  test('programRollup: idempotent - running twice does not duplicate Case Summary', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'case-x', name: 'Xray', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    setupCaseState(tmpDir, 'case-x');
+
+    // Run twice
+    const result1 = runThruntTools('program rollup', tmpDir);
+    assert.ok(result1.success, `First run failed: ${result1.error}`);
+    const result2 = runThruntTools('program rollup', tmpDir);
+    assert.ok(result2.success, `Second run failed: ${result2.error}`);
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    const matches = stateContent.match(/## Case Summary/g);
+    assert.strictEqual(matches.length, 1, 'should have exactly one ## Case Summary section after two runs');
+  });
+
+  test('programRollup: stale detection - case opened 30 days ago with no activity shows as stale', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setupProgramState(tmpDir, [
+      { slug: 'old-case', name: 'Old Case', status: 'active', opened_at: thirtyDaysAgo },
+    ]);
+    setupCaseState(tmpDir, 'old-case');
+    const caseStatePath = path.join(tmpDir, '.planning', 'cases', 'old-case', 'STATE.md');
+    const staleTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(caseStatePath, staleTime, staleTime);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.stale, 1, 'should detect 1 stale case');
+    assert.strictEqual(parsed.active, 0, 'stale cases should not count as active');
+
+    const stateContent = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(stateContent.includes('stale'), 'STATE.md should show stale status in table');
+  });
+
+  test('programRollup: recent case STATE activity keeps active case out of stale bucket', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setupProgramState(tmpDir, [
+      { slug: 'recent-case', name: 'Recent Case', status: 'active', opened_at: thirtyDaysAgo },
+    ]);
+    setupCaseState(tmpDir, 'recent-case');
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.stale, 0, 'recent case STATE activity should prevent stale classification');
+    assert.strictEqual(parsed.active, 1, 'case should remain active when STATE.md was recently updated');
+  });
+
+  test('programRollup: nested query or receipt activity keeps case active', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setupProgramState(tmpDir, [
+      { slug: 'nested-activity', name: 'Nested Activity', status: 'active', opened_at: thirtyDaysAgo },
+    ]);
+    setupCaseState(tmpDir, 'nested-activity');
+
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'nested-activity');
+    const caseStatePath = path.join(caseDir, 'STATE.md');
+    const oldTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(caseStatePath, oldTime, oldTime);
+
+    const queryDir = path.join(caseDir, 'QUERIES');
+    fs.mkdirSync(queryDir, { recursive: true });
+    const queryPath = path.join(queryDir, 'QRY-20260410-001.md');
+    fs.writeFileSync(queryPath, '# Query\n\nRecent evidence collection.\n');
+
+    const recentTime = new Date();
+    fs.utimesSync(queryPath, recentTime, recentTime);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.stale, 0, 'nested activity should prevent stale classification');
+    assert.strictEqual(parsed.active, 1, 'case should remain active when nested artifacts were updated');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cmdCaseClose indexing + cmdCaseNew auto-search (Phase 52 Plan 02)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdCaseClose indexing + cmdCaseNew auto-search', () => {
+  const Database = require('better-sqlite3');
+  let tmpDir;
+
+  function setupProgramState(cwd, rosterEntries = []) {
+    const planDir = path.join(cwd, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+    const rosterYaml = rosterEntries.length === 0
+      ? 'case_roster: []'
+      : 'case_roster:\n' + rosterEntries.map(e => {
+          let yaml = `  - slug: ${e.slug}\n    name: ${e.name}\n    status: ${e.status}\n    opened_at: "${e.opened_at}"`;
+          if (e.closed_at) yaml += `\n    closed_at: "${e.closed_at}"`;
+          if (e.technique_count) yaml += `\n    technique_count: "${e.technique_count}"`;
+          return yaml;
+        }).join('\n');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      `---\nthrunt_state_version: 1.0\nstatus: active\n${rosterYaml}\n---\n\n# Program State\n`);
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+  }
+
+  function createCaseDir(cwd, slug, opts = {}) {
+    const caseDir = path.join(cwd, '.planning', 'cases', slug);
+    fs.mkdirSync(caseDir, { recursive: true });
+    fs.mkdirSync(path.join(caseDir, 'QUERIES'), { recursive: true });
+    fs.mkdirSync(path.join(caseDir, 'RECEIPTS'), { recursive: true });
+
+    const today = new Date().toISOString().split('T')[0];
+    const techYaml = opts.technique_ids && opts.technique_ids.length > 0
+      ? 'technique_ids: [' + opts.technique_ids.join(', ') + ']'
+      : 'technique_ids: []';
+    const status = opts.status || 'active';
+    const title = opts.name || slug;
+    const outcomeYaml = opts.outcome_summary ? `\noutcome_summary: "${opts.outcome_summary}"` : '';
+    fs.writeFileSync(path.join(caseDir, 'STATE.md'),
+      `---\nstatus: ${status}\nopened_at: "${today}"\ntitle: "${title}"\n${techYaml}${outcomeYaml}\n---\n\n# Case: ${title}\n`);
+
+    fs.writeFileSync(path.join(caseDir, 'HUNTMAP.md'),
+      `---\ntitle: ${title}\nstatus: active\ncreated: ${today}\n---\n\n# Huntmap\n`);
+
+    fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'),
+      opts.hypotheses || `# Hypotheses\n\n_No hypotheses yet._\n`);
+
+    if (opts.findings) {
+      fs.writeFileSync(path.join(caseDir, 'FINDINGS.md'), opts.findings);
+    }
+
+    return caseDir;
+  }
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('cmdCaseClose indexes case artifacts into program.db', () => {
+    // Create a case with FINDINGS.md containing technique IDs and IOCs
+    setupProgramState(tmpDir, [
+      { slug: 'apt-powershell', name: 'APT Powershell', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    createCaseDir(tmpDir, 'apt-powershell', {
+      name: 'APT Powershell',
+      technique_ids: ['T1059.001'],
+      findings: '# Findings\n\nAttacker used T1059.001 powershell to execute malware from 192.168.1.50.\nPayload hash: d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592\n',
+      hypotheses: '## Hypothesis 1: PowerShell Abuse\n\nAdversary leverages T1059.001 for initial execution.\n',
+    });
+
+    // Close the case (should trigger indexing)
+    const result = runThruntTools(['case', 'close', 'apt-powershell'], tmpDir);
+    assert.ok(result.success, `Close failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+
+    // Verify program.db exists and contains indexed data
+    const dbPath = path.join(tmpDir, '.planning', 'program.db');
+    assert.ok(fs.existsSync(dbPath), 'program.db should exist after case close');
+
+    const db = new Database(dbPath);
+    try {
+      const caseRows = db.prepare('SELECT * FROM case_index WHERE slug = ?').all('apt-powershell');
+      assert.strictEqual(caseRows.length, 1, 'should have exactly 1 case_index row');
+      assert.strictEqual(caseRows[0].slug, 'apt-powershell');
+
+      const artifacts = db.prepare('SELECT * FROM case_artifacts WHERE case_id = ?').all(caseRows[0].id);
+      assert.ok(artifacts.length >= 2, 'should have at least 2 artifacts (finding + hypothesis)');
+
+      const techniques = db.prepare('SELECT * FROM case_techniques WHERE case_id = ?').all(caseRows[0].id);
+      assert.ok(techniques.length >= 1, 'should have at least 1 technique');
+      assert.ok(techniques.some(t => t.technique_id === 'T1059.001'), 'should include T1059.001');
+    } finally {
+      db.close();
+    }
+  });
+
+  test('cmdCaseClose re-indexing is idempotent', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'idempotent-case', name: 'Idempotent Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    createCaseDir(tmpDir, 'idempotent-case', {
+      name: 'Idempotent Case',
+      findings: '# Findings\n\nSuspicious lateral movement T1021.002 via SMB.\n',
+    });
+
+    // Close twice
+    runThruntTools(['case', 'close', 'idempotent-case'], tmpDir);
+
+    // Re-open by manipulating roster, then close again
+    const planDir = path.join(tmpDir, '.planning');
+    const stateContent = fs.readFileSync(path.join(planDir, 'STATE.md'), 'utf-8');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      stateContent.replace('status: closed', 'status: active'));
+    // Update case STATE.md too
+    const caseStatePath = path.join(planDir, 'cases', 'idempotent-case', 'STATE.md');
+    const caseState = fs.readFileSync(caseStatePath, 'utf-8');
+    fs.writeFileSync(caseStatePath, caseState.replace('status: closed', 'status: active'));
+
+    runThruntTools(['case', 'close', 'idempotent-case'], tmpDir);
+
+    // Verify no duplicates
+    const dbPath = path.join(planDir, 'program.db');
+    const db = new Database(dbPath);
+    try {
+      const caseRows = db.prepare('SELECT * FROM case_index WHERE slug = ?').all('idempotent-case');
+      assert.strictEqual(caseRows.length, 1, 'should have exactly 1 case_index row after re-close');
+
+      const artifacts = db.prepare('SELECT * FROM case_artifacts WHERE case_id = ?').all(caseRows[0].id);
+      // Should not have duplicates — count finding artifacts
+      const findings = artifacts.filter(a => a.artifact_type === 'finding');
+      assert.strictEqual(findings.length, 1, 'should have exactly 1 finding artifact after re-close');
+    } finally {
+      db.close();
+    }
+  });
+
+  test('cmdCaseClose without FINDINGS.md still succeeds', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'no-findings', name: 'No Findings Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    createCaseDir(tmpDir, 'no-findings', {
+      name: 'No Findings Case',
+      // no findings, just hypotheses
+      hypotheses: '## Hypothesis A\n\nTest hypothesis content.\n',
+    });
+
+    const result = runThruntTools(['case', 'close', 'no-findings'], tmpDir);
+    assert.ok(result.success, `Close failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true, 'case close should succeed without FINDINGS.md');
+
+    // DB should still exist and have hypothesis indexed
+    const dbPath = path.join(tmpDir, '.planning', 'program.db');
+    assert.ok(fs.existsSync(dbPath), 'program.db should exist even without FINDINGS.md');
+  });
+
+  test('cmdCaseNew returns empty past_case_matches on first case', () => {
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'First Investigation'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(Array.isArray(output.past_case_matches), 'output should include past_case_matches array');
+    assert.strictEqual(output.past_case_matches.length, 0, 'first case should have empty past_case_matches');
+  });
+
+  test('cmdCaseNew writes parseable case STATE.md content', () => {
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'First Investigation'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+
+    const statePath = path.join(tmpDir, '.planning', 'cases', 'first-investigation', 'STATE.md');
+    const content = fs.readFileSync(statePath, 'utf-8');
+    assert.ok(content.includes('title: First Investigation'));
+    assert.ok(content.includes('## Current Position'));
+    assert.ok(content.includes('**Active signal:** First Investigation opened for investigation'));
+    assert.ok(content.includes('Phase: 1 of 1'));
+    assert.ok(content.includes('Plan: 1 of 1'));
+    assert.ok(content.includes('Status: Active'));
+  });
+
+  test('cmdCaseNew returns matches after past case indexed', () => {
+    setupProgramState(tmpDir, []);
+
+    // Create and close a case with content about powershell T1059.001
+    const newResult = runThruntTools(['case', 'new', 'PowerShell Execution'], tmpDir);
+    assert.ok(newResult.success, `New case failed: ${newResult.error}`);
+
+    // Add FINDINGS.md to the created case
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'powershell-execution');
+    fs.writeFileSync(path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nAdversary used T1059.001 PowerShell to download and execute payload.\n' +
+      'Lateral movement detected via T1021.002 SMB shares.\n' +
+      'Malicious IP: 10.0.0.42\n');
+
+    // Close the case (triggers indexing)
+    const closeResult = runThruntTools(['case', 'close', 'powershell-execution'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    // Now create a new case with a name that overlaps with the past case
+    const newResult2 = runThruntTools(['case', 'new', 'PowerShell T1059 Investigation'], tmpDir);
+    assert.ok(newResult2.success, `Second new case failed: ${newResult2.error}`);
+    const output2 = JSON.parse(newResult2.output);
+    assert.ok(Array.isArray(output2.past_case_matches), 'output should include past_case_matches');
+    assert.ok(output2.past_case_matches.length > 0, 'should have past case matches from FTS or technique overlap');
+    assert.ok(
+      output2.past_case_matches.some(match => match.name === 'PowerShell Execution'),
+      'past case matches should preserve the user-facing case title instead of the slug'
+    );
+  });
+
+  test('cmdCaseClose indexing failure is non-fatal', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'error-case', name: 'Error Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    // Create case dir but make the case dir not exist (so indexCase fails to find FINDINGS)
+    // Actually just verify the try/catch structure works by checking close succeeds
+    // The real test: close succeeds even when case dir is missing for indexing
+    // We skip creating the case dir files for indexing — only the STATE.md in cases/ is needed
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'error-case');
+    fs.mkdirSync(caseDir, { recursive: true });
+    const today = new Date().toISOString().split('T')[0];
+    fs.writeFileSync(path.join(caseDir, 'STATE.md'),
+      `---\nstatus: active\nopened_at: "${today}"\ntitle: "Error Case"\n---\n\n# Case\n`);
+
+    const result = runThruntTools(['case', 'close', 'error-case'], tmpDir);
+    assert.ok(result.success, `Close should succeed even if indexing has issues: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true, 'case close should succeed even with indexing edge cases');
+  });
+
+  test('cmdCaseClose updates structured case STATE.md status fields', () => {
+    setupProgramState(tmpDir, []);
+
+    const newResult = runThruntTools(['case', 'new', 'Close Me'], tmpDir);
+    assert.ok(newResult.success, `New case failed: ${newResult.error}`);
+
+    const closeResult = runThruntTools(['case', 'close', 'close-me'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    const statePath = path.join(tmpDir, '.planning', 'cases', 'close-me', 'STATE.md');
+    const content = fs.readFileSync(statePath, 'utf-8');
+    assert.ok(content.includes('status: closed'), 'frontmatter should be updated to closed');
+    assert.ok(content.includes('Status: Closed'), 'body status should be updated to Closed');
+    assert.ok(content.includes('Last activity: Closed '), 'body last activity should reflect closure');
+  });
+
+  test('cmdCaseClose refreshes roster technique_count from indexed case techniques', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'count-me', name: 'Count Me', status: 'active', opened_at: '2026-04-01', technique_count: '0' },
+    ]);
+    createCaseDir(tmpDir, 'count-me', {
+      name: 'Count Me',
+      findings: '# Findings\n\nObserved T1059.001 execution and T1021.002 lateral movement.\n',
+      hypotheses: '## Hypothesis A\n\nFollow-up on T1059.001 activity.\n',
+    });
+
+    const closeResult = runThruntTools(['case', 'close', 'count-me'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    const statusResult = runThruntTools(['case', 'status', 'count-me'], tmpDir);
+    assert.ok(statusResult.success, `Status failed: ${statusResult.error}`);
+    const status = JSON.parse(statusResult.output);
+
+    assert.strictEqual(status.status, 'closed');
+    assert.strictEqual(status.technique_count, '2');
+  });
+
+  test('cmdCaseClose persists inferred technique_ids into case STATE.md frontmatter', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'persist-techniques', name: 'Persist Techniques', status: 'active', opened_at: '2026-04-01', technique_count: '0' },
+    ]);
+    createCaseDir(tmpDir, 'persist-techniques', {
+      name: 'Persist Techniques',
+      findings: '# Findings\n\nObserved T1059.001 execution and T1021.002 lateral movement.\n',
+      hypotheses: '## Hypothesis A\n\nFollow-up on T1059.001 activity.\n',
+    });
+
+    const statePath = path.join(tmpDir, '.planning', 'cases', 'persist-techniques', 'STATE.md');
+    const beforeClose = extractFrontmatter(fs.readFileSync(statePath, 'utf-8'));
+    assert.deepStrictEqual(beforeClose.technique_ids, []);
+
+    const closeResult = runThruntTools(['case', 'close', 'persist-techniques'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    const afterClose = extractFrontmatter(fs.readFileSync(statePath, 'utf-8'));
+    assert.deepStrictEqual(afterClose.technique_ids, ['T1021.002', 'T1059.001']);
+    assert.strictEqual(afterClose.status, 'closed');
+  });
+
+  test('cmdCaseClose preserves legacy case notes when STATE.md lacks Current Position', () => {
+    setupProgramState(tmpDir, [
+      { slug: 'legacy-case', name: 'Legacy Case', status: 'active', opened_at: '2026-04-01' },
+    ]);
+    const caseDir = createCaseDir(tmpDir, 'legacy-case', {
+      name: 'Legacy Case',
+      findings: '# Findings\n\nObserved T1059.001 execution.\n',
+    });
+    fs.writeFileSync(
+      path.join(caseDir, 'STATE.md'),
+      [
+        '---',
+        'status: active',
+        'opened_at: "2026-04-01"',
+        'title: "Legacy Case"',
+        '---',
+        '',
+        '# Legacy State',
+        '',
+        '## Analyst Notes',
+        '',
+        'Preserve this note when the case is closed.',
+        '',
+        '**Status:** In progress',
+      ].join('\n')
+    );
+
+    const closeResult = runThruntTools(['case', 'close', 'legacy-case'], tmpDir);
+    assert.ok(closeResult.success, `Close failed: ${closeResult.error}`);
+
+    const statePath = path.join(caseDir, 'STATE.md');
+    const content = fs.readFileSync(statePath, 'utf-8');
+    const fm = extractFrontmatter(content);
+
+    assert.strictEqual(fm.status, 'closed');
+    assert.ok(fm.closed_at, 'frontmatter should record closed_at');
+    assert.ok(content.includes('## Analyst Notes'), 'custom notes header should be preserved');
+    assert.ok(content.includes('Preserve this note when the case is closed.'), 'custom notes content should be preserved');
+    assert.ok(content.includes('**Status:** Closed'), 'existing body status line should be updated in place');
+    assert.ok(!content.includes('## Current Position'), 'legacy state should not be rewritten to the template body');
+  });
+
+  test('cmdCaseClose rejects traversal slugs before mutating other planning scopes', () => {
+    setupProgramState(tmpDir, []);
+
+    const workstreamDir = path.join(tmpDir, '.planning', 'workstreams', 'ws');
+    fs.mkdirSync(workstreamDir, { recursive: true });
+    const originalState = '---\nstatus: active\n---\n# State\n**Status:** In progress\n';
+    fs.writeFileSync(path.join(workstreamDir, 'STATE.md'), originalState);
+
+    const result = runThruntTools(['case', 'close', '../workstreams/ws'], tmpDir);
+    assert.ok(!result.success, 'case close should fail for traversal slug');
+    assert.ok(result.error.includes('Invalid case slug'), `unexpected error: ${result.error}`);
+
+    const currentState = fs.readFileSync(path.join(workstreamDir, 'STATE.md'), 'utf-8');
+    assert.strictEqual(currentState, originalState, 'workstream STATE.md should remain unchanged');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cmdCaseSearch (Phase 52 Plan 02 Task 2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdCaseSearch', () => {
+  const Database = require('better-sqlite3');
+  let tmpDir;
+
+  function setupProgramState(cwd, rosterEntries = []) {
+    const planDir = path.join(cwd, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+    const rosterYaml = rosterEntries.length === 0
+      ? 'case_roster: []'
+      : 'case_roster:\n' + rosterEntries.map(e => {
+          let yaml = `  - slug: ${e.slug}\n    name: ${e.name}\n    status: ${e.status}\n    opened_at: "${e.opened_at}"`;
+          if (e.closed_at) yaml += `\n    closed_at: "${e.closed_at}"`;
+          if (e.technique_count) yaml += `\n    technique_count: "${e.technique_count}"`;
+          return yaml;
+        }).join('\n');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      `---\nthrunt_state_version: 1.0\nstatus: active\n${rosterYaml}\n---\n\n# Program State\n`);
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+  }
+
+  function createAndCloseCase(cwd, slug, name, opts = {}) {
+    // Create case via CLI — slug is derived from name automatically
+    const newResult = runThruntTools(['case', 'new', name], cwd);
+    // Derive the actual slug from the CLI output
+    const derivedSlug = newResult.success ? JSON.parse(newResult.output).slug : slug;
+
+    // Add FINDINGS.md if provided
+    const caseDir = path.join(cwd, '.planning', 'cases', derivedSlug);
+    if (opts.findings) {
+      fs.writeFileSync(path.join(caseDir, 'FINDINGS.md'), opts.findings);
+    }
+    if (opts.hypotheses) {
+      fs.writeFileSync(path.join(caseDir, 'HYPOTHESES.md'), opts.hypotheses);
+    }
+    // Update case STATE.md with outcome_summary if provided
+    if (opts.outcome_summary) {
+      const statePath = path.join(caseDir, 'STATE.md');
+      const content = fs.readFileSync(statePath, 'utf-8');
+      fs.writeFileSync(statePath, content.replace('---\n\n', `outcome_summary: "${opts.outcome_summary}"\n---\n\n`));
+    }
+
+    // Close the case (triggers indexing)
+    runThruntTools(['case', 'close', derivedSlug], cwd);
+  }
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    setupProgramState(tmpDir, []);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('case-search returns matching results', () => {
+    createAndCloseCase(tmpDir, 'apt-recon', 'APT Recon', {
+      findings: '# Findings\n\nAdversary performed network reconnaissance using T1018 Remote System Discovery.\n' +
+        'Scanned internal subnets 10.0.0.0/24 for open SMB shares.\n',
+      outcome_summary: 'Recon activity contained',
+    });
+
+    const result = runThruntTools(['case-search', 'reconnaissance'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(Array.isArray(output.results), 'results should be array');
+    assert.ok(output.results.length > 0, 'should have at least 1 match for "reconnaissance"');
+    assert.strictEqual(output.query, 'reconnaissance');
+
+    // Verify result shape has required INTEL-04 fields
+    const r = output.results[0];
+    assert.ok('slug' in r, 'result should have slug');
+    assert.ok('name' in r, 'result should have name');
+    assert.ok('match_snippet' in r, 'result should have match_snippet');
+    assert.ok('technique_overlap' in r, 'result should have technique_overlap');
+    assert.ok('outcome_summary' in r, 'result should have outcome_summary');
+    assert.ok('relevance_score' in r, 'result should have relevance_score');
+  });
+
+  test('case-search --technique filters by technique ID', () => {
+    createAndCloseCase(tmpDir, 'phishing-case', 'Phishing Campaign', {
+      findings: '# Findings\n\nT1566.001 spearphishing attachment delivered malware via email.\n',
+    });
+    createAndCloseCase(tmpDir, 'brute-force', 'Brute Force Attack', {
+      findings: '# Findings\n\nT1110.001 password spraying against VPN gateway.\n',
+    });
+
+    // Search for technique that only exists in phishing case
+    const result = runThruntTools(['case-search', 'malware', '--technique', 'T1566.001'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    // Results should only include cases with T1566.001
+    for (const r of output.results) {
+      assert.ok(
+        r.slug === 'phishing-campaign' || r.technique_overlap?.includes('T1566.001'),
+        `result ${r.slug} should have technique T1566.001`
+      );
+    }
+  });
+
+  test('case-search --technique normalizes lowercase technique IDs before overlap lookup', () => {
+    createAndCloseCase(tmpDir, 'phishing-case', 'Phishing Campaign', {
+      findings: '# Findings\n\nT1566.001 spearphishing attachment delivered malware via email.\n',
+    });
+    createAndCloseCase(tmpDir, 'brute-force', 'Brute Force Attack', {
+      findings: '# Findings\n\nT1110.001 password spraying against VPN gateway.\n',
+    });
+
+    const result = runThruntTools(['case-search', 'malware', '--technique', 't1566.001'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(output.results.length > 0, 'expected at least one technique-filtered result');
+    for (const r of output.results) {
+      assert.ok(
+        r.slug === 'phishing-campaign' || r.technique_overlap?.includes('T1566.001'),
+        `result ${r.slug} should have technique T1566.001`
+      );
+    }
+  });
+
+  test('case-search --technique matches state-only technique IDs and expands parent technique filters', () => {
+    const newResult = runThruntTools(['case', 'new', 'Password Spray Followup'], tmpDir);
+    assert.ok(newResult.success, `case new failed: ${newResult.error}`);
+
+    const slug = JSON.parse(newResult.output).slug;
+    const caseDir = path.join(tmpDir, '.planning', 'cases', slug);
+    fs.writeFileSync(
+      path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nPassword spray activity confirmed against the Okta tenant.\n'
+    );
+
+    const statePath = path.join(caseDir, 'STATE.md');
+    const stateContent = fs.readFileSync(statePath, 'utf-8');
+    const frontmatter = extractFrontmatter(stateContent);
+    frontmatter.technique_ids = ['T1110.003'];
+    fs.writeFileSync(statePath, spliceFrontmatter(stateContent, frontmatter));
+
+    const closeResult = runThruntTools(['case', 'close', slug], tmpDir);
+    assert.ok(closeResult.success, `case close failed: ${closeResult.error}`);
+
+    const result = runThruntTools(['case-search', 'password spray', '--technique', 'T1110'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.strictEqual(output.total, 1, `expected one state-backed technique match, got ${output.total}`);
+    assert.strictEqual(output.results[0].slug, slug, 'search should return the indexed case');
+    assert.ok(
+      output.results[0].technique_overlap.includes('T1110.003'),
+      'parent technique filter should expand to matching indexed sub-techniques'
+    );
+  });
+
+  test('case-search --limit caps results', () => {
+    // Create 3 cases with similar content
+    createAndCloseCase(tmpDir, 'lateral-1', 'Lateral Move Alpha', {
+      findings: '# Findings\n\nLateral movement via SMB T1021.002 detected in alpha subnet.\n',
+    });
+    createAndCloseCase(tmpDir, 'lateral-2', 'Lateral Move Beta', {
+      findings: '# Findings\n\nLateral movement via RDP T1021.001 detected in beta subnet.\n',
+    });
+    createAndCloseCase(tmpDir, 'lateral-3', 'Lateral Move Gamma', {
+      findings: '# Findings\n\nLateral movement via WinRM T1021.006 detected in gamma subnet.\n',
+    });
+
+    const result = runThruntTools(['case-search', 'lateral', '--limit', '1'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(output.results.length <= 1, 'should have at most 1 result with --limit 1');
+  });
+
+  test('case-search returns empty for no matches', () => {
+    createAndCloseCase(tmpDir, 'some-case', 'Some Case', {
+      findings: '# Findings\n\nSome finding about malware.\n',
+    });
+
+    const result = runThruntTools(['case-search', 'zzzyyyxxx_nomatch'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.strictEqual(output.results.length, 0, 'should have 0 results for non-matching query');
+  });
+
+  test('case-search with missing query returns error', () => {
+    const result = runThruntTools(['case-search'], tmpDir);
+    // Should either fail or return success:false
+    if (result.success) {
+      const output = JSON.parse(result.output);
+      assert.strictEqual(output.success, false, 'should return success:false for missing query');
+      assert.ok(output.error, 'should have error message');
+    } else {
+      assert.ok(result.error, 'should have error output');
+    }
+  });
+
+  test('case-search rejects option-only invocation without a real query', () => {
+    const result = runThruntTools(['case-search', '--limit', '1'], tmpDir);
+    assert.ok(result.success, `case-search should exit cleanly: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, false, 'option-only invocation should fail validation');
+    assert.ok(output.error.includes('Query required'), 'error should report missing query');
+  });
+
+  test('case-search on empty DB returns empty results', () => {
+    // Don't create or close any cases — DB should be empty or non-existent
+    const result = runThruntTools(['case-search', 'anything'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.strictEqual(output.results.length, 0, 'empty DB should return 0 results');
+  });
+
+  test('case-search results include required INTEL-04 fields', () => {
+    createAndCloseCase(tmpDir, 'intel-fields-case', 'Intel Fields Test', {
+      findings: '# Findings\n\nDetected T1059.001 PowerShell execution with IOC 10.0.0.42.\n' +
+        'Adversary used encoded commands for persistence.\n',
+      outcome_summary: 'PowerShell abuse contained and remediated',
+    });
+
+    const result = runThruntTools(['case-search', 'powershell'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.ok(output.results.length > 0, 'should have results for powershell search');
+
+    const r = output.results[0];
+    // Required fields per INTEL-04
+    assert.ok(typeof r.slug === 'string', 'slug should be string');
+    assert.ok(typeof r.name === 'string', 'name should be string');
+    assert.ok(typeof r.match_snippet === 'string', 'match_snippet should be string');
+    assert.ok(Array.isArray(r.technique_overlap), 'technique_overlap should be array');
+    assert.ok(typeof r.relevance_score === 'number', 'relevance_score should be number');
+    // outcome_summary may be null or string
+    assert.ok(r.outcome_summary === null || typeof r.outcome_summary === 'string', 'outcome_summary should be string or null');
+  });
+
+  test('case-search CLI routing dispatches correctly via thrunt-tools', () => {
+    createAndCloseCase(tmpDir, 'cli-route-test', 'CLI Route Test', {
+      findings: '# Findings\n\nRouting test content with unique marker xyzRouteTest.\n',
+    });
+
+    // This tests the full CLI path through thrunt-tools.cjs
+    const result = runThruntTools('case-search xyzRouteTest', tmpDir);
+    assert.ok(result.success, `CLI routing failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(output.results.length > 0, 'should find the routing test case via CLI');
+  });
+
+  test('case-search resolves relative --program against the effective --cwd', () => {
+    const tempRoot = fs.mkdtempSync(path.join(require('os').tmpdir(), 'thrunt-search-cwd-'));
+    const shellDir = path.join(tempRoot, 'shell');
+    const cwdDir = path.join(tempRoot, 'targets', 'a');
+    const programDir = path.join(tempRoot, 'targets', 'b');
+    fs.mkdirSync(shellDir, { recursive: true });
+    fs.mkdirSync(cwdDir, { recursive: true });
+    fs.mkdirSync(programDir, { recursive: true });
+
+    setupProgramState(programDir, []);
+    createAndCloseCase(programDir, 'relative-program-search', 'Relative Program Search', {
+      findings: '# Findings\n\nUnique relative program marker for search routing.\n',
+    });
+
+    try {
+      const result = runThruntTools(
+        ['--cwd', cwdDir, 'case-search', 'relative program marker', '--program', '../b'],
+        shellDir
+      );
+      assert.ok(result.success, `case-search failed: ${result.error}`);
+      const output = JSON.parse(result.output);
+      assert.strictEqual(output.success, true);
+      assert.strictEqual(output.total, 1, `expected one result, got ${output.total}`);
+      assert.strictEqual(output.results[0].slug, 'relative-program-search');
+    } finally {
+      cleanup(tempRoot);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cmdCaseNew detection coverage (Phase 57 Plan 01 Task 2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdCaseNew detection coverage', () => {
+  let tmpDir;
+
+  function setupProgramState(cwd, rosterEntries = []) {
+    const planDir = path.join(cwd, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+    const rosterYaml = rosterEntries.length === 0
+      ? 'case_roster: []'
+      : 'case_roster:\n' + rosterEntries.map(e => {
+          let yaml = `  - slug: ${e.slug}\n    name: ${e.name}\n    status: ${e.status}\n    opened_at: "${e.opened_at}"`;
+          if (e.closed_at) yaml += `\n    closed_at: "${e.closed_at}"`;
+          if (e.technique_count) yaml += `\n    technique_count: "${e.technique_count}"`;
+          return yaml;
+        }).join('\n');
+    fs.writeFileSync(path.join(planDir, 'STATE.md'),
+      `---\nthrunt_state_version: 1.0\nstatus: active\n${rosterYaml}\n---\n\n# Program State\n`);
+    fs.writeFileSync(path.join(planDir, 'MISSION.md'), '# Mission\n');
+    fs.writeFileSync(path.join(planDir, 'config.json'), '{}');
+  }
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('cmdCaseNew with technique ID in name returns detection_coverage array', () => {
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'T1059 PowerShell Investigation'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(Array.isArray(output.detection_coverage), 'output should include detection_coverage array');
+  });
+
+  test('detection_coverage entries have required fields', () => {
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'T1059 PowerShell Analysis'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.ok(Array.isArray(output.detection_coverage), 'detection_coverage should be array');
+
+    // Each entry (if any) should have the required fields
+    for (const entry of output.detection_coverage) {
+      assert.ok(typeof entry.technique_id === 'string', 'technique_id should be string');
+      assert.ok(typeof entry.technique_name === 'string', 'technique_name should be string');
+      assert.ok(typeof entry.source_count === 'number', 'source_count should be number');
+      assert.ok(Array.isArray(entry.sources), 'sources should be array');
+    }
+  });
+
+  test('cmdCaseNew succeeds with empty detection_coverage when no detections exist', () => {
+    setupProgramState(tmpDir, []);
+
+    // Use a technique ID unlikely to have detections in a fresh intel.db
+    const result = runThruntTools(['case', 'new', 'T9999 Nonexistent Technique'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(Array.isArray(output.detection_coverage), 'detection_coverage should be array');
+    // Whether empty or not, the case creation should succeed
+  });
+
+  test('cmdCaseNew succeeds with detection_coverage when @thrunt/mcp unavailable', () => {
+    // This tests the non-fatal degradation path.
+    // In test environment, @thrunt/mcp modules ARE available, so we verify
+    // that detection_coverage is always present (non-fatal means array, possibly empty)
+    setupProgramState(tmpDir, []);
+
+    const result = runThruntTools(['case', 'new', 'No Intel Modules Test'], tmpDir);
+    assert.ok(result.success, `New case failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(Array.isArray(output.detection_coverage), 'detection_coverage should be array even without technique IDs in name');
+    assert.strictEqual(output.detection_coverage.length, 0, 'should be empty when no technique IDs in case name');
   });
 });

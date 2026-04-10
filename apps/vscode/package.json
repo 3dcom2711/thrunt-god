@@ -2,7 +2,7 @@
   "name": "thrunt-god",
   "displayName": "THRUNT God",
   "description": "Hunt investigation dashboard for THRUNT God threat-hunting framework",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "backbay-labs",
   "license": "MIT",
   "repository": {
@@ -25,6 +25,7 @@
     "onCommand:thrunt-god.showProgressReport",
     "onCommand:thrunt-god.analyzeHuntmap",
     "onCommand:thrunt-god.showRuntimeDoctor",
+    "onCommand:thrunt-god.closeCase",
     "onCommand:thrunt-god.showInEvidenceBoard",
     "onCommand:thrunt-god.openHuntOverview",
     "onCommand:thrunt-god.openEvidenceBoard",
@@ -51,7 +52,12 @@
     "onWebviewPanel:thruntGod.huntOverview",
     "onWebviewPanel:thruntGod.evidenceBoard",
     "onWebviewPanel:thruntGod.queryAnalysis",
-    "onWebviewPanel:thruntGod.drainViewer"
+    "onWebviewPanel:thruntGod.drainViewer",
+    "onWebviewPanel:thruntGod.programDashboard",
+    "onWebviewPanel:thruntGod.mcpControlPanel",
+    "onWebviewPanel:thruntGod.commandDeckPanel",
+    "onCommand:thrunt-god.openRunbook",
+    "onWebviewPanel:thruntGod.runbookPanel"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -70,12 +76,22 @@
           "id": "thruntGod.huntTree",
           "name": "Investigation",
           "when": "thruntGod.huntDetected"
+        },
+        {
+          "id": "thruntGod.automationTree",
+          "name": "Automation",
+          "when": "thruntGod.huntDetected"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "thruntGod.huntTree",
+        "contents": "No hunt detected in this workspace.\n\nOpen a folder containing .planning/MISSION.md or .hunt/MISSION.md to get started.\n[Open Folder](command:vscode.openFolder)",
+        "when": "!thruntGod.huntDetected"
+      },
+      {
+        "view": "thruntGod.automationTree",
         "contents": "No hunt detected in this workspace.\n\nOpen a folder containing .planning/MISSION.md or .hunt/MISSION.md to get started.\n[Open Folder](command:vscode.openFolder)",
         "when": "!thruntGod.huntDetected"
       }
@@ -119,6 +135,11 @@
         "icon": "$(tools)"
       },
       {
+        "command": "thrunt-god.closeCase",
+        "title": "THRUNT: Close Case",
+        "icon": "$(check-all)"
+      },
+      {
         "command": "thrunt-god.revealInExplorer",
         "title": "THRUNT: Reveal in Explorer"
       },
@@ -138,6 +159,11 @@
       {
         "command": "thrunt-god.openHuntOverview",
         "title": "THRUNT: Open Hunt Overview",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "thrunt-god.openProgramDashboard",
+        "title": "THRUNT: Open Program Dashboard",
         "icon": "$(dashboard)"
       },
       {
@@ -236,13 +262,63 @@
       {
         "command": "thrunt-god.cancelCliCommand",
         "title": "THRUNT: Cancel Running Command"
+      },
+      {
+        "command": "thrunt-god.refreshAutomationSidebar",
+        "title": "THRUNT: Refresh Automation Sidebar",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "thrunt-god.mcpStart",
+        "title": "Start MCP Server",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpInstall",
+        "title": "Install MCP Runtime",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpRestart",
+        "title": "Restart MCP Server",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpHealthCheck",
+        "title": "Run MCP Health Check",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpListTools",
+        "title": "List MCP Tools",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpOpenLogs",
+        "title": "Open MCP Logs",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.mcpOpenPanel",
+        "title": "Open MCP Control Panel",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.openCommandDeck",
+        "title": "Open Command Deck",
+        "category": "THRUNT"
+      },
+      {
+        "command": "thrunt-god.openRunbook",
+        "title": "Open Runbook",
+        "category": "THRUNT GOD"
       }
     ],
     "menus": {
       "view/item/context": [
         {
           "command": "thrunt-god.runHuntPhase",
-          "when": "view == thruntGod.huntTree && viewItem == phase",
+          "when": "view == thruntGod.huntTree && viewItem == phase-runnable",
           "group": "execution@1"
         },
         {
@@ -294,6 +370,51 @@
           "command": "thrunt-god.openHuntOverview",
           "when": "view == thruntGod.huntTree && viewItem == mission",
           "group": "navigation@3"
+        },
+        {
+          "command": "thrunt-god.mcpInstall",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && !thruntGod.mcpAvailable",
+          "group": "mcp@1"
+        },
+        {
+          "command": "thrunt-god.mcpStart",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@2"
+        },
+        {
+          "command": "thrunt-god.mcpRestart",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@3"
+        },
+        {
+          "command": "thrunt-god.mcpHealthCheck",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@4"
+        },
+        {
+          "command": "thrunt-god.mcpListTools",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@5"
+        },
+        {
+          "command": "thrunt-god.mcpOpenLogs",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@6"
+        },
+        {
+          "command": "thrunt-god.mcpOpenPanel",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@7"
+        },
+        {
+          "command": "thrunt-god.openCommandDeck",
+          "when": "view == thruntGod.automationTree && viewItem == automationCommandDeck",
+          "group": "commandDeck@1"
+        },
+        {
+          "command": "thrunt-god.openRunbook",
+          "when": "view == thruntGod.automationTree && viewItem == automationRunbookItem",
+          "group": "runbooks@1"
         }
       ],
       "editor/context": [
@@ -350,6 +471,11 @@
           "group": "navigation"
         },
         {
+          "command": "thrunt-god.openProgramDashboard",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation"
+        },
+        {
           "command": "thrunt-god.openEvidenceBoard",
           "when": "view == thruntGod.huntTree",
           "group": "navigation"
@@ -371,8 +497,13 @@
         },
         {
           "command": "thrunt-god.runHuntPhase",
-          "when": "view == thruntGod.huntTree",
+          "when": "view == thruntGod.huntTree && thruntGod.hasRunnablePhases",
           "group": "navigation@7"
+        },
+        {
+          "command": "thrunt-god.refreshAutomationSidebar",
+          "when": "view == thruntGod.automationTree",
+          "group": "navigation"
         }
       ]
     },
@@ -422,6 +553,28 @@
           "type": "string",
           "default": "runtime execute --pack {packId} --phase {phase}",
           "description": "Template used by Run Hunt Phase. Supported placeholders: {phase}, {phaseName}, {phaseNameSlug}, {packId}."
+        },
+        "thruntGod.executionHistory.maxEntries": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 10000,
+          "description": "Maximum number of execution history entries to retain in .planning/.run-history.json."
+        },
+        "thruntGod.mcp.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute or workspace-relative path to the MCP server entry point. Leave empty to use the managed MCP runtime installed from the sidebar."
+        },
+        "thruntGod.mcp.installPackage": {
+          "type": "string",
+          "default": "@thrunt/mcp",
+          "description": "npm package spec used by the MCP sidebar install action. Override this for pre-release tarballs or internal registries."
+        },
+        "thruntGod.mcpProfile": {
+          "type": "string",
+          "default": "default",
+          "description": "Named MCP profile shown in the MCP UI when switching server configurations."
         }
       }
     }

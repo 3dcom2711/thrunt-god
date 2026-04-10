@@ -1,7 +1,7 @@
 ---
 name: thrunt-signal-triager
 description: Researches domain ecosystem before huntmap creation. Produces files in .planning/research/ consumed during huntmap creation. Spawned by /hunt:new-program or /hunt:new-program orchestrators.
-tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*
+tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__thrunt_hunt_intel__*
 color: cyan
 # hooks:
 #   PostToolUse:

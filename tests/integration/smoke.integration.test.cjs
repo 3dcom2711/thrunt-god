@@ -11,6 +11,8 @@ const {
   OPENSEARCH_URL,
   SPLUNK_USER,
   SPLUNK_PASSWORD,
+  SEARCH_BACKEND_READY_TIMEOUT_MS,
+  SPLUNK_READY_TIMEOUT_MS,
 } = require('./helpers.cjs');
 const { seedSplunk, seedElastic, seedOpenSearch } = require('./fixtures/seed-data.cjs');
 const SPLUNK_AUTH = 'Basic ' + Buffer.from(`${SPLUNK_USER}:${SPLUNK_PASSWORD}`).toString('base64');
@@ -54,6 +56,29 @@ async function runSplunkSearch(statement) {
   return resultsResp.text();
 }
 
+async function waitForSplunkSeedQuery(statement, {
+  timeout = SPLUNK_READY_TIMEOUT_MS,
+  interval = 1000,
+  expectedSubstrings = ['ws-01', 'alice'],
+} = {}) {
+  const start = Date.now();
+
+  while (true) {
+    const text = await runSplunkSearch(statement);
+    if (expectedSubstrings.some((value) => text.includes(value))) {
+      return text;
+    }
+
+    if (Date.now() - start > timeout) {
+      throw new Error(
+        `Splunk search did not return seeded events within ${timeout}ms for query: ${statement}`
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+}
+
 describe('docker infrastructure smoke test', async (t) => {
   if (skipIfNoDocker(t)) return;
 
@@ -61,26 +86,26 @@ describe('docker infrastructure smoke test', async (t) => {
   // It verifies health and seeds data, then asserts seed data is queryable.
 
   test('splunk container is healthy and accepts seed data', async () => {
-    await ensureSplunkHostAccess({ timeout: 300000 });
+    await ensureSplunkHostAccess({ timeout: SPLUNK_READY_TIMEOUT_MS });
     const result = await seedSplunk(SPLUNK_URL, { user: SPLUNK_USER, password: SPLUNK_PASSWORD });
     assert.ok(result.indexed >= 3, `Expected at least 3 indexed events, got ${result.indexed}`);
   });
 
   test('elasticsearch container is healthy and accepts seed data', async () => {
-    await waitForHealthy(ELASTIC_URL, { timeout: 60000 });
+    await waitForHealthy(ELASTIC_URL, { timeout: SEARCH_BACKEND_READY_TIMEOUT_MS });
     const result = await seedElastic(ELASTIC_URL);
     assert.ok(result.indexed >= 3, `Expected at least 3 indexed events, got ${result.indexed}`);
   });
 
   test('opensearch container is healthy and accepts seed data', async () => {
-    await waitForHealthy(OPENSEARCH_URL, { timeout: 60000 });
+    await waitForHealthy(OPENSEARCH_URL, { timeout: SEARCH_BACKEND_READY_TIMEOUT_MS });
     const result = await seedOpenSearch(OPENSEARCH_URL);
     assert.ok(result.indexed >= 3, `Expected at least 3 indexed events, got ${result.indexed}`);
   });
 
   test('splunk seed data is queryable via REST search', async () => {
-    await ensureSplunkHostAccess({ timeout: 300000 });
-    const text = await runSplunkSearch('index=test_sysmon | head 10');
+    await ensureSplunkHostAccess({ timeout: SPLUNK_READY_TIMEOUT_MS });
+    const text = await waitForSplunkSeedQuery('index=test_sysmon | head 10');
     assert.ok(
       text.includes('ws-01') || text.includes('alice'),
       'Splunk search should return seeded events with host/user fields'

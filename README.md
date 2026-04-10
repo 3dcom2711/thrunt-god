@@ -42,7 +42,7 @@ npx thrunt-god@latest --claude --local
 ```
 
 <p align="center">
-  <img src="assets/terminal.svg" alt="thrunt-god install" width="640" />
+  <img src="assets/terminal.svg" alt="thrunt-god install" width="1200" />
 </p>
 
 Bootstrap the hunt command surface into your local IDE environment.
@@ -77,7 +77,7 @@ After install, open a folder containing `.planning/MISSION.md` or `.hunt/MISSION
 Every hunt resolves through five phases. Each step is explicit.
 
 <p align="center">
-  <img src="assets/phases.png" alt="Signal → Hunt → Swarm → Receipt → Publish" width="820" />
+  <img src="assets/phases.png" alt="Signal → Hunt → Swarm → Receipt → Publish" width="1200" />
 </p>
 
 | Phase       |                                                                            |
@@ -198,13 +198,13 @@ All hunt state lives in a planning directory at the project root (`.planning/` b
 
 Settings live in `.planning/config.json`, created by `/hunt:new-program` and editable via `/thrunt:settings`. Global defaults in `~/.thrunt/defaults.json` are merged into every new project config.
 
-| Setting | Default | What it controls |
-| ------- | ------- | ---------------- |
-| `mode` | `interactive` | `interactive` confirms at each step, `yolo` auto-approves |
-| `granularity` | `standard` | Phase count: `coarse` (3-5), `standard` (5-8), `fine` (8-12) |
-| `model_profile` | `balanced` | Model tier per agent: `quality`, `balanced`, `budget`, `inherit` |
-| `planning.commit_docs` | `true` | Whether `.planning/` is committed to git |
-| `git.branching_strategy` | `none` | `none`, `phase` (branch per phase), `milestone` (branch per version) |
+| Setting                  | Default       | What it controls                                                     |
+| ------------------------ | ------------- | -------------------------------------------------------------------- |
+| `mode`                   | `interactive` | `interactive` confirms at each step, `yolo` auto-approves            |
+| `granularity`            | `standard`    | Phase count: `coarse` (3-5), `standard` (5-8), `fine` (8-12)         |
+| `model_profile`          | `balanced`    | Model tier per agent: `quality`, `balanced`, `budget`, `inherit`     |
+| `planning.commit_docs`   | `true`        | Whether `.planning/` is committed to git                             |
+| `git.branching_strategy` | `none`        | `none`, `phase` (branch per phase), `milestone` (branch per version) |
 
 Full schema and connector profiles: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
 

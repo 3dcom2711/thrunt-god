@@ -64,7 +64,8 @@ PATTERNS=(
 )
 
 # ─── Allowlist ───────────────────────────────────────────────────────────────
-# Files that legitimately discuss injection patterns (security docs, tests, this script)
+# Files that legitimately trip the generic prompt-injection heuristics.
+# Keep vendored data entries file-scoped so new corpus additions still get scanned.
 ALLOWLIST=(
   'scripts/prompt-injection-scan.sh'
   'scripts/base64-scan.sh'
@@ -76,7 +77,13 @@ ALLOWLIST=(
   'thrunt-god/bin/lib/security.cjs'
   'hooks/thrunt-prompt-guard.js'
   'SECURITY.md'
+  'apps/mcp/data/mitre-attack-enterprise.json'
+  'apps/mcp/data/sigma-core/rules/windows/process_creation/proc_creation_win_renamed_binary_highly_relevant.yml'
+  'apps/mcp/data/sigma-core/rules/windows/process_creation/proc_creation_win_w32tm.yml'
   'thrunt-god/data/mitre-attack-enterprise.json'
+  # Bundled thrunt-god distributions inside examples (contain security.cjs patterns + ATT&CK data)
+  'thrunt-god/examples/brute-force-to-persistence/.github/thrunt-god/'
+  'thrunt-god/examples/oauth-session-hijack/.github/thrunt-god/'
 )
 
 normalize_path() {
@@ -97,10 +104,19 @@ is_allowlisted() {
   for allowed in "${ALLOWLIST[@]}"; do
     local candidate
     candidate="$(normalize_path "$allowed")"
+    # Exact match
     if [[ "$normalized" == "$candidate" ]]; then
       return 0
     fi
     if [[ "$normalized" = /* && "$normalized" == "$repo_root/$candidate" ]]; then
+      return 0
+    fi
+    # Directory prefix match (allowlist entries ending in /)
+    # Use "$candidate/" with trailing slash to prevent apps/mcp/data/ from matching apps/mcp/database/
+    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" == "$candidate/"* ]]; then
+      return 0
+    fi
+    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" = /* && "$normalized" == "$repo_root/$candidate/"* ]]; then
       return 0
     fi
   done
