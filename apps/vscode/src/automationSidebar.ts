@@ -205,8 +205,8 @@ export class AutomationTreeDataProvider
     // Built-in commands
     for (const cmd of BUILT_IN_COMMANDS) {
       items.push(new AutomationTreeItem(cmd.label, vscode.TreeItemCollapsibleState.None, {
-        description: cmd.mutating ? '$(edit) mutating' : '$(eye) read-only',
-        iconPath: new vscode.ThemeIcon(cmd.icon),
+        description: cmd.mutating ? 'mutating' : 'read-only',
+        iconPath: new vscode.ThemeIcon(cmd.icon, cmd.mutating ? new vscode.ThemeColor('charts.yellow') : undefined),
         tooltip: cmd.description,
         contextValue: 'automationCommandDeckItem',
         dataId: cmd.id,
@@ -216,8 +216,8 @@ export class AutomationTreeDataProvider
     // User templates
     for (const tmpl of this.commandTemplates) {
       items.push(new AutomationTreeItem(tmpl.label, vscode.TreeItemCollapsibleState.None, {
-        description: tmpl.mutating ? '$(edit) mutating' : '$(eye) read-only',
-        iconPath: new vscode.ThemeIcon('file-code'),
+        description: tmpl.mutating ? 'mutating' : 'read-only',
+        iconPath: new vscode.ThemeIcon('file-code', tmpl.mutating ? new vscode.ThemeColor('charts.yellow') : undefined),
         tooltip: tmpl.description,
         contextValue: 'automationCommandDeckItem',
         dataId: tmpl.id,
@@ -259,9 +259,9 @@ export class AutomationTreeDataProvider
       const dateStr = ts.toLocaleDateString();
       const description = `${dateStr} ${timeStr} (${entry.duration}ms)`;
 
-      const mutatingBadge = entry.mutating ? '$(edit)' : '$(eye)';
+      const mutatingLabel = entry.mutating ? 'mutating' : 'read-only';
       const envLabel = entry.environment ? ` [${entry.environment}]` : '';
-      const tooltip = `${mutatingBadge} ${entry.name}${envLabel}\nStatus: ${entry.status}\nDuration: ${entry.duration}ms\n\n${entry.stdout.slice(0, 500)}`;
+      const tooltip = `${mutatingLabel} · ${entry.name}${envLabel}\nStatus: ${entry.status}\nDuration: ${entry.duration}ms\n\n${entry.stdout.slice(0, 500)}`;
 
       return new AutomationTreeItem(
         entry.name,

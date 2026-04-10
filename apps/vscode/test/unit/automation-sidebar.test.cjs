@@ -213,24 +213,22 @@ describe('AutomationTreeDataProvider', () => {
       assert.ok(children.length >= 10, `expected >= 10 built-in commands, got ${children.length}`);
     });
 
-    it('Command Deck children show $(eye) read-only for non-mutating commands', () => {
+    it('Command Deck children show read-only for non-mutating commands', () => {
       const p = new ext.AutomationTreeDataProvider();
       const roots = p.getChildren(undefined);
       const children = p.getChildren(roots[1]);
       const runtimeDoctor = children.find(c => c.label === 'Runtime Doctor');
       assert.ok(runtimeDoctor, 'Runtime Doctor should be in children');
-      assert.ok(runtimeDoctor.description.includes('$(eye)'), 'description should contain $(eye)');
-      assert.ok(runtimeDoctor.description.includes('read-only'), 'description should contain read-only');
+      assert.strictEqual(runtimeDoctor.description, 'read-only');
     });
 
-    it('Command Deck children show $(edit) mutating for mutating commands', () => {
+    it('Command Deck children show mutating for mutating commands', () => {
       const p = new ext.AutomationTreeDataProvider();
       const roots = p.getChildren(undefined);
       const children = p.getChildren(roots[1]);
       const closeCase = children.find(c => c.label === 'Close Case');
       assert.ok(closeCase, 'Close Case should be in children');
-      assert.ok(closeCase.description.includes('$(edit)'), 'description should contain $(edit)');
-      assert.ok(closeCase.description.includes('mutating'), 'description should contain mutating');
+      assert.strictEqual(closeCase.description, 'mutating');
     });
 
     it('Command Deck children have contextValue automationCommandDeckItem', () => {
