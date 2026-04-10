@@ -232,8 +232,8 @@ export class MCPStatusManager implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    if (this.serverProcess) return;
     if (this.startPromise) return this.startPromise;
+    if (this.serverProcess) return;
     if (this.stopPromise) {
       await this.stopPromise;
     }
@@ -260,6 +260,7 @@ export class MCPStatusManager implements vscode.Disposable {
       const finishError = (message: string, error?: Error) => {
         if (settled) return;
         settled = true;
+        clearTimeout(startupTimer);
         startupFailureMessage = message;
         if (this.serverProcess === child) {
           this.serverProcess = null;
@@ -316,7 +317,13 @@ export class MCPStatusManager implements vscode.Disposable {
           `[MCP] Server exited (code ${code ?? 'null'}, signal ${signal ?? 'none'})`
         );
 
-        if (!settled && !intentional) {
+        if (!settled) {
+          if (intentional) {
+            settled = true;
+            resolve();
+            return;
+          }
+
           finishError(
             this.formatStartupFailure(code, signal, startupFailureMessage, startupLog)
           );

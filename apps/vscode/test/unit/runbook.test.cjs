@@ -318,6 +318,27 @@ describe('RunbookEngine', () => {
     assert.deepEqual(result, { command: 'echo hello' });
   });
 
+  it('tokenizeRunbookCommand is exported from bundle', () => {
+    assert.equal(typeof ext.tokenizeRunbookCommand, 'function');
+  });
+
+  it('tokenizeRunbookCommand preserves escaped quotes inside quoted JSON args', () => {
+    const tokens = ext.tokenizeRunbookCommand(
+      'query --params "{\\"query\\":\\"name = \\\\\\"alice\\\\\\"\\"}"'
+    );
+
+    assert.deepEqual(tokens, [
+      'query',
+      '--params',
+      '{"query":"name = \\"alice\\""}',
+    ]);
+  });
+
+  it('tokenizeRunbookCommand preserves escaped backslashes inside quoted args', () => {
+    const tokens = ext.tokenizeRunbookCommand('echo "C:\\\\Windows\\\\Temp"');
+    assert.deepEqual(tokens, ['echo', 'C:\\Windows\\Temp']);
+  });
+
   // --- Dry-run behavior tests ---
 
   it('RunbookEngine dry-run produces dry-run status for all steps', async () => {

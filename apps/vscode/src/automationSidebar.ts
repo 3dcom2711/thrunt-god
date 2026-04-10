@@ -231,6 +231,11 @@ export class AutomationTreeDataProvider
         contextValue: 'automationCommandDeckItem',
         dataId: tmpl.id,
       });
+      item.command = {
+        command: 'thrunt-god.openCommandDeck',
+        title: tmpl.label,
+        arguments: [item],
+      };
       items.push(item);
     }
 

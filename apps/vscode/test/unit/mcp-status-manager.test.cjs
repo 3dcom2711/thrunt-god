@@ -8,6 +8,8 @@
 
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const BUNDLE_PATH = path.join(__dirname, '..', '..', 'dist', 'extension.js');
@@ -21,6 +23,25 @@ function createMockOutputChannel() {
     clear: () => {},
     dispose: () => {},
   };
+}
+
+function createSlowServerScript() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thrunt-mcp-status-'));
+  const serverPath = path.join(dir, 'slow-server.cjs');
+  fs.writeFileSync(
+    serverPath,
+    [
+      '#!/usr/bin/env node',
+      'setInterval(() => {}, 1000);',
+      "process.on('SIGTERM', () => process.exit(0));",
+    ].join('\n'),
+    { mode: 0o755 }
+  );
+  return { dir, serverPath };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe('MCPStatusManager', () => {
@@ -148,5 +169,51 @@ describe('MCPStatusManager', () => {
     const status = manager.getStatus();
     assert.equal(status.connection, 'connected');
     assert.equal(status.hasError, false);
+  });
+
+  it('returns the in-flight startup promise while the server is still booting', async () => {
+    const { dir, serverPath } = createSlowServerScript();
+    manager = new ext.MCPStatusManager(mockChannel, serverPath);
+
+    try {
+      const firstStart = manager.start();
+      const secondStart = manager.start();
+
+      const secondOutcome = await Promise.race([
+        secondStart.then(() => 'resolved', () => 'rejected'),
+        delay(150).then(() => 'pending'),
+      ]);
+
+      assert.equal(secondOutcome, 'pending');
+
+      await manager.stop();
+
+      assert.equal(await firstStart.then(() => 'resolved', () => 'rejected'), 'resolved');
+      assert.equal(await secondStart.then(() => 'resolved', () => 'rejected'), 'resolved');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('settles a pending startup cleanly when stop is called before ready', async () => {
+    const { dir, serverPath } = createSlowServerScript();
+    manager = new ext.MCPStatusManager(mockChannel, serverPath);
+
+    try {
+      const startPromise = manager.start();
+      await delay(150);
+      await manager.stop();
+
+      const outcome = await Promise.race([
+        startPromise.then(() => 'resolved', () => 'rejected'),
+        delay(1000).then(() => 'timeout'),
+      ]);
+
+      assert.equal(outcome, 'resolved');
+      assert.equal(manager.getStatus().connection, 'disconnected');
+      assert.equal(manager.getStatus().hasError, false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

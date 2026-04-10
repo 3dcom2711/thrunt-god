@@ -845,6 +845,32 @@ describe('tools.cjs - registerTools count', () => {
 });
 
 describe('server smoke test', () => {
+  it('--health returns healthy metadata for the opened database', () => {
+    const tmpDir = makeTempDir();
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
+
+    const result = spawnSync(
+      process.execPath,
+      [serverPath, '--health'],
+      {
+        env: {
+          ...process.env,
+          THRUNT_INTEL_DB_DIR: tmpDir,
+        },
+        encoding: 'utf-8',
+        timeout: 5000,
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.error?.message || 'expected healthy exit');
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.status, 'healthy');
+    assert.ok(payload.dbSizeBytes > 0, 'health payload should report the sqlite file size');
+    assert.ok(payload.dbTableCount > 0, 'health payload should report schema tables');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+  });
+
   it('--run-tool exits after emitting a one-shot result', () => {
     const tmpDir = makeTempDir();
     const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
@@ -876,6 +902,39 @@ describe('server smoke test', () => {
     assert.ok(Array.isArray(payload.content));
     assert.ok(payload.content[0].text.includes('"id": "T1059"'));
     assert.ok(!result.stderr.includes('MCP server started on stdio'));
+
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+  });
+
+  it('--run-tool returns structured JSON errors for invalid input payloads', () => {
+    const tmpDir = makeTempDir();
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        serverPath,
+        '--run-tool',
+        'lookup_technique',
+        '--input',
+        '{"technique_id"',
+      ],
+      {
+        env: {
+          ...process.env,
+          THRUNT_INTEL_DB_DIR: tmpDir,
+        },
+        encoding: 'utf-8',
+        timeout: 5000,
+      }
+    );
+
+    assert.equal(result.status, 1, 'invalid JSON input should fail fast');
+    const payload = JSON.parse(result.stdout.trim());
+    assert.match(payload.error, /JSON|Unexpected end|Expected ':'/);
+    assert.ok(!result.stderr.includes('MCP server started on stdio'));
+
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
   });
 
   it('responds to JSON-RPC initialize request', async () => {

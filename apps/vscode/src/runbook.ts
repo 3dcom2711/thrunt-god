@@ -210,6 +210,72 @@ export function parseRunbook(yamlContent: string): { runbook: RunbookDef | null;
   return { runbook, errors: [] };
 }
 
+export function tokenizeRunbookCommand(input: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: string | null = null;
+  let escaping = false;
+  let tokenStarted = false;
+
+  for (const char of input) {
+    if (escaping) {
+      current += char;
+      tokenStarted = true;
+      escaping = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      if (quote === '\'') {
+        current += char;
+        tokenStarted = true;
+      } else {
+        escaping = true;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+        tokenStarted = true;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === '\'') {
+      quote = char;
+      tokenStarted = true;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (tokenStarted) {
+        tokens.push(current);
+        current = '';
+        tokenStarted = false;
+      }
+      continue;
+    }
+
+    current += char;
+    tokenStarted = true;
+  }
+
+  if (escaping) {
+    current += '\\';
+    tokenStarted = true;
+  }
+
+  if (tokenStarted) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
 // ---------------------------------------------------------------------------
 // RunbookRegistry — discovers and caches runbook files from .planning/runbooks/
 // ---------------------------------------------------------------------------
@@ -504,27 +570,8 @@ export class RunbookEngine {
   // Step executors
   // ---------------------------------------------------------------------------
 
-  private static tokenizeCommand(input: string): string[] {
-    const tokens: string[] = [];
-    let current = '';
-    let quote: string | null = null;
-    for (const char of input) {
-      if (quote) {
-        if (char === quote) { quote = null; } else { current += char; }
-      } else if (char === '"' || char === "'") {
-        quote = char;
-      } else if (/\s/.test(char)) {
-        if (current) { tokens.push(current); current = ''; }
-      } else {
-        current += char;
-      }
-    }
-    if (current) tokens.push(current);
-    return tokens;
-  }
-
   private executeCli(command: string): Promise<{ output: string; exitCode: number }> {
-    const args = RunbookEngine.tokenizeCommand(command);
+    const args = tokenizeRunbookCommand(command);
     const cliPath =
       vscode.workspace.getConfiguration('thruntGod').get<string>('cli.path') ||
       path.join(this.workspaceRoot, 'dist', 'thrunt-god', 'bin', 'thrunt-tools.cjs');

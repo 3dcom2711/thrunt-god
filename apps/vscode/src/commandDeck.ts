@@ -310,6 +310,7 @@ export class CommandDeckPanel implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private isDisposed = false;
   private ready = false;
+  private pendingTemplateId: string | null = null;
 
   private constructor(
     context: vscode.ExtensionContext,
@@ -409,6 +410,32 @@ export class CommandDeckPanel implements vscode.Disposable {
     }
   }
 
+  openTemplate(templateId: string): void {
+    this.panel.reveal(vscode.ViewColumn.Active);
+
+    if (!this.ready) {
+      this.pendingTemplateId = templateId;
+      return;
+    }
+
+    const template = this.registry.getTemplates().find((entry) => entry.id === templateId);
+    if (!template) {
+      void vscode.window.showErrorMessage(`Command Deck template not found: ${templateId}`);
+      return;
+    }
+
+    if (template.placeholders.length > 0) {
+      this.postMessage({
+        type: 'templatePrompt',
+        templateId: template.id,
+        placeholders: template.placeholders,
+      });
+      return;
+    }
+
+    void this.handleTemplateExec(template.id, {});
+  }
+
   private postMessage(message: HostToCommandDeckMessage): void {
     if (!this.isDisposed) {
       void this.panel.webview.postMessage(message);
@@ -442,6 +469,11 @@ export class CommandDeckPanel implements vscode.Disposable {
           context: null,
           isDark: isDarkTheme(vscode.window.activeColorTheme.kind),
         });
+        if (this.pendingTemplateId) {
+          const pendingTemplateId = this.pendingTemplateId;
+          this.pendingTemplateId = null;
+          this.openTemplate(pendingTemplateId);
+        }
         return;
       case 'command:exec':
         void this.handleExec(msg.commandId);

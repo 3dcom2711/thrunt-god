@@ -251,6 +251,29 @@ describe('AutomationTreeDataProvider', () => {
       assert.ok(runHuntPhase, 'Run Hunt Phase should be in children');
       assert.equal(runHuntPhase.iconPath.id, 'play', 'Run Hunt Phase icon should be play');
     });
+
+    it('saved template children open the command deck when clicked', () => {
+      const p = new ext.AutomationTreeDataProvider();
+      p.setCommandTemplates([
+        {
+          id: 'tmpl-query',
+          label: 'Saved Query',
+          description: 'Run a saved query template',
+          category: 'Investigation',
+          mutating: false,
+          cliArgs: ['query', '{domain}'],
+          placeholders: ['domain'],
+        },
+      ]);
+
+      const roots = p.getChildren(undefined);
+      const children = p.getChildren(roots[1]);
+      const templateItem = children.find((child) => child.label === 'Saved Query');
+
+      assert.ok(templateItem, 'Saved Query should be in children');
+      assert.equal(templateItem.command.command, 'thrunt-god.openCommandDeck');
+      assert.equal(templateItem.command.arguments[0], templateItem);
+    });
   });
 
   describe('MCP status rendering', () => {

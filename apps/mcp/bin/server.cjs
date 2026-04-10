@@ -4,6 +4,7 @@
 // All logging to stderr (JSON-RPC only on stdout)
 const log = (...args) => console.error('[thrunt-mcp]', ...args);
 
+const fs = require('fs');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { openIntelDb } = require('../lib/intel.cjs');
@@ -16,34 +17,54 @@ if (process.env.THRUNT_INTEL_DB_DIR) {
   dbOpts.dbDir = process.env.THRUNT_INTEL_DB_DIR;
 }
 
+function safeCloseDb(db) {
+  if (!db || typeof db.close !== 'function') {
+    return;
+  }
+
+  try {
+    db.close();
+  } catch {
+    // ignore close failures during shutdown paths
+  }
+}
+
+function getMainDbSizeBytes(db) {
+  const mainDb = db
+    .prepare('PRAGMA database_list')
+    .all()
+    .find((entry) => entry.name === 'main');
+
+  if (!mainDb?.file || !fs.existsSync(mainDb.file)) {
+    return 0;
+  }
+
+  return fs.statSync(mainDb.file).size;
+}
+
 // --- Health check mode (no MCP server, no transport) ---
 if (process.argv.includes('--health')) {
   const startTime = Date.now();
+  let db = null;
   try {
-    const db = openIntelDb(dbOpts);
+    db = openIntelDb(dbOpts);
     const tables = db.prepare(
       "SELECT count(*) as c FROM sqlite_master WHERE type='table'"
     ).get();
-    const dbPath = require('path').join(
-      process.env.THRUNT_INTEL_DB_DIR || require('path').join(require('os').homedir(), '.thrunt'),
-      'intel.db'
-    );
-    const dbSize = require('fs').existsSync(dbPath)
-      ? require('fs').statSync(dbPath).size
-      : 0;
 
     const result = {
       status: 'healthy',
       toolCount: 10,
-      dbSizeBytes: dbSize,
+      dbSizeBytes: getMainDbSizeBytes(db),
       dbTableCount: tables.c,
       uptimeMs: Date.now() - startTime,
       serverVersion: '0.1.0',
     };
     process.stdout.write(JSON.stringify(result) + '\n');
-    db.close();
+    safeCloseDb(db);
     process.exit(0);
   } catch (err) {
+    safeCloseDb(db);
     const result = {
       status: 'unhealthy',
       toolCount: 0,
@@ -107,21 +128,23 @@ if (runToolIdx !== -1) {
     process.exit(1);
   }
 
+  let db = null;
   try {
-    const db = openIntelDb(dbOpts);
+    db = openIntelDb(dbOpts);
     const args = JSON.parse(inputJson);
     const result = handler(db, args);
     // Handle both sync and async results
     Promise.resolve(result).then((res) => {
       process.stdout.write(JSON.stringify(res) + '\n');
-      db.close();
+      safeCloseDb(db);
       process.exit(0);
     }).catch((err) => {
       process.stdout.write(JSON.stringify({ error: err.message }) + '\n');
-      db.close();
+      safeCloseDb(db);
       process.exit(1);
     });
   } catch (err) {
+    safeCloseDb(db);
     process.stdout.write(JSON.stringify({ error: err.message }) + '\n');
     process.exit(1);
   }

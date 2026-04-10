@@ -1506,8 +1506,16 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     context.subscriptions.push(
-      vscode.commands.registerCommand('thrunt-god.openCommandDeck', () => {
-        CommandDeckPanel.createOrShow(context, commandDeckRegistry, executionLogger, mcpStatus);
+      vscode.commands.registerCommand('thrunt-god.openCommandDeck', (item?: AutomationTreeItem) => {
+        const panel = CommandDeckPanel.createOrShow(
+          context,
+          commandDeckRegistry,
+          executionLogger,
+          mcpStatus
+        );
+        if (item?.dataId) {
+          panel.openTemplate(item.dataId);
+        }
       })
     );
 
@@ -2386,6 +2394,6 @@ export {
   BUILT_IN_COMMANDS,
   getContextRelevantIds,
 } from './commandDeck';
-export { validateRunbook, parseRunbook, RunbookRegistry, RunbookEngine, resolveParams, RUNBOOK_PANEL_VIEW_TYPE, VALID_STEP_ACTIONS } from './runbook';
+export { validateRunbook, parseRunbook, RunbookRegistry, RunbookEngine, resolveParams, tokenizeRunbookCommand, RUNBOOK_PANEL_VIEW_TYPE, VALID_STEP_ACTIONS } from './runbook';
 export { RunbookPanel } from './runbookPanel';
 export { ExecutionLogger, confirmMutatingAction, buildCommandEntry, buildRunbookEntry } from './executionLogger';
