@@ -467,121 +467,142 @@ function handleLogLearning(db, args) {
   };
 }
 
-function registerTools(server, db) {
-  server.tool(
-    'lookup_technique',
-    'Look up an ATT&CK technique by ID (e.g., T1059.001). Returns technique name, description, tactics, platforms, data sources, and MITRE URL.',
-    {
+const TOOL_REGISTRY = [
+  {
+    name: 'lookup_technique',
+    description: 'Look up an ATT&CK technique by ID (e.g., T1059.001). Returns technique name, description, tactics, platforms, data sources, and MITRE URL.',
+    inputSchema: { technique_id: 'string (ATT&CK technique ID, e.g. T1059.001)' },
+    schema: {
       technique_id: z.string()
         .regex(/^T\d{4}(?:\.\d{3})?$/i)
         .describe('ATT&CK technique ID (e.g., T1059.001, T1078)'),
     },
-    withTimeout((args) => handleLookupTechnique(db, args))
-  );
-
-  server.tool(
-    'search_techniques',
-    'Full-text search across ATT&CK technique names and descriptions. Supports filtering by tactic and platform.',
-    {
+    handler: handleLookupTechnique,
+  },
+  {
+    name: 'search_techniques',
+    description: 'Full-text search across ATT&CK technique names and descriptions. Supports filtering by tactic and platform.',
+    inputSchema: { query: 'string', tactic: 'string?', platform: 'string?', limit: 'number (1-100, default 20)' },
+    schema: {
       query: z.string().min(1).describe('Search query (keywords, technique name fragment, etc.)'),
       tactic: z.string().optional().describe('Filter by tactic name (e.g., "Initial Access", "Persistence")'),
       platform: z.string().optional().describe('Filter by platform (e.g., "Windows", "Linux", "Cloud")'),
       limit: z.number().int().min(1).max(100).default(20).describe('Maximum results to return'),
     },
-    withTimeout((args) => handleSearchTechniques(db, args))
-  );
-
-  server.tool(
-    'lookup_group',
-    'Look up an ATT&CK threat group by ID or name. Returns group details with associated techniques and software/malware.',
-    {
+    handler: handleSearchTechniques,
+  },
+  {
+    name: 'lookup_group',
+    description: 'Look up an ATT&CK threat group by ID or name. Returns group details with associated techniques and software/malware.',
+    inputSchema: { group_id: 'string (group ID e.g. G0007 or name)' },
+    schema: {
       group_id: z.string().describe('ATT&CK group ID (e.g., G0007) or group name (e.g., "APT28")'),
     },
-    withTimeout((args) => handleLookupGroup(db, args))
-  );
-
-  server.tool(
-    'generate_layer',
-    'Generate an ATT&CK Navigator v4.5 layer JSON. Supports custom technique sets, group-based layers, coverage snapshots, and gap analysis.',
-    {
+    handler: handleLookupGroup,
+  },
+  {
+    name: 'generate_layer',
+    description: 'Generate an ATT&CK Navigator v4.5 layer JSON. Supports custom technique sets, group-based layers, coverage snapshots, and gap analysis.',
+    inputSchema: { mode: 'custom|group|coverage|gap', name: 'string', technique_ids: 'string[]?', group_id: 'string?', description: 'string?' },
+    schema: {
       mode: z.enum(['custom', 'group', 'coverage', 'gap']).describe('Layer type: custom (specific techniques), group (all techniques for a group), coverage (detection coverage snapshot), gap (uncovered techniques for a group)'),
       name: z.string().describe('Layer name'),
       technique_ids: z.array(z.string()).optional().describe('Technique IDs for custom mode'),
       group_id: z.string().optional().describe('Group ID for group/gap mode (e.g., G0007)'),
       description: z.string().optional().describe('Layer description'),
     },
-    withTimeout((args) => handleGenerateLayer(db, args))
-  );
-
-  server.tool(
-    'analyze_coverage',
-    'Analyze detection coverage for a threat group or named threat profile. Returns per-tactic breakdown showing which techniques have detections and which are gaps.',
-    {
+    handler: handleGenerateLayer,
+  },
+  {
+    name: 'analyze_coverage',
+    description: 'Analyze detection coverage for a threat group or named threat profile. Returns per-tactic breakdown showing which techniques have detections and which are gaps.',
+    inputSchema: { group_id: 'string?', profile: 'string?', include_techniques: 'boolean (default true)' },
+    schema: {
       group_id: z.string().optional().describe('ATT&CK group ID (e.g., G0007)'),
       profile: z.string().optional().describe('Named threat profile: ransomware, apt, initial-access, persistence, credential-access, defense-evasion'),
       include_techniques: z.boolean().default(true).describe('Include technique-level detail in each tactic'),
     },
-    withTimeout((args) => handleAnalyzeCoverage(db, args))
-  );
-
-  server.tool(
-    'compare_detections',
-    'Compare detection coverage across sources (Sigma, ESCU, Elastic, KQL) for a technique or topic.',
-    {
+    handler: handleAnalyzeCoverage,
+  },
+  {
+    name: 'compare_detections',
+    description: 'Compare detection coverage across sources (Sigma, ESCU, Elastic, KQL) for a technique or topic.',
+    inputSchema: { technique_id: 'string?', query: 'string?' },
+    schema: {
       technique_id: z.string().optional().describe('ATT&CK technique ID (e.g., T1059)'),
       query: z.string().optional().describe('Free-text search query'),
     },
-    withTimeout((args) => handleCompareDetections(db, args))
-  );
-
-  server.tool(
-    'suggest_detections',
-    'Suggest detections for an uncovered technique based on rules from the same tactic family.',
-    {
+    handler: handleCompareDetections,
+  },
+  {
+    name: 'suggest_detections',
+    description: 'Suggest detections for an uncovered technique based on rules from the same tactic family.',
+    inputSchema: { technique_id: 'string (ATT&CK technique ID)' },
+    schema: {
       technique_id: z.string().regex(/^T\d{4}(?:\.\d{3})?$/i).describe('ATT&CK technique ID'),
     },
-    withTimeout((args) => handleSuggestDetections(db, args))
-  );
-
-  server.tool(
-    'query_knowledge',
-    'Search the hunt knowledge graph for entities (threat actors, techniques, tools, campaigns, vulnerabilities, data sources) and their relationships. Returns matching entities with related connections.',
-    {
+    handler: handleSuggestDetections,
+  },
+  {
+    name: 'query_knowledge',
+    description: 'Search the hunt knowledge graph for entities (threat actors, techniques, tools, campaigns, vulnerabilities, data sources) and their relationships. Returns matching entities with related connections.',
+    inputSchema: { query: 'string', type: 'threat_actor|technique|detection|campaign|tool|vulnerability|data_source?', limit: 'number (1-50, default 10)' },
+    schema: {
       query: z.string().min(1),
       type: z.enum(['threat_actor', 'technique', 'detection', 'campaign', 'tool', 'vulnerability', 'data_source']).optional(),
       limit: z.number().int().min(1).max(50).default(10),
     },
-    withTimeout((args) => handleQueryKnowledge(db, args))
-  );
-
-  server.tool(
-    'log_decision',
-    'Log a hunt decision with reasoning for future reference. Decisions are tagged by technique and case, enabling institutional memory across hunt sessions.',
-    {
+    handler: handleQueryKnowledge,
+  },
+  {
+    name: 'log_decision',
+    description: 'Log a hunt decision with reasoning for future reference. Decisions are tagged by technique and case, enabling institutional memory across hunt sessions.',
+    inputSchema: { case_slug: 'string', technique_id: 'string', decision: 'string', reasoning: 'string?', context: 'string?' },
+    schema: {
       case_slug: z.string(),
       technique_id: z.string(),
       decision: z.string(),
       reasoning: z.string().optional(),
       context: z.string().optional(),
     },
-    withTimeout((args) => handleLogDecision(db, args))
-  );
-
-  server.tool(
-    'log_learning',
-    'Log a hunt learning or pattern for future reference. Learnings are tagged by topic and technique, surfacing when future hunts touch the same areas.',
-    {
+    handler: handleLogDecision,
+  },
+  {
+    name: 'log_learning',
+    description: 'Log a hunt learning or pattern for future reference. Learnings are tagged by topic and technique, surfacing when future hunts touch the same areas.',
+    inputSchema: { topic: 'string', pattern: 'string', detail: 'string?', technique_ids: 'string?', case_slug: 'string?' },
+    schema: {
       topic: z.string(),
       pattern: z.string(),
       detail: z.string().optional(),
       technique_ids: z.string().optional().describe('Comma-separated ATT&CK technique IDs'),
       case_slug: z.string().optional(),
     },
-    withTimeout((args) => handleLogLearning(db, args))
-  );
+    handler: handleLogLearning,
+  },
+];
+
+function getToolDefinitions() {
+  return TOOL_REGISTRY.map(({ name, description, inputSchema }) => ({
+    name,
+    description,
+    inputSchema: { ...inputSchema },
+  }));
+}
+
+function registerTools(server, db) {
+  for (const tool of TOOL_REGISTRY) {
+    server.tool(
+      tool.name,
+      tool.description,
+      tool.schema,
+      withTimeout((args) => tool.handler(db, args))
+    );
+  }
 }
 
 module.exports = {
+  getToolDefinitions,
   registerTools,
   handleLookupTechnique,
   handleSearchTechniques,

@@ -16,7 +16,7 @@ const INTEL_DB_DIR = path.join(os.homedir(), '.thrunt');
 const INTEL_DB_PATH = path.join(INTEL_DB_DIR, 'intel.db');
 
 // Resolve data files: prefer package-local data/, fall back to monorepo thrunt-god/data/.
-// If neither path contains the MITRE JSON, fail early with a clear message.
+// The lookup stays lazy so metadata-only CLI modes can run without a provisioned data dir.
 const LOCAL_DATA = path.join(__dirname, '..', 'data');
 const MONOREPO_DATA = path.join(__dirname, '..', '..', '..', 'thrunt-god', 'data');
 
@@ -31,9 +31,19 @@ function resolveDataDir() {
   );
 }
 
-const DATA_DIR = resolveDataDir();
-const TECHNIQUES_DATA = path.join(DATA_DIR, 'mitre-attack-enterprise.json');
-const GROUPS_DATA = path.join(DATA_DIR, 'mitre-attack-groups.json');
+let resolvedDataPaths = null;
+
+function getDataPaths() {
+  if (!resolvedDataPaths) {
+    const dataDir = resolveDataDir();
+    resolvedDataPaths = {
+      techniquesData: path.join(dataDir, 'mitre-attack-enterprise.json'),
+      groupsData: path.join(dataDir, 'mitre-attack-groups.json'),
+    };
+  }
+
+  return resolvedDataPaths;
+}
 
 /**
  * Create all tables idempotently.
@@ -128,7 +138,8 @@ function populateIfEmpty(db) {
     const count = db.prepare('SELECT COUNT(*) AS cnt FROM techniques').get().cnt;
     if (count > 0) return;
 
-    const techRaw = fs.readFileSync(TECHNIQUES_DATA, 'utf8');
+    const { techniquesData: techniquesDataPath, groupsData: groupsDataPath } = getDataPaths();
+    const techRaw = fs.readFileSync(techniquesDataPath, 'utf8');
     const techData = JSON.parse(techRaw);
 
     const insertTechnique = db.prepare(
@@ -158,7 +169,7 @@ function populateIfEmpty(db) {
       }
     }
 
-    const groupsRaw = fs.readFileSync(GROUPS_DATA, 'utf8');
+    const groupsRaw = fs.readFileSync(groupsDataPath, 'utf8');
     const groupsData = JSON.parse(groupsRaw);
 
     const insertGroup = db.prepare(

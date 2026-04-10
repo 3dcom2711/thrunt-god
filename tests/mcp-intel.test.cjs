@@ -93,6 +93,11 @@ describe('tools.cjs - exports', () => {
     assert.equal(typeof registerTools, 'function');
   });
 
+  it('exports getToolDefinitions function', () => {
+    const { getToolDefinitions } = loadTools();
+    assert.equal(typeof getToolDefinitions, 'function');
+  });
+
   it('exports handler functions for testing', () => {
     const t = loadTools();
     assert.equal(typeof t.handleLookupTechnique, 'function');
@@ -827,8 +832,8 @@ describe('server.cjs stdout purity', () => {
 });
 
 describe('tools.cjs - registerTools count', () => {
-  it('registers exactly 10 tools on the server', () => {
-    const { registerTools } = loadTools();
+  it('registers exactly the exported tool definition count on the server', () => {
+    const { getToolDefinitions, registerTools } = loadTools();
     const tmpDir = makeTempDir();
     const { openIntelDb } = loadIntel();
     const testDb = openIntelDb({ dbDir: tmpDir });
@@ -842,11 +847,52 @@ describe('tools.cjs - registerTools count', () => {
     testDb.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
-    assert.equal(toolCount, 10, `expected 10 tool registrations, got ${toolCount}`);
+    assert.equal(toolCount, getToolDefinitions().length, `expected ${getToolDefinitions().length} tool registrations, got ${toolCount}`);
   });
 });
 
 describe('server smoke test', () => {
+  it('--list-tools works even when ATT&CK data files are unavailable', () => {
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
+    const script = `
+      const Module = require('module');
+      const realFs = require('fs');
+      const realLoad = Module._load;
+      Module._load = function(request, parent, isMain) {
+        if (request === 'fs') {
+          return new Proxy(realFs, {
+            get(target, prop, receiver) {
+              if (prop === 'existsSync') {
+                return (value) => {
+                  const stringValue = String(value || '');
+                  if (stringValue.includes('mitre-attack-enterprise.json') || stringValue.includes('mitre-attack-groups.json')) {
+                    return false;
+                  }
+                  return realFs.existsSync(value);
+                };
+              }
+              return Reflect.get(target, prop, receiver);
+            },
+          });
+        }
+        return realLoad.apply(this, arguments);
+      };
+      process.argv = [process.execPath, ${JSON.stringify(serverPath)}, '--list-tools'];
+      require(${JSON.stringify(serverPath)});
+    `;
+
+    const result = spawnSync(process.execPath, ['-e', script], {
+      encoding: 'utf-8',
+      timeout: MCP_SMOKE_TIMEOUT_MS,
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.error?.message || 'expected successful list-tools exit');
+    const payload = JSON.parse(result.stdout.trim());
+    assert.ok(Array.isArray(payload));
+    assert.ok(payload.length > 0);
+    assert.equal(payload[0].name, 'lookup_technique');
+  });
+
   it('--health returns healthy metadata for the opened database', () => {
     const tmpDir = makeTempDir();
     const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
