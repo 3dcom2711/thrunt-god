@@ -81,6 +81,9 @@ ALLOWLIST=(
   'apps/mcp/data/sigma-core/rules/windows/process_creation/proc_creation_win_renamed_binary_highly_relevant.yml'
   'apps/mcp/data/sigma-core/rules/windows/process_creation/proc_creation_win_w32tm.yml'
   'thrunt-god/data/mitre-attack-enterprise.json'
+  # Bundled thrunt-god distributions inside examples (contain security.cjs patterns + ATT&CK data)
+  'thrunt-god/examples/brute-force-to-persistence/.github/thrunt-god/'
+  'thrunt-god/examples/oauth-session-hijack/.github/thrunt-god/'
 )
 
 normalize_path() {
@@ -109,11 +112,11 @@ is_allowlisted() {
       return 0
     fi
     # Directory prefix match (allowlist entries ending in /)
-    # Use "${candidate}/" with trailing slash to prevent apps/mcp/data/ from matching apps/mcp/database/
-    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" == "${candidate}/"* ]]; then
+    # Use "$candidate/" with trailing slash to prevent apps/mcp/data/ from matching apps/mcp/database/
+    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" == "$candidate/"* ]]; then
       return 0
     fi
-    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" = /* && "$normalized" == "$repo_root/${candidate}/"* ]]; then
+    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" = /* && "$normalized" == "$repo_root/$candidate/"* ]]; then
       return 0
     fi
   done
