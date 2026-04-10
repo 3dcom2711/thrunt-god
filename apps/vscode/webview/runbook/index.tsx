@@ -16,7 +16,6 @@ const vscode = createVsCodeApi<unknown, RunbookToHostMessage>();
 function RunbookApp() {
   const { setIsDark } = useTheme();
   const [runbook, setRunbook] = useState<RunbookDef | null>(null);
-  const [runbookPath, setRunbookPath] = useState('');
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
   const [dryRun, setDryRun] = useState(false);
@@ -35,7 +34,6 @@ function RunbookApp() {
       switch (message.type) {
         case 'init':
           setRunbook(message.runbook);
-          setRunbookPath(message.runbookPath);
           setIsDark(message.isDark);
           setError(null);
           setRunRecord(null);

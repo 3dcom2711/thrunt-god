@@ -13,7 +13,7 @@ export class ExecutionLogger implements vscode.Disposable {
   private readonly _onDidAppend = new vscode.EventEmitter<void>();
   readonly onDidAppend: vscode.Event<void> = this._onDidAppend.event;
 
-  constructor(private readonly workspaceRoot: string) {
+  constructor(workspaceRoot: string) {
     this.historyPath = path.join(workspaceRoot, HISTORY_DIR, HISTORY_FILENAME);
   }
 

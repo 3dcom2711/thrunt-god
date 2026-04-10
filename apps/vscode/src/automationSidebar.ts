@@ -4,7 +4,7 @@ import type { MCPStatusManager } from './mcpStatusManager';
 import type { RunbookRegistry } from './runbook';
 import type { ExecutionLogger } from './executionLogger';
 import type { ExecutionEntry } from '../shared/execution-history';
-import type { CommandDef, CommandTemplate } from '../shared/command-deck';
+import type { CommandTemplate } from '../shared/command-deck';
 import { BUILT_IN_COMMANDS } from './commandDeck';
 
 // ---------------------------------------------------------------------------

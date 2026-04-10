@@ -25,7 +25,7 @@ export const BUILT_IN_COMMANDS: CommandDef[] = [
     description: 'Check connector health, runtime readiness, and environment configuration.',
     category: 'Maintenance',
     mutating: false,
-    commandId: 'thrunt-god.runtimeDoctor',
+    commandId: 'thrunt-god.showRuntimeDoctor',
   },
   {
     id: 'open-program-dashboard',
@@ -46,49 +46,40 @@ export const BUILT_IN_COMMANDS: CommandDef[] = [
     commandId: 'thrunt-god.openEvidenceBoard',
   },
   {
-    id: 'analyze-coverage',
-    label: 'Analyze Coverage',
-    icon: 'graph',
-    description: 'Analyze detection coverage across ATT&CK techniques and data sources.',
-    category: 'Intelligence',
-    mutating: false,
-    cliArgs: ['coverage', 'analyze'],
-  },
-  {
-    id: 'generate-attack-layer',
-    label: 'Generate ATT&CK Layer',
-    icon: 'shield',
-    description: 'Generate a MITRE ATT&CK Navigator layer from current hunt findings.',
-    category: 'Intelligence',
-    mutating: true,
-    cliArgs: ['attack-layer', 'generate'],
-  },
-  {
-    id: 'query-knowledge',
-    label: 'Query Knowledge',
+    id: 'open-query-analysis',
+    label: 'Open Query Analysis',
     icon: 'search',
-    description: 'Search the knowledge base for threat intelligence and detection context.',
-    category: 'Intelligence',
+    description: 'Inspect query execution details, results, and correlation context.',
+    category: 'Investigation',
     mutating: false,
-    cliArgs: ['knowledge', 'query'],
+    commandId: 'thrunt-god.openQueryAnalysis',
   },
   {
-    id: 'run-pack',
-    label: 'Run Pack',
+    id: 'analyze-huntmap',
+    label: 'Analyze Huntmap',
+    icon: 'shield',
+    description: 'Analyze the current huntmap structure and open the structured result.',
+    category: 'Investigation',
+    mutating: false,
+    commandId: 'thrunt-god.analyzeHuntmap',
+  },
+  {
+    id: 'open-hunt-overview',
+    label: 'Open Hunt Overview',
+    icon: 'dashboard',
+    description: 'Open the hunt overview dashboard for the current workspace.',
+    category: 'Investigation',
+    mutating: false,
+    commandId: 'thrunt-god.openHuntOverview',
+  },
+  {
+    id: 'run-hunt-phase',
+    label: 'Run Hunt Phase',
     icon: 'play',
-    description: 'Execute a hunt pack against configured data sources.',
+    description: 'Execute the next runnable hunt phase or pick one to run.',
     category: 'Execution',
     mutating: true,
-    cliArgs: ['runtime', 'execute'],
-  },
-  {
-    id: 'publish-findings',
-    label: 'Publish Findings',
-    icon: 'cloud-upload',
-    description: 'Publish validated findings to the configured output destination.',
-    category: 'Execution',
-    mutating: true,
-    cliArgs: ['findings', 'publish'],
+    commandId: 'thrunt-god.runHuntPhase',
   },
   {
     id: 'close-case',
@@ -100,13 +91,22 @@ export const BUILT_IN_COMMANDS: CommandDef[] = [
     commandId: 'thrunt-god.closeCase',
   },
   {
-    id: 'reindex-intel',
-    label: 'Reindex Intel/Detections',
-    icon: 'database',
-    description: 'Rebuild the local intel and detection index from upstream sources.',
+    id: 'show-progress-report',
+    label: 'Show Progress Report',
+    icon: 'graph',
+    description: 'Render the current hunt progress report as markdown.',
+    category: 'Investigation',
+    mutating: false,
+    commandId: 'thrunt-god.showProgressReport',
+  },
+  {
+    id: 'mcp-health-check',
+    label: 'MCP Health Check',
+    icon: 'pulse',
+    description: 'Run a one-shot MCP health check without starting the long-lived server.',
     category: 'Maintenance',
-    mutating: true,
-    cliArgs: ['intel', 'reindex'],
+    mutating: false,
+    commandId: 'thrunt-god.mcpHealthCheck',
   },
 ];
 
@@ -118,15 +118,19 @@ export function getContextRelevantIds(context: CommandDeckContext | null): strin
   if (!context) return [];
   switch (context.nodeType) {
     case 'phase':
-      return ['run-pack', 'analyze-coverage'];
+      return ['run-hunt-phase', 'analyze-huntmap'];
+    case 'case':
+      return ['close-case', 'open-evidence-board', 'open-query-analysis'];
     case 'query':
-      return ['query-knowledge', 'analyze-coverage'];
+      return ['open-query-analysis', 'open-evidence-board'];
     case 'receipt':
-      return ['open-evidence-board', 'publish-findings'];
+      return ['open-evidence-board', 'open-query-analysis'];
     case 'hypothesis':
-      return ['analyze-coverage', 'query-knowledge'];
+      return ['analyze-huntmap', 'open-query-analysis'];
     case 'mission':
       return ['open-program-dashboard', 'runtime-doctor'];
+    case 'huntmap':
+      return ['analyze-huntmap', 'run-hunt-phase'];
     default:
       return [];
   }
@@ -308,7 +312,7 @@ export class CommandDeckPanel implements vscode.Disposable {
   private ready = false;
 
   private constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly registry: CommandDeckRegistry,
     private readonly logger: ExecutionLogger,
     private readonly mcpStatus: MCPStatusManager | null,

@@ -249,9 +249,9 @@ describe('AutomationTreeDataProvider', () => {
       const runtimeDoctor = children.find(c => c.label === 'Runtime Doctor');
       assert.ok(runtimeDoctor, 'Runtime Doctor should be in children');
       assert.equal(runtimeDoctor.iconPath.id, 'heart', 'Runtime Doctor icon should be heart');
-      const runPack = children.find(c => c.label === 'Run Pack');
-      assert.ok(runPack, 'Run Pack should be in children');
-      assert.equal(runPack.iconPath.id, 'play', 'Run Pack icon should be play');
+      const runHuntPhase = children.find(c => c.label === 'Run Hunt Phase');
+      assert.ok(runHuntPhase, 'Run Hunt Phase should be in children');
+      assert.equal(runHuntPhase.iconPath.id, 'play', 'Run Hunt Phase icon should be play');
     });
   });
 

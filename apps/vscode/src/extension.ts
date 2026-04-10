@@ -1070,6 +1070,96 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('thrunt-god.closeCase', async () => {
+      const huntRoot = activeHuntRoot;
+      const workspaceRoot = resolveWorkspaceRoot(huntRoot);
+      if (!huntRoot || !workspaceRoot) {
+        await vscode.window.showWarningMessage(
+          'Open a THRUNT hunt workspace with an active or existing case before closing a case.'
+        );
+        return undefined;
+      }
+
+      const activeCasePath = path.join(huntRoot.fsPath, '.active-case');
+      const casesDir = path.join(huntRoot.fsPath, 'cases');
+      let activeSlug: string | null = null;
+
+      try {
+        const slug = fs.readFileSync(activeCasePath, 'utf-8').trim();
+        if (slug) {
+          activeSlug = slug;
+        }
+      } catch {
+        activeSlug = null;
+      }
+
+      let availableSlugs: string[] = [];
+      try {
+        availableSlugs = fs.readdirSync(casesDir, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .sort((left, right) => left.localeCompare(right));
+      } catch {
+        availableSlugs = [];
+      }
+
+      const slugSet = new Set<string>();
+      if (activeSlug) {
+        slugSet.add(activeSlug);
+      }
+      for (const slug of availableSlugs) {
+        slugSet.add(slug);
+      }
+
+      if (slugSet.size === 0) {
+        await vscode.window.showInformationMessage('No cases are available to close in this workspace.');
+        return undefined;
+      }
+
+      const selected = await vscode.window.showQuickPick(
+        [...slugSet].map((slug) => ({
+          label: slug,
+          description: slug === activeSlug ? 'active case' : undefined,
+          slug,
+        })),
+        {
+          title: 'Close Case',
+          placeHolder: activeSlug ? `Select a case to close (active: ${activeSlug})` : 'Select a case to close',
+          ignoreFocusOut: true,
+        }
+      );
+
+      if (!selected) {
+        return undefined;
+      }
+
+      const confirmation = await vscode.window.showWarningMessage(
+        `Close case "${selected.slug}"?`,
+        { modal: true },
+        'Close Case'
+      );
+      if (confirmation !== 'Close Case') {
+        return undefined;
+      }
+
+      const result = await runThruntCliCommand(
+        context,
+        cliOutputChannel,
+        workspaceRoot,
+        ['case', 'close', selected.slug],
+        huntRoot
+      );
+
+      if (result?.parsed) {
+        await openJsonResultDocument(result.parsed);
+      }
+      await vscode.commands.executeCommand('thrunt-god.refreshSidebar');
+      await vscode.commands.executeCommand('thrunt-god.refreshAutomationSidebar');
+      return result;
+    })
+  );
+
   vscode.commands.executeCommand('setContext', 'thruntGod.huntDetected', false);
   updateRunnablePhaseContext(null);
 

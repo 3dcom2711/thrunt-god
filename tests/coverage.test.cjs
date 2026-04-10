@@ -180,7 +180,7 @@ describe('compareDetections', () => {
       severity: 'high',
       logsource: '{}',
       query: 'lsass access',
-      description: 'Should not count for T1003 parent searches',
+      description: 'Should count for T1003 parent coverage searches',
       metadata: '{}',
       file_path: 'test/sigma-subtech.yml',
     });
@@ -241,13 +241,13 @@ describe('compareDetections', () => {
     assert.ok(result);
   });
 
-  it('does not count sub-technique-only detections for the parent technique', () => {
+  it('counts sub-technique-only detections for the parent technique coverage view', () => {
     const { compareDetections } = loadCoverage();
     const result = compareDetections(db, 'T1003');
 
     assert.ok(
-      !result.sources.some(source => source.rule_id === 'sigma:test-t1003-subtechnique-only'),
-      'parent-technique coverage should exclude detections tagged only to sub-techniques'
+      result.sources.some(source => source.rule_id === 'sigma:test-t1003-subtechnique-only'),
+      'parent-technique coverage should include detections tagged only to sub-techniques'
     );
   });
 });

@@ -147,10 +147,30 @@ function compareDetections(db, input) {
   }
 }
 
+function buildCoverageTechniqueMatchClause(techniqueId) {
+  const detections = getDetections();
+  const normalisedId = String(techniqueId || '').toUpperCase().trim();
+  const exactMatch = detections.buildTechniqueIdMatchClause('technique_ids', normalisedId);
+
+  if (!/^T\d{4}$/.test(normalisedId)) {
+    return exactMatch;
+  }
+
+  const normalisedColumn = "UPPER(REPLACE(COALESCE(technique_ids, ''), ' ', ''))";
+  return {
+    clause: `(${exactMatch.clause} OR ${normalisedColumn} LIKE ? OR ${normalisedColumn} LIKE ?)`,
+    params: [
+      ...exactMatch.params,
+      `${normalisedId}.%`,
+      `%,${normalisedId}.%`,
+    ],
+  };
+}
+
 function _compareForTechnique(db, techniqueId) {
   const tech = lookupTechnique(db, techniqueId);
   const techniqueName = tech ? tech.name : null;
-  const techniqueMatch = getDetections().buildTechniqueIdMatchClause('technique_ids', techniqueId);
+  const techniqueMatch = buildCoverageTechniqueMatchClause(techniqueId);
 
   let rows;
   try {
@@ -228,7 +248,7 @@ function suggestDetections(db, techniqueId) {
 
     for (const sibId of siblingIds) {
       if (similarRules.length >= 10) break;
-      const techniqueMatch = getDetections().buildTechniqueIdMatchClause('technique_ids', sibId);
+      const techniqueMatch = buildCoverageTechniqueMatchClause(sibId);
 
       try {
         const detRows = db.prepare(

@@ -2116,6 +2116,34 @@ describe('cmdProgramRollup', () => {
     assert.strictEqual(parsed.stale, 0, 'recent case STATE activity should prevent stale classification');
     assert.strictEqual(parsed.active, 1, 'case should remain active when STATE.md was recently updated');
   });
+
+  test('programRollup: nested query or receipt activity keeps case active', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setupProgramState(tmpDir, [
+      { slug: 'nested-activity', name: 'Nested Activity', status: 'active', opened_at: thirtyDaysAgo },
+    ]);
+    setupCaseState(tmpDir, 'nested-activity');
+
+    const caseDir = path.join(tmpDir, '.planning', 'cases', 'nested-activity');
+    const caseStatePath = path.join(caseDir, 'STATE.md');
+    const oldTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(caseStatePath, oldTime, oldTime);
+
+    const queryDir = path.join(caseDir, 'QUERIES');
+    fs.mkdirSync(queryDir, { recursive: true });
+    const queryPath = path.join(queryDir, 'QRY-20260410-001.md');
+    fs.writeFileSync(queryPath, '# Query\n\nRecent evidence collection.\n');
+
+    const recentTime = new Date();
+    fs.utimesSync(queryPath, recentTime, recentTime);
+
+    const result = runThruntTools('program rollup', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.stale, 0, 'nested activity should prevent stale classification');
+    assert.strictEqual(parsed.active, 1, 'case should remain active when nested artifacts were updated');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2572,6 +2600,27 @@ describe('cmdCaseSearch', () => {
     const output = JSON.parse(result.output);
     assert.strictEqual(output.success, true);
     // Results should only include cases with T1566.001
+    for (const r of output.results) {
+      assert.ok(
+        r.slug === 'phishing-campaign' || r.technique_overlap?.includes('T1566.001'),
+        `result ${r.slug} should have technique T1566.001`
+      );
+    }
+  });
+
+  test('case-search --technique normalizes lowercase technique IDs before overlap lookup', () => {
+    createAndCloseCase(tmpDir, 'phishing-case', 'Phishing Campaign', {
+      findings: '# Findings\n\nT1566.001 spearphishing attachment delivered malware via email.\n',
+    });
+    createAndCloseCase(tmpDir, 'brute-force', 'Brute Force Attack', {
+      findings: '# Findings\n\nT1110.001 password spraying against VPN gateway.\n',
+    });
+
+    const result = runThruntTools(['case-search', 'malware', '--technique', 't1566.001'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.ok(output.results.length > 0, 'expected at least one technique-filtered result');
     for (const r of output.results) {
       assert.ok(
         r.slug === 'phishing-campaign' || r.technique_overlap?.includes('T1566.001'),

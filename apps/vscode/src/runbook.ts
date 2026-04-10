@@ -620,18 +620,25 @@ export class RunbookEngine {
   }
 
   private async executeOpen(filePath: string): Promise<{ success: boolean; output: string }> {
-    const resolved = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(this.workspaceRoot, filePath);
-    const normalizedResolved = path.resolve(resolved);
-    const normalizedRoot = path.resolve(this.workspaceRoot);
-    if (!normalizedResolved.startsWith(normalizedRoot + path.sep) && normalizedResolved !== normalizedRoot) {
-      return { success: false, output: `Path traversal blocked: ${filePath} resolves outside workspace` };
+    try {
+      const resolved = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(this.workspaceRoot, filePath);
+      const normalizedResolved = path.resolve(resolved);
+      const normalizedRoot = path.resolve(this.workspaceRoot);
+      if (!normalizedResolved.startsWith(normalizedRoot + path.sep) && normalizedResolved !== normalizedRoot) {
+        return { success: false, output: `Path traversal blocked: ${filePath} resolves outside workspace` };
+      }
+      const uri = vscode.Uri.file(normalizedResolved);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+      return { success: true, output: `Opened: ${filePath}` };
+    } catch (err) {
+      return {
+        success: false,
+        output: err instanceof Error ? err.message : String(err),
+      };
     }
-    const uri = vscode.Uri.file(normalizedResolved);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc);
-    return { success: true, output: `Opened: ${filePath}` };
   }
 
   private async executeNote(

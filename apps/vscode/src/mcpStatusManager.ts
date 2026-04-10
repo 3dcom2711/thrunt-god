@@ -36,6 +36,8 @@ export class MCPStatusManager implements vscode.Disposable {
   };
 
   private serverProcess: ChildProcessWithoutNullStreams | null = null;
+  private expectedExitProcess: ChildProcessWithoutNullStreams | null = null;
+  private stopPromise: Promise<void> | null = null;
 
   constructor(
     private readonly outputChannel: vscode.OutputChannel,
@@ -204,7 +206,7 @@ export class MCPStatusManager implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    if (this.serverProcess) return;
+    if (this.serverProcess || this.stopPromise) return;
 
     this.outputChannel.appendLine('[MCP] Starting server...');
     const child = spawn(process.execPath, [this.mcpServerPath], {
@@ -212,6 +214,7 @@ export class MCPStatusManager implements vscode.Disposable {
     });
 
     this.serverProcess = child;
+    this.expectedExitProcess = null;
 
     child.stderr.on('data', (data: Buffer) => {
       this.outputChannel.appendLine(`[MCP] ${data.toString().trimEnd()}`);
@@ -224,14 +227,18 @@ export class MCPStatusManager implements vscode.Disposable {
       this.outputChannel.appendLine('[MCP] Server started');
     });
 
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
+      const intentional = this.expectedExitProcess === child;
       if (this.serverProcess === child) {
         this.serverProcess = null;
       }
+      if (intentional) {
+        this.expectedExitProcess = null;
+      }
       this.status.connection = 'disconnected';
-      this.status.hasError = true;
+      this.status.hasError = !intentional && code !== 0 && signal !== 'SIGTERM';
       this._onDidChange.fire(this.getStatus());
-      this.outputChannel.appendLine(`[MCP] Server exited (code ${code})`);
+      this.outputChannel.appendLine(`[MCP] Server exited (code ${code ?? 'null'}, signal ${signal ?? 'none'})`);
     });
 
     child.on('error', (err) => {
@@ -251,28 +258,46 @@ export class MCPStatusManager implements vscode.Disposable {
   }
 
   async stop(): Promise<void> {
+    if (this.stopPromise) {
+      return this.stopPromise;
+    }
     if (!this.serverProcess) return;
 
     this.outputChannel.appendLine('[MCP] Stopping server...');
     const proc = this.serverProcess;
-    this.serverProcess = null;
+    this.expectedExitProcess = proc;
 
-    return new Promise<void>((resolve) => {
-      const killTimer = setTimeout(() => {
-        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+    this.stopPromise = new Promise<void>((resolve) => {
+      const finish = () => {
+        this.stopPromise = null;
         resolve();
-      }, KILL_GRACE_MS);
+      };
 
       proc.once('close', () => {
         clearTimeout(killTimer);
-        resolve();
+        finish();
       });
 
-      proc.kill('SIGTERM');
+      const killTimer = setTimeout(() => {
+        try {
+          proc.kill('SIGKILL');
+        } catch {
+          finish();
+        }
+      }, KILL_GRACE_MS);
+
+      try {
+        proc.kill('SIGTERM');
+      } catch {
+        clearTimeout(killTimer);
+        finish();
+      }
 
       this.status.connection = 'disconnected';
       this._onDidChange.fire(this.getStatus());
     });
+
+    return this.stopPromise;
   }
 
   dispose(): void {
@@ -282,7 +307,7 @@ export class MCPStatusManager implements vscode.Disposable {
 
   private applyHealthResult(result: MCPHealthResult): void {
     this.status.lastHealthCheck = result;
-    this.status.connection = result.status === 'healthy' ? 'connected' : 'disconnected';
+    this.status.connection = this.serverProcess ? 'connected' : 'disconnected';
     this.status.hasError = result.status !== 'healthy';
     this.outputChannel.appendLine(`[MCP] Health check: ${result.status} (tools: ${result.toolCount}, db: ${result.dbSizeBytes} bytes)`);
     this._onDidChange.fire(this.getStatus());

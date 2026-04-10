@@ -32,10 +32,21 @@ function normalizeTechniqueId(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+function addCoveredTechnique(set, techniqueId) {
+  const normalized = normalizeTechniqueId(techniqueId);
+  if (!normalized) return;
+
+  set.add(normalized);
+
+  const parentMatch = normalized.match(/^(T\d{4})\.\d{3}$/);
+  if (parentMatch) {
+    set.add(parentMatch[1]);
+  }
+}
+
 function collectTechniqueIds(set, techniqueIds) {
   for (const token of String(techniqueIds || '').split(',')) {
-    const normalized = normalizeTechniqueId(token);
-    if (normalized) set.add(normalized);
+    addCoveredTechnique(set, token);
   }
 }
 

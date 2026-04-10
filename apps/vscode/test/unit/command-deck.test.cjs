@@ -73,33 +73,35 @@ describe('getContextRelevantIds', () => {
     assert.equal(ext.getContextRelevantIds(null).length, 0);
   });
 
-  it('getContextRelevantIds returns run-pack for phase context', () => {
+  it('getContextRelevantIds returns run-hunt-phase actions for phase context', () => {
     const ids = ext.getContextRelevantIds({ nodeType: 'phase' });
-    assert.ok(ids.includes('run-pack'), 'should include run-pack');
-    assert.ok(ids.includes('analyze-coverage'), 'should include analyze-coverage');
+    assert.ok(ids.includes('run-hunt-phase'), 'should include run-hunt-phase');
+    assert.ok(ids.includes('analyze-huntmap'), 'should include analyze-huntmap');
   });
 
-  it('getContextRelevantIds returns empty for removed case context', () => {
+  it('getContextRelevantIds returns current case actions for case context', () => {
     const ids = ext.getContextRelevantIds({ nodeType: 'case' });
-    assert.equal(ids.length, 0);
+    assert.ok(ids.includes('close-case'));
+    assert.ok(ids.includes('open-evidence-board'));
+    assert.ok(ids.includes('open-query-analysis'));
   });
 
-  it('getContextRelevantIds returns correct ids for query context', () => {
+  it('getContextRelevantIds returns query investigation actions for query context', () => {
     const ids = ext.getContextRelevantIds({ nodeType: 'query' });
-    assert.ok(ids.includes('query-knowledge'));
-    assert.ok(ids.includes('analyze-coverage'));
+    assert.ok(ids.includes('open-query-analysis'));
+    assert.ok(ids.includes('open-evidence-board'));
   });
 
-  it('getContextRelevantIds returns correct ids for receipt context', () => {
+  it('getContextRelevantIds returns receipt investigation actions for receipt context', () => {
     const ids = ext.getContextRelevantIds({ nodeType: 'receipt' });
     assert.ok(ids.includes('open-evidence-board'));
-    assert.ok(ids.includes('publish-findings'));
+    assert.ok(ids.includes('open-query-analysis'));
   });
 
-  it('getContextRelevantIds returns correct ids for hypothesis context', () => {
+  it('getContextRelevantIds returns hypothesis analysis actions for hypothesis context', () => {
     const ids = ext.getContextRelevantIds({ nodeType: 'hypothesis' });
-    assert.ok(ids.includes('analyze-coverage'));
-    assert.ok(ids.includes('query-knowledge'));
+    assert.ok(ids.includes('analyze-huntmap'));
+    assert.ok(ids.includes('open-query-analysis'));
   });
 
   it('getContextRelevantIds returns empty for removed finding context', () => {
@@ -113,9 +115,10 @@ describe('getContextRelevantIds', () => {
     assert.ok(ids.includes('runtime-doctor'));
   });
 
-  it('getContextRelevantIds returns empty for removed huntmap context', () => {
+  it('getContextRelevantIds returns correct ids for huntmap context', () => {
     const ids = ext.getContextRelevantIds({ nodeType: 'huntmap' });
-    assert.equal(ids.length, 0);
+    assert.ok(ids.includes('analyze-huntmap'));
+    assert.ok(ids.includes('run-hunt-phase'));
   });
 
   it('getContextRelevantIds returns empty for unknown context', () => {

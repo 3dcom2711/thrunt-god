@@ -126,33 +126,33 @@ if (runToolIdx !== -1) {
     process.stdout.write(JSON.stringify({ error: err.message }) + '\n');
     process.exit(1);
   }
+} else {
+  const server = new McpServer({
+    name: 'thrunt-mcp',
+    version: '0.1.0',
+  });
+
+  log('Opening intel database...');
+  const db = openIntelDb(dbOpts);
+  ensureKnowledgeSchema(db);
+  log('Intel database ready');
+
+  const shutdown = createShutdownHandler({ server, db, log });
+
+  registerTools(server, db);
+  log('Tools registered');
+
+  registerPrompts(server, db);
+  log('Prompts registered');
+
+  const transport = new StdioServerTransport();
+  server.connect(transport).then(() => {
+    log('MCP server started on stdio');
+  }).catch(err => {
+    log('Failed to start:', err.message);
+    void shutdown(1);
+  });
+
+  process.on('SIGINT', () => { void shutdown(0); });
+  process.on('SIGTERM', () => { void shutdown(0); });
 }
-
-const server = new McpServer({
-  name: 'thrunt-mcp',
-  version: '0.1.0',
-});
-
-log('Opening intel database...');
-const db = openIntelDb(dbOpts);
-ensureKnowledgeSchema(db);
-log('Intel database ready');
-
-const shutdown = createShutdownHandler({ server, db, log });
-
-registerTools(server, db);
-log('Tools registered');
-
-registerPrompts(server, db);
-log('Prompts registered');
-
-const transport = new StdioServerTransport();
-server.connect(transport).then(() => {
-  log('MCP server started on stdio');
-}).catch(err => {
-  log('Failed to start:', err.message);
-  void shutdown(1);
-});
-
-process.on('SIGINT', () => { void shutdown(0); });
-process.on('SIGTERM', () => { void shutdown(0); });

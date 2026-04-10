@@ -104,7 +104,7 @@ export class RunbookPanel implements vscode.Disposable {
   private currentRunbook: { def: RunbookDef; path: string } | null = null;
 
   private constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly registry: RunbookRegistry,
     private readonly engine: RunbookEngine,
     private readonly logger: ExecutionLogger,

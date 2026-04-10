@@ -12,4 +12,16 @@ describe('VS Code package manifest', () => {
       'package.json should activate on thruntGod.programDashboard'
     );
   });
+
+  it('contributes the close-case command for Command Deck and palette execution', () => {
+    const commands = Array.isArray(pkg.contributes?.commands) ? pkg.contributes.commands : [];
+    assert.ok(
+      commands.some((command) => command.command === 'thrunt-god.closeCase'),
+      'package.json should contribute thrunt-god.closeCase'
+    );
+    assert.ok(
+      pkg.activationEvents.includes('onCommand:thrunt-god.closeCase'),
+      'package.json should activate on thrunt-god.closeCase'
+    );
+  });
 });

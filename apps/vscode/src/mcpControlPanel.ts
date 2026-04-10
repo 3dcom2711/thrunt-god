@@ -6,7 +6,6 @@ import type {
   McpControlToHostMessage,
   HostToMcpControlMessage,
   McpServerStatus,
-  McpToolInfo,
 } from '../shared/mcp-control';
 
 export const MCP_CONTROL_VIEW_TYPE = 'thruntGod.mcpControlPanel';
@@ -92,7 +91,7 @@ export class McpControlPanel implements vscode.Disposable {
   private ready = false;
 
   private constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly mcpStatus: MCPStatusManager,
     private readonly panel: vscode.WebviewPanel
   ) {

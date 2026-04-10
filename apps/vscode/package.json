@@ -25,6 +25,7 @@
     "onCommand:thrunt-god.showProgressReport",
     "onCommand:thrunt-god.analyzeHuntmap",
     "onCommand:thrunt-god.showRuntimeDoctor",
+    "onCommand:thrunt-god.closeCase",
     "onCommand:thrunt-god.showInEvidenceBoard",
     "onCommand:thrunt-god.openHuntOverview",
     "onCommand:thrunt-god.openEvidenceBoard",
@@ -132,6 +133,11 @@
         "command": "thrunt-god.showRuntimeDoctor",
         "title": "THRUNT: Check Runtime",
         "icon": "$(tools)"
+      },
+      {
+        "command": "thrunt-god.closeCase",
+        "title": "THRUNT: Close Case",
+        "icon": "$(check-all)"
       },
       {
         "command": "thrunt-god.revealInExplorer",

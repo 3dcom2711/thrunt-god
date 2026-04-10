@@ -18,14 +18,13 @@ const vscode = createVsCodeApi<unknown, CommandDeckToHostMessage>();
 function getRelevantIdsFromContext(context: CommandDeckContext | null): string[] {
   if (!context) return [];
   switch (context.nodeType) {
-    case 'phase': return ['run-pack', 'analyze-coverage'];
-    case 'case': return ['close-case', 'publish-findings', 'open-evidence-board'];
-    case 'query': return ['query-knowledge', 'analyze-coverage'];
-    case 'receipt': return ['open-evidence-board', 'publish-findings'];
-    case 'hypothesis': return ['analyze-coverage', 'query-knowledge'];
-    case 'finding': return ['publish-findings'];
+    case 'phase': return ['run-hunt-phase', 'analyze-huntmap'];
+    case 'case': return ['close-case', 'open-evidence-board', 'open-query-analysis'];
+    case 'query': return ['open-query-analysis', 'open-evidence-board'];
+    case 'receipt': return ['open-evidence-board', 'open-query-analysis'];
+    case 'hypothesis': return ['analyze-huntmap', 'open-query-analysis'];
     case 'mission': return ['open-program-dashboard', 'runtime-doctor'];
-    case 'huntmap': return ['generate-attack-layer', 'analyze-coverage'];
+    case 'huntmap': return ['analyze-huntmap', 'run-hunt-phase'];
     default: return [];
   }
 }
@@ -206,7 +205,6 @@ function CommandDeckApp() {
 
       {templatePrompt && (
         <PlaceholderPrompt
-          templateId={templatePrompt.templateId}
           placeholders={templatePrompt.placeholders}
           onSubmit={(values) => {
             vscode.postMessage({ type: 'template:exec', templateId: templatePrompt.templateId, values });
@@ -343,12 +341,10 @@ function TemplateForm({ onClose }: { onClose: () => void }) {
 }
 
 function PlaceholderPrompt({
-  templateId,
   placeholders,
   onSubmit,
   onCancel,
 }: {
-  templateId: string;
   placeholders: string[];
   onSubmit: (values: Record<string, string>) => void;
   onCancel: () => void;

@@ -3500,6 +3500,44 @@ function parseActivityDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getLatestArtifactMtime(rootDir) {
+  const stack = [rootDir];
+  let latestMtime = null;
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(currentDir, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          stack.push(entryPath);
+          continue;
+        }
+
+        if (!entry.isFile()) {
+          continue;
+        }
+
+        const stat = fs.statSync(entryPath);
+        if (!Number.isNaN(stat.mtime.getTime()) && (!latestMtime || stat.mtime > latestMtime)) {
+          latestMtime = stat.mtime;
+        }
+      } catch {
+        // Skip unreadable entries and continue scanning sibling artifacts.
+      }
+    }
+  }
+
+  return latestMtime;
+}
+
 function getCaseActivityDate(caseStatePath, rosterEntry = {}) {
   if (fs.existsSync(caseStatePath)) {
     try {
@@ -3516,21 +3554,7 @@ function getCaseActivityDate(caseStatePath, rosterEntry = {}) {
 
       // Use the most recent mtime from any file in the case directory as fallback
       const caseDir = path.dirname(caseStatePath);
-      let latestMtime = null;
-      try {
-        const entries = fs.readdirSync(caseDir);
-        for (const entry of entries) {
-          try {
-            const entryPath = path.join(caseDir, entry);
-            const stat = fs.statSync(entryPath);
-            if (stat.isFile() && !Number.isNaN(stat.mtime.getTime())) {
-              if (!latestMtime || stat.mtime > latestMtime) {
-                latestMtime = stat.mtime;
-              }
-            }
-          } catch { /* skip unreadable entries */ }
-        }
-      } catch { /* fall through */ }
+      const latestMtime = getLatestArtifactMtime(caseDir);
       if (latestMtime) {
         return latestMtime;
       }
@@ -3876,7 +3900,11 @@ function cmdCaseSearch(cwd, query, options, raw) {
 
     // If --technique specified, filter results to those with matching techniques
     if (options.technique) {
-      const techIds = Array.isArray(options.technique) ? options.technique : [options.technique];
+      const techIds = [...new Set(
+        (Array.isArray(options.technique) ? options.technique : [options.technique])
+          .map((techId) => String(techId || '').trim().toUpperCase())
+          .filter(Boolean)
+      )];
       const overlap = findTechniqueOverlap(db, techIds);
       const overlapMap = new Map(overlap.map(o => [o.slug, o]));
       // Filter to only results with technique overlap

@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 function makeTempDir() {
   const dir = path.join(os.tmpdir(), `thrunt-mcp-test-${crypto.randomUUID()}`);
@@ -845,6 +845,39 @@ describe('tools.cjs - registerTools count', () => {
 });
 
 describe('server smoke test', () => {
+  it('--run-tool exits after emitting a one-shot result', () => {
+    const tmpDir = makeTempDir();
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        serverPath,
+        '--run-tool',
+        'lookup_technique',
+        '--input',
+        JSON.stringify({ technique_id: 'T1059' }),
+      ],
+      {
+        env: {
+          ...process.env,
+          THRUNT_INTEL_DB_DIR: tmpDir,
+        },
+        encoding: 'utf-8',
+        timeout: 5000,
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.error?.message || 'expected successful exit');
+    assert.equal(result.signal, null, 'one-shot tool execution should not hang waiting for stdio transport');
+
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.isError, undefined);
+    assert.ok(Array.isArray(payload.content));
+    assert.ok(payload.content[0].text.includes('"id": "T1059"'));
+    assert.ok(!result.stderr.includes('MCP server started on stdio'));
+  });
+
   it('responds to JSON-RPC initialize request', async () => {
     const tmpDir = makeTempDir();
     const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
