@@ -2,11 +2,21 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const os = require('os');
 const path = require('path');
 const fs = require('fs');
 
 const BUNDLE_PATH = path.join(__dirname, '..', '..', 'dist', 'extension.js');
 const ext = require(BUNDLE_PATH);
+const EXAMPLE_RUNBOOK_PATH = path.join(__dirname, '..', 'fixtures', 'runbooks', 'example-domain-hunt.yaml');
+
+function makeRunbookWorkspace() {
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'thrunt-runbook-workspace-'));
+  const runbookDir = path.join(workspaceRoot, '.planning', 'runbooks');
+  fs.mkdirSync(runbookDir, { recursive: true });
+  fs.copyFileSync(EXAMPLE_RUNBOOK_PATH, path.join(runbookDir, 'example-domain-hunt.yaml'));
+  return workspaceRoot;
+}
 
 // ---------------------------------------------------------------------------
 // Export tests
@@ -40,8 +50,7 @@ describe('Runbook exports', () => {
 
 describe('parseRunbook valid YAML', () => {
   it('parseRunbook accepts valid example runbook YAML', () => {
-    const yamlPath = path.join(__dirname, '..', '..', '..', '..', '.planning', 'runbooks', 'example-domain-hunt.yaml');
-    const content = fs.readFileSync(yamlPath, 'utf8');
+    const content = fs.readFileSync(EXAMPLE_RUNBOOK_PATH, 'utf8');
     const result = ext.parseRunbook(content);
 
     assert.notEqual(result.runbook, null, 'runbook should not be null');
@@ -146,42 +155,54 @@ describe('parseRunbook rejection', () => {
 
 describe('RunbookRegistry', () => {
   it('RunbookRegistry.discover finds example runbook', async () => {
-    const workspaceRoot = path.join(__dirname, '..', '..', '..', '..');
-    const registry = new ext.RunbookRegistry(workspaceRoot);
-    await registry.discover();
+    const workspaceRoot = makeRunbookWorkspace();
+    try {
+      const registry = new ext.RunbookRegistry(workspaceRoot);
+      await registry.discover();
 
-    assert.ok(registry.count >= 1, `expected at least 1 runbook, got ${registry.count}`);
+      assert.ok(registry.count >= 1, `expected at least 1 runbook, got ${registry.count}`);
 
-    const runbooks = registry.getRunbooks();
-    const example = runbooks.find((r) => r.name === 'Domain Investigation Runbook');
-    assert.ok(example, 'should find Domain Investigation Runbook');
-    assert.equal(example.valid, true, 'example runbook should be valid');
-    assert.equal(example.errors.length, 0, 'example runbook should have no errors');
+      const runbooks = registry.getRunbooks();
+      const example = runbooks.find((r) => r.name === 'Domain Investigation Runbook');
+      assert.ok(example, 'should find Domain Investigation Runbook');
+      assert.equal(example.valid, true, 'example runbook should be valid');
+      assert.equal(example.errors.length, 0, 'example runbook should have no errors');
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
   });
 
   it('RunbookRegistry.getRunbook returns RunbookDef for valid file', async () => {
-    const workspaceRoot = path.join(__dirname, '..', '..', '..', '..');
-    const registry = new ext.RunbookRegistry(workspaceRoot);
-    await registry.discover();
+    const workspaceRoot = makeRunbookWorkspace();
+    try {
+      const registry = new ext.RunbookRegistry(workspaceRoot);
+      await registry.discover();
 
-    const runbooks = registry.getRunbooks();
-    const example = runbooks.find((r) => r.name === 'Domain Investigation Runbook');
-    assert.ok(example, 'should find example runbook');
+      const runbooks = registry.getRunbooks();
+      const example = runbooks.find((r) => r.name === 'Domain Investigation Runbook');
+      assert.ok(example, 'should find example runbook');
 
-    const def = registry.getRunbook(example.path);
-    assert.notEqual(def, null, 'should return a RunbookDef');
-    assert.equal(def.name, 'Domain Investigation Runbook');
-    assert.equal(def.steps.length, 5);
+      const def = registry.getRunbook(example.path);
+      assert.notEqual(def, null, 'should return a RunbookDef');
+      assert.equal(def.name, 'Domain Investigation Runbook');
+      assert.equal(def.steps.length, 5);
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
   });
 
   it('RunbookRegistry.refresh clears and re-discovers', async () => {
-    const workspaceRoot = path.join(__dirname, '..', '..', '..', '..');
-    const registry = new ext.RunbookRegistry(workspaceRoot);
-    await registry.discover();
-    const countBefore = registry.count;
+    const workspaceRoot = makeRunbookWorkspace();
+    try {
+      const registry = new ext.RunbookRegistry(workspaceRoot);
+      await registry.discover();
+      const countBefore = registry.count;
 
-    await registry.refresh();
-    assert.equal(registry.count, countBefore, 'count should be same after refresh');
+      await registry.refresh();
+      assert.equal(registry.count, countBefore, 'count should be same after refresh');
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });
 

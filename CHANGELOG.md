@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-04-10
+
+### Fixed
+- Release verification no longer depends on a developer-local `.planning/runbooks/example-domain-hunt.yaml` file that is absent from clean CI and release checkouts
+- VS Code runbook unit tests now use committed fixtures under `apps/vscode/test/fixtures/`, making `lint:vscode`, `test:vscode:unit`, and tag-driven release runs deterministic
+
 ## [0.3.1] - 2026-04-10
 
 ### Added
