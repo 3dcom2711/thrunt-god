@@ -109,10 +109,11 @@ is_allowlisted() {
       return 0
     fi
     # Directory prefix match (allowlist entries ending in /)
-    if [[ "$allowed" == */ && "$normalized" == "$candidate/"* ]]; then
+    # Use "${candidate}/" with trailing slash to prevent apps/mcp/data/ from matching apps/mcp/database/
+    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" == "${candidate}/"* ]]; then
       return 0
     fi
-    if [[ "$allowed" == */ && "$normalized" = /* && "$normalized" == "$repo_root/$candidate/"* ]]; then
+    if [[ "$allowed" == */ && -n "$candidate" && "$normalized" = /* && "$normalized" == "$repo_root/${candidate}/"* ]]; then
       return 0
     fi
   done
