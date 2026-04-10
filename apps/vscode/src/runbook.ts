@@ -182,7 +182,8 @@ export function parseRunbook(yamlContent: string): { runbook: RunbookDef | null;
     const params: Record<string, string> = {};
     if (s.params && typeof s.params === 'object') {
       for (const [k, v] of Object.entries(s.params as Record<string, unknown>)) {
-        params[k] = String(v); // coerce to string safely
+        params[k] = (v === null || v === undefined) ? '' :
+          (typeof v === 'object') ? JSON.stringify(v) : String(v);
       }
     }
     return {
