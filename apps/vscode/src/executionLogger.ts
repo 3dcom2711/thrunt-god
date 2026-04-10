@@ -102,6 +102,9 @@ export class ExecutionLogger implements vscode.Disposable {
       }
       const tmpPath = this.historyPath + '.tmp';
       fs.writeFileSync(tmpPath, JSON.stringify(entries, null, 2));
+      try { fs.unlinkSync(this.historyPath); } catch (e: unknown) {
+        if (e && typeof e === 'object' && 'code' in e && (e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      }
       fs.renameSync(tmpPath, this.historyPath);
     } catch (err) {
       console.error(`[ExecutionLogger] Failed to write history: ${err}`);
