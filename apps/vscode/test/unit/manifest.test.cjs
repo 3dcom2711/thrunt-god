@@ -75,6 +75,17 @@ describe('extension manifest', () => {
     assert.match(phaseRun.when, /viewItem == phase-runnable/);
   });
 
+  it('contributes openProgramDashboard command and view/title menu entry', () => {
+    const cmd = findCommand('thrunt-god.openProgramDashboard');
+    assert.ok(cmd, 'openProgramDashboard command should be contributed');
+    assert.equal(cmd.title, 'THRUNT: Open Program Dashboard');
+    assert.equal(cmd.icon, '$(dashboard)');
+
+    const titleMenu = findMenuEntry('view/title', 'thrunt-god.openProgramDashboard');
+    assert.ok(titleMenu, 'openProgramDashboard should appear in the huntTree toolbar');
+    assert.match(titleMenu.when, /view == thruntGod\.huntTree/);
+  });
+
   it('registers automation tree view alongside investigation tree', () => {
     const views = manifest.contributes.views.thruntGodSidebar;
     assert.equal(views.length, 2, 'should have two sidebar views');

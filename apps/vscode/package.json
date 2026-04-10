@@ -455,6 +455,11 @@
           "group": "navigation"
         },
         {
+          "command": "thrunt-god.openProgramDashboard",
+          "when": "view == thruntGod.huntTree",
+          "group": "navigation"
+        },
+        {
           "command": "thrunt-god.openEvidenceBoard",
           "when": "view == thruntGod.huntTree",
           "group": "navigation"
