@@ -213,7 +213,7 @@ export class CommandDeckRegistry {
   }
 
   static extractPlaceholders(text: string): string[] {
-    const matches = text.match(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g) || [];
+    const matches = text.match(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g) || [];
     return [...new Set(matches.map((m) => m.slice(1, -1)))];
   }
 }
@@ -620,7 +620,7 @@ export class CommandDeckPanel implements vscode.Disposable {
 
     // Substitute placeholders in cliArgs
     const resolvedArgs = (tmpl.cliArgs || []).map((arg) =>
-      arg.replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (_, key) => values[key] ?? '')
+      arg.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (_, key) => values[key] ?? '')
     );
 
     const startedAt = Date.now();
