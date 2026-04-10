@@ -101,7 +101,10 @@ const runToolIdx = process.argv.indexOf('--run-tool');
 if (runToolIdx !== -1) {
   const toolName = process.argv[runToolIdx + 1];
   const inputIdx = process.argv.indexOf('--input');
-  const inputJson = inputIdx !== -1 ? process.argv[inputIdx + 1] : '{}';
+  const positionalInputJson = process.argv[runToolIdx + 2];
+  const inputJson = inputIdx !== -1
+    ? process.argv[inputIdx + 1]
+    : (positionalInputJson && !positionalInputJson.startsWith('--') ? positionalInputJson : '{}');
 
   if (!toolName) {
     process.stdout.write(JSON.stringify({ error: 'Missing tool name after --run-tool' }) + '\n');

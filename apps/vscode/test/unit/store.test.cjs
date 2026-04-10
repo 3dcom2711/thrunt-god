@@ -146,41 +146,46 @@ describe('resolveArtifactType', () => {
     );
   });
 
-  // --- Case-nested artifact resolution (cases/<slug>/ prefix stripped) ---
+  // --- Case-nested artifact resolution (case/workstream namespace preserved) ---
 
   it('resolves cases/<slug>/MISSION.md to mission type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/MISSION.md');
-    assert.deepEqual(result, { type: 'mission', id: 'MISSION' });
+    assert.deepEqual(result, { type: 'mission', id: 'cases/brute-force/MISSION' });
   });
 
   it('resolves cases/<slug>/QUERIES/QRY-*.md to query type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/QUERIES/QRY-001.md');
-    assert.deepEqual(result, { type: 'query', id: 'QRY-001' });
+    assert.deepEqual(result, { type: 'query', id: 'cases/brute-force/QRY-001' });
   });
 
   it('resolves cases/<slug>/RECEIPTS/RCT-*.md to receipt type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/RECEIPTS/RCT-001.md');
-    assert.deepEqual(result, { type: 'receipt', id: 'RCT-001' });
+    assert.deepEqual(result, { type: 'receipt', id: 'cases/brute-force/RCT-001' });
   });
 
   it('resolves cases/<slug>/HYPOTHESES.md to hypotheses type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/HYPOTHESES.md');
-    assert.deepEqual(result, { type: 'hypotheses', id: 'HYPOTHESES' });
+    assert.deepEqual(result, { type: 'hypotheses', id: 'cases/brute-force/HYPOTHESES' });
   });
 
   it('resolves cases/<slug>/STATE.md to state type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/STATE.md');
-    assert.deepEqual(result, { type: 'state', id: 'STATE' });
+    assert.deepEqual(result, { type: 'state', id: 'cases/brute-force/STATE' });
   });
 
   it('resolves cases/<slug>/HUNTMAP.md to huntmap type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/HUNTMAP.md');
-    assert.deepEqual(result, { type: 'huntmap', id: 'HUNTMAP' });
+    assert.deepEqual(result, { type: 'huntmap', id: 'cases/brute-force/HUNTMAP' });
   });
 
   it('resolves cases/<slug>/EVIDENCE_REVIEW.md to evidenceReview type', () => {
     const result = ext.resolveArtifactType('/workspace/.planning/cases/brute-force/EVIDENCE_REVIEW.md');
-    assert.deepEqual(result, { type: 'evidenceReview', id: 'EVIDENCE_REVIEW' });
+    assert.deepEqual(result, { type: 'evidenceReview', id: 'cases/brute-force/EVIDENCE_REVIEW' });
+  });
+
+  it('resolves workstreams/<slug>/QUERIES/QRY-*.md with workstream namespace preserved', () => {
+    const result = ext.resolveArtifactType('/workspace/.planning/workstreams/auth/QUERIES/QRY-001.md');
+    assert.deepEqual(result, { type: 'query', id: 'workstreams/auth/QRY-001' });
   });
 
   // --- Flat-path regression checks (ensure no regression from case prefix stripping) ---

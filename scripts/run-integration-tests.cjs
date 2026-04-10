@@ -19,7 +19,7 @@ if (files.length === 0) {
 }
 
 try {
-  execFileSync(process.execPath, ['--test', ...files], {
+  execFileSync(process.execPath, ['--test', '--test-concurrency=1', ...files], {
     stdio: 'inherit',
     env: { ...process.env },
   });

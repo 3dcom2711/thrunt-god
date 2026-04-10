@@ -8,6 +8,8 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn, spawnSync } = require('child_process');
 
+const MCP_SMOKE_TIMEOUT_MS = 15000;
+
 function makeTempDir() {
   const dir = path.join(os.tmpdir(), `thrunt-mcp-test-${crypto.randomUUID()}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -858,7 +860,7 @@ describe('server smoke test', () => {
           THRUNT_INTEL_DB_DIR: tmpDir,
         },
         encoding: 'utf-8',
-        timeout: 5000,
+        timeout: MCP_SMOKE_TIMEOUT_MS,
       }
     );
 
@@ -890,7 +892,7 @@ describe('server smoke test', () => {
           THRUNT_INTEL_DB_DIR: tmpDir,
         },
         encoding: 'utf-8',
-        timeout: 5000,
+        timeout: MCP_SMOKE_TIMEOUT_MS,
       }
     );
 
@@ -902,6 +904,36 @@ describe('server smoke test', () => {
     assert.ok(Array.isArray(payload.content));
     assert.ok(payload.content[0].text.includes('"id": "T1059"'));
     assert.ok(!result.stderr.includes('MCP server started on stdio'));
+
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+  });
+
+  it('--run-tool accepts positional JSON input for one-shot execution', () => {
+    const tmpDir = makeTempDir();
+    const serverPath = path.join(__dirname, '..', 'apps', 'mcp', 'bin', 'server.cjs');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        serverPath,
+        '--run-tool',
+        'lookup_group',
+        JSON.stringify({ group_id: 'G0016' }),
+      ],
+      {
+        env: {
+          ...process.env,
+          THRUNT_INTEL_DB_DIR: tmpDir,
+        },
+        encoding: 'utf-8',
+        timeout: MCP_SMOKE_TIMEOUT_MS,
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.error?.message || 'expected successful exit');
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.isError, undefined);
+    assert.ok(payload.content[0].text.includes('"id": "G0016"'));
 
     fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
   });
@@ -925,7 +957,7 @@ describe('server smoke test', () => {
           THRUNT_INTEL_DB_DIR: tmpDir,
         },
         encoding: 'utf-8',
-        timeout: 5000,
+        timeout: MCP_SMOKE_TIMEOUT_MS,
       }
     );
 

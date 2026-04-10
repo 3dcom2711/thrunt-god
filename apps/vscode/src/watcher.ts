@@ -2,12 +2,6 @@ import * as vscode from 'vscode';
 import { HUNT_DIRS } from './constants';
 import type { ArtifactType } from './types';
 
-/** Strip cases/<slug>/ prefix so resolveArtifactType sees flat-style paths */
-function stripCasePrefix(relative: string): string {
-  const m = /^cases\/[^/]+\/(.+)$/.exec(relative);
-  return m ? m[1] : relative;
-}
-
 function toArtifactRelativePath(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
 
@@ -15,18 +9,24 @@ function toArtifactRelativePath(filePath: string): string {
     const marker = `/${huntDir}/`;
     const markerIndex = normalized.lastIndexOf(marker);
     if (markerIndex >= 0) {
-      return stripCasePrefix(normalized.slice(markerIndex + marker.length));
+      return normalized.slice(markerIndex + marker.length);
     }
 
     if (normalized === huntDir || normalized.startsWith(`${huntDir}/`)) {
-      return stripCasePrefix(normalized.slice(huntDir.length).replace(/^\/+/, ''));
+      return normalized.slice(huntDir.length).replace(/^\/+/, '');
     }
   }
 
-  const fallback = stripCasePrefix(normalized.replace(/^\/+/, ''));
+  const fallback = normalized.replace(/^\/+/, '');
   const parts = fallback.split('/').filter(Boolean);
   const filename = parts[parts.length - 1] ?? '';
   const directContainer = parts[parts.length - 2] ?? '';
+
+  for (let i = 0; i < parts.length - 2; i += 1) {
+    if (parts[i] === 'cases' || parts[i] === 'workstreams') {
+      return parts.slice(i).join('/');
+    }
+  }
 
   if (parts.length === 1) {
     return parts[0];
@@ -43,11 +43,26 @@ function toArtifactRelativePath(filePath: string): string {
     return filename;
   }
 
-  if (directContainer === 'QUERIES' || directContainer === 'RECEIPTS') {
+  if (directContainer === 'QUERIES' || directContainer === 'RECEIPTS' || directContainer === 'published') {
     return `${directContainer}/${filename}`;
   }
 
   return fallback;
+}
+
+function splitArtifactNamespace(relativePath: string): { namespace: string | null; scopedPath: string } {
+  const childMatch = /^(cases|workstreams)\/([^/]+)\/(.+)$/.exec(relativePath);
+  if (!childMatch) {
+    return { namespace: null, scopedPath: relativePath };
+  }
+  return {
+    namespace: `${childMatch[1]}/${childMatch[2]}`,
+    scopedPath: childMatch[3],
+  };
+}
+
+function scopedArtifactId(namespace: string | null, artifactId: string): string {
+  return namespace ? `${namespace}/${artifactId}` : artifactId;
 }
 
 /**
@@ -56,32 +71,33 @@ function toArtifactRelativePath(filePath: string): string {
  */
 export function resolveArtifactType(filePath: string): { type: ArtifactType; id: string } | null {
   const normalized = toArtifactRelativePath(filePath);
-  const basename = normalized.split('/').pop() ?? '';
+  const { namespace, scopedPath } = splitArtifactNamespace(normalized);
+  const basename = scopedPath.split('/').pop() ?? '';
   const nameNoExt = basename.replace(/\.md$/i, '');
 
   // Top-level singleton artifacts
-  switch (normalized) {
+  switch (scopedPath) {
     case 'MISSION.md':
-      return { type: 'mission', id: 'MISSION' };
+      return { type: 'mission', id: scopedArtifactId(namespace, 'MISSION') };
     case 'HYPOTHESES.md':
-      return { type: 'hypotheses', id: 'HYPOTHESES' };
+      return { type: 'hypotheses', id: scopedArtifactId(namespace, 'HYPOTHESES') };
     case 'HUNTMAP.md':
-      return { type: 'huntmap', id: 'HUNTMAP' };
+      return { type: 'huntmap', id: scopedArtifactId(namespace, 'HUNTMAP') };
     case 'STATE.md':
-      return { type: 'state', id: 'STATE' };
+      return { type: 'state', id: scopedArtifactId(namespace, 'STATE') };
     case 'EVIDENCE_REVIEW.md':
-      return { type: 'evidenceReview', id: 'EVIDENCE_REVIEW' };
+      return { type: 'evidenceReview', id: scopedArtifactId(namespace, 'EVIDENCE_REVIEW') };
     case 'FINDINGS.md':
     case 'published/FINDINGS.md':
-      return { type: 'phaseSummary', id: 'FINDINGS' };
+      return { type: 'phaseSummary', id: scopedArtifactId(namespace, 'FINDINGS') };
   }
 
   // Directory-based artifacts: QUERIES/QRY-*.md and RECEIPTS/RCT-*.md
-  if (/^QUERIES\/QRY-[^/]+\.md$/i.test(normalized)) {
-    return { type: 'query', id: nameNoExt };
+  if (/^QUERIES\/QRY-[^/]+\.md$/i.test(scopedPath)) {
+    return { type: 'query', id: scopedArtifactId(namespace, nameNoExt) };
   }
-  if (/^RECEIPTS\/RCT-[^/]+\.md$/i.test(normalized)) {
-    return { type: 'receipt', id: nameNoExt };
+  if (/^RECEIPTS\/RCT-[^/]+\.md$/i.test(scopedPath)) {
+    return { type: 'receipt', id: scopedArtifactId(namespace, nameNoExt) };
   }
 
   // Unrecognized artifact (e.g. SUCCESS_CRITERIA.md, environment/ENVIRONMENT.md)

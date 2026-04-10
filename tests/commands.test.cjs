@@ -9,7 +9,7 @@ const Module = require('module');
 const fs = require('fs');
 const path = require('path');
 const { runThruntTools, createTempProject, cleanup } = require('./helpers.cjs');
-const { extractFrontmatter } = require('../thrunt-god/bin/lib/frontmatter.cjs');
+const { extractFrontmatter, spliceFrontmatter } = require('../thrunt-god/bin/lib/frontmatter.cjs');
 
 describe('history-digest command', () => {
   let tmpDir;
@@ -2629,6 +2629,39 @@ describe('cmdCaseSearch', () => {
     }
   });
 
+  test('case-search --technique matches state-only technique IDs and expands parent technique filters', () => {
+    const newResult = runThruntTools(['case', 'new', 'Password Spray Followup'], tmpDir);
+    assert.ok(newResult.success, `case new failed: ${newResult.error}`);
+
+    const slug = JSON.parse(newResult.output).slug;
+    const caseDir = path.join(tmpDir, '.planning', 'cases', slug);
+    fs.writeFileSync(
+      path.join(caseDir, 'FINDINGS.md'),
+      '# Findings\n\nPassword spray activity confirmed against the Okta tenant.\n'
+    );
+
+    const statePath = path.join(caseDir, 'STATE.md');
+    const stateContent = fs.readFileSync(statePath, 'utf-8');
+    const frontmatter = extractFrontmatter(stateContent);
+    frontmatter.technique_ids = ['T1110.003'];
+    fs.writeFileSync(statePath, spliceFrontmatter(stateContent, frontmatter));
+
+    const closeResult = runThruntTools(['case', 'close', slug], tmpDir);
+    assert.ok(closeResult.success, `case close failed: ${closeResult.error}`);
+
+    const result = runThruntTools(['case-search', 'password spray', '--technique', 'T1110'], tmpDir);
+    assert.ok(result.success, `case-search failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.success, true);
+    assert.strictEqual(output.total, 1, `expected one state-backed technique match, got ${output.total}`);
+    assert.strictEqual(output.results[0].slug, slug, 'search should return the indexed case');
+    assert.ok(
+      output.results[0].technique_overlap.includes('T1110.003'),
+      'parent technique filter should expand to matching indexed sub-techniques'
+    );
+  });
+
   test('case-search --limit caps results', () => {
     // Create 3 cases with similar content
     createAndCloseCase(tmpDir, 'lateral-1', 'Lateral Move Alpha', {
@@ -2723,6 +2756,35 @@ describe('cmdCaseSearch', () => {
     const output = JSON.parse(result.output);
     assert.strictEqual(output.success, true);
     assert.ok(output.results.length > 0, 'should find the routing test case via CLI');
+  });
+
+  test('case-search resolves relative --program against the effective --cwd', () => {
+    const tempRoot = fs.mkdtempSync(path.join(require('os').tmpdir(), 'thrunt-search-cwd-'));
+    const shellDir = path.join(tempRoot, 'shell');
+    const cwdDir = path.join(tempRoot, 'targets', 'a');
+    const programDir = path.join(tempRoot, 'targets', 'b');
+    fs.mkdirSync(shellDir, { recursive: true });
+    fs.mkdirSync(cwdDir, { recursive: true });
+    fs.mkdirSync(programDir, { recursive: true });
+
+    setupProgramState(programDir, []);
+    createAndCloseCase(programDir, 'relative-program-search', 'Relative Program Search', {
+      findings: '# Findings\n\nUnique relative program marker for search routing.\n',
+    });
+
+    try {
+      const result = runThruntTools(
+        ['--cwd', cwdDir, 'case-search', 'relative program marker', '--program', '../b'],
+        shellDir
+      );
+      assert.ok(result.success, `case-search failed: ${result.error}`);
+      const output = JSON.parse(result.output);
+      assert.strictEqual(output.success, true);
+      assert.strictEqual(output.total, 1, `expected one result, got ${output.total}`);
+      assert.strictEqual(output.results[0].slug, 'relative-program-search');
+    } finally {
+      cleanup(tempRoot);
+    }
   });
 });
 

@@ -3618,6 +3618,30 @@ function updateCaseStateBody(content, opts = {}) {
   return next;
 }
 
+function expandTechniqueOverlapIds(db, techniqueIds) {
+  const expanded = new Set(
+    (techniqueIds || [])
+      .map((techniqueId) => String(techniqueId || '').trim().toUpperCase())
+      .filter(Boolean)
+  );
+
+  if (!db || expanded.size === 0) return [...expanded];
+
+  for (const techniqueId of [...expanded]) {
+    if (techniqueId.includes('.')) continue;
+    try {
+      const rows = db.prepare('SELECT DISTINCT technique_id FROM case_techniques WHERE technique_id LIKE ?').all(`${techniqueId}.%`);
+      for (const row of rows) {
+        if (row.technique_id) expanded.add(String(row.technique_id).trim().toUpperCase());
+      }
+    } catch {
+      // Best-effort expansion only.
+    }
+  }
+
+  return [...expanded];
+}
+
 function cmdCaseNew(cwd, name, options, raw) {
   if (!name) {
     error('Case name required. Usage: case new <name>');
@@ -3701,18 +3725,7 @@ function cmdCaseNew(cwd, name, options, raw) {
         const techIds = extractTechniqueIds(name);
         let overlapResults = [];
         if (techIds.length > 0) {
-          // Also include sub-technique variants (T1059 -> T1059.xxx) for broader matching
-          const expanded = new Set(techIds);
-          for (const tid of techIds) {
-            // If parent ID (no dot), find any sub-techniques in the DB
-            if (!tid.includes('.')) {
-              try {
-                const subs = db.prepare('SELECT DISTINCT technique_id FROM case_techniques WHERE technique_id LIKE ?').all(tid + '.%');
-                for (const s of subs) expanded.add(s.technique_id);
-              } catch { /* ignore */ }
-            }
-          }
-          overlapResults = findTechniqueOverlap(db, [...expanded]);
+          overlapResults = findTechniqueOverlap(db, expandTechniqueOverlapIds(db, techIds));
         }
         // Merge: name matches first, then technique overlaps not already in name results
         const seen = new Set(nameResults.map(r => r.slug));
@@ -3900,11 +3913,11 @@ function cmdCaseSearch(cwd, query, options, raw) {
 
     // If --technique specified, filter results to those with matching techniques
     if (options.technique) {
-      const techIds = [...new Set(
+      const techIds = expandTechniqueOverlapIds(db, [...new Set(
         (Array.isArray(options.technique) ? options.technique : [options.technique])
           .map((techId) => String(techId || '').trim().toUpperCase())
           .filter(Boolean)
-      )];
+      )]);
       const overlap = findTechniqueOverlap(db, techIds);
       const overlapMap = new Map(overlap.map(o => [o.slug, o]));
       // Filter to only results with technique overlap

@@ -9,6 +9,7 @@ const {
   SPLUNK_URL,
   SPLUNK_USER,
   SPLUNK_PASSWORD,
+  SPLUNK_READY_TIMEOUT_MS,
 } = require('./helpers.cjs');
 const { seedSplunk } = require('./fixtures/seed-data.cjs');
 const SPLUNK_AUTH = 'Basic ' + Buffer.from(`${SPLUNK_USER}:${SPLUNK_PASSWORD}`).toString('base64');
@@ -20,7 +21,7 @@ describe('splunk integration', async (t) => {
   let queryResult;
 
   test('bootstraps bearer token from Splunk REST API', async () => {
-    await ensureSplunkHostAccess({ timeout: 300000 });
+    await ensureSplunkHostAccess({ timeout: SPLUNK_READY_TIMEOUT_MS });
     await seedSplunk(SPLUNK_URL, { user: SPLUNK_USER, password: SPLUNK_PASSWORD });
     bearerToken = await createSplunkBearerToken(SPLUNK_URL, { user: SPLUNK_USER, password: SPLUNK_PASSWORD });
     assert.ok(typeof bearerToken === 'string' && bearerToken.length > 0, 'Bearer token should be a non-empty string');

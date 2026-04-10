@@ -129,6 +129,13 @@ function handleSearchTechniques(db, args) {
 
 function handleLookupGroup(db, args) {
   const { group_id } = args;
+  if (typeof group_id !== 'string' || group_id.trim().length === 0) {
+    return {
+      content: [{ type: 'text', text: 'group_id required' }],
+      isError: true,
+    };
+  }
+
   const group = resolveGroup(db, group_id);
 
   if (!group) {
@@ -149,10 +156,15 @@ function handleLookupGroup(db, args) {
 }
 
 function resolveGroup(db, groupId) {
-  let group = lookupGroup(db, groupId);
+  if (typeof groupId !== 'string' || groupId.trim().length === 0) {
+    return null;
+  }
 
-  if (!group && !/^G\d+$/i.test(groupId)) {
-    const escaped = groupId.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  const normalizedGroupId = groupId.trim();
+  let group = lookupGroup(db, normalizedGroupId);
+
+  if (!group && !/^G\d+$/i.test(normalizedGroupId)) {
+    const escaped = normalizedGroupId.replace(/%/g, '\\%').replace(/_/g, '\\_');
     const nameMatch = db.prepare(
       "SELECT * FROM groups WHERE name LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\' LIMIT 1"
     ).get(`%${escaped}%`, `%${escaped}%`);

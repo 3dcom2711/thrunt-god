@@ -327,6 +327,36 @@ describe('db.cjs - indexCase', () => {
     assert.ok(ids.includes('T1078.004'), 'should include T1078.004');
   });
 
+  it('indexes technique IDs from STATE frontmatter even when artifacts omit ATT&CK IDs', () => {
+    const { indexCase } = loadDb();
+    const slug = 'state-only-techniques';
+    const caseDir = path.join(tmpDir, '.planning', 'cases', slug);
+    createCaseArtifacts(caseDir, {
+      findings: '# Findings\n\nPassword spray activity confirmed against Okta.\n',
+      hypotheses: '# Hypotheses\n\n## H1\nThe actor abused a valid cloud identity after the initial spray.\n',
+      state: `---
+status: closed
+opened_at: 2026-03-15
+closed_at: 2026-03-20
+technique_ids: [T1110.003, T1078]
+---
+
+# Case: State-only technique coverage
+
+Status: Closed
+`,
+    });
+
+    indexCase(database, slug, caseDir);
+
+    const techniques = database.prepare('SELECT technique_id FROM case_techniques ORDER BY technique_id').all();
+    assert.deepEqual(
+      techniques.map((row) => row.technique_id),
+      ['T1078', 'T1110.003'],
+      'state frontmatter technique IDs should be persisted into case_techniques'
+    );
+  });
+
   it('indexes IOCs as artifact rows', () => {
     const { indexCase } = loadDb();
     const slug = 'lateral-movement';

@@ -1317,7 +1317,10 @@ async function runCommand(command, args, cwd, raw) {
 
     case 'case-search': {
       const { query, limit, technique, program } = parseCaseSearchArgs(args);
-      commands.cmdCaseSearch(program || cwd, query, { limit, technique, program }, raw);
+      const resolvedProgram = program
+        ? (path.isAbsolute(program) ? program : path.resolve(cwd, program))
+        : null;
+      commands.cmdCaseSearch(resolvedProgram || cwd, query, { limit, technique, program: resolvedProgram }, raw);
       break;
     }
 

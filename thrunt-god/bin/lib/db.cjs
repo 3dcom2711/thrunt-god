@@ -238,6 +238,21 @@ function readCaseMetadata(caseDir) {
   };
 }
 
+function readCaseStateTechniqueIds(caseDir) {
+  const statePath = path.join(caseDir, 'STATE.md');
+  if (!fs.existsSync(statePath)) return [];
+
+  const content = fs.readFileSync(statePath, 'utf-8');
+  const fm = extractFrontmatter(content);
+  if (!Array.isArray(fm.technique_ids)) return [];
+
+  return [...new Set(
+    fm.technique_ids
+      .map((techniqueId) => String(techniqueId || '').trim().toUpperCase())
+      .filter(Boolean)
+  )];
+}
+
 /**
  * Index a case's artifacts into the program database.
  * Idempotent: re-indexing replaces existing entries.
@@ -330,7 +345,10 @@ function indexCase(db, slug, caseDir) {
     }
 
     // ── Extract and insert technique IDs ──────────────────────────────────
-    const techIds = extractTechniqueIds(allText);
+    const techIds = [...new Set([
+      ...extractTechniqueIds(allText),
+      ...readCaseStateTechniqueIds(caseDir),
+    ])];
     for (const tid of techIds) {
       insertTechnique.run(caseId, tid);
     }

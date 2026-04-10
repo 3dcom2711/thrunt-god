@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const { skipIfNoDocker, waitForHealthy, OPENSEARCH_URL } = require('./helpers.cjs');
+const { skipIfNoDocker, waitForHealthy, OPENSEARCH_URL, SEARCH_BACKEND_READY_TIMEOUT_MS } = require('./helpers.cjs');
 const { seedOpenSearch } = require('./fixtures/seed-data.cjs');
 
 // This integration test validates the JDBC shim path: OpenSearch returns {schema, datarows}
@@ -16,7 +16,7 @@ describe('opensearch integration', async (t) => {
   let queryResult;
 
   test('seeds OpenSearch and confirms SQL plugin readiness', async () => {
-    await waitForHealthy(OPENSEARCH_URL, { timeout: 60000 });
+    await waitForHealthy(OPENSEARCH_URL, { timeout: SEARCH_BACKEND_READY_TIMEOUT_MS });
     seedResult = await seedOpenSearch(OPENSEARCH_URL);
     assert.ok(seedResult.indexed >= 3, `Expected at least 3 indexed documents, got ${seedResult.indexed}`);
   });
