@@ -503,8 +503,27 @@ export class RunbookEngine {
   // Step executors
   // ---------------------------------------------------------------------------
 
+  private static tokenizeCommand(input: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let quote: string | null = null;
+    for (const char of input) {
+      if (quote) {
+        if (char === quote) { quote = null; } else { current += char; }
+      } else if (char === '"' || char === "'") {
+        quote = char;
+      } else if (/\s/.test(char)) {
+        if (current) { tokens.push(current); current = ''; }
+      } else {
+        current += char;
+      }
+    }
+    if (current) tokens.push(current);
+    return tokens;
+  }
+
   private executeCli(command: string): Promise<{ output: string; exitCode: number }> {
-    const args = command.split(/\s+/);
+    const args = RunbookEngine.tokenizeCommand(command);
     const cliPath =
       vscode.workspace.getConfiguration('thruntGod').get<string>('cli.path') ||
       path.join(this.workspaceRoot, 'dist', 'thrunt-god', 'bin', 'thrunt-tools.cjs');
