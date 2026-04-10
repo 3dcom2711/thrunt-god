@@ -18,6 +18,19 @@ if (process.env.THRUNT_INTEL_DB_DIR) {
   dbOpts.dbDir = process.env.THRUNT_INTEL_DB_DIR;
 }
 
+const TOOL_DEFINITIONS = [
+  { name: 'lookup_technique', description: 'Look up an ATT&CK technique by ID (e.g., T1059.001). Returns technique name, description, tactics, platforms, data sources, and MITRE URL.', inputSchema: { technique_id: 'string (ATT&CK technique ID, e.g. T1059.001)' } },
+  { name: 'search_techniques', description: 'Full-text search across ATT&CK technique names and descriptions. Supports filtering by tactic and platform.', inputSchema: { query: 'string', tactic: 'string?', platform: 'string?', limit: 'number (1-100, default 20)' } },
+  { name: 'lookup_group', description: 'Look up an ATT&CK threat group by ID or name. Returns group details with associated techniques and software/malware.', inputSchema: { group_id: 'string (group ID e.g. G0007 or name)' } },
+  { name: 'generate_layer', description: 'Generate an ATT&CK Navigator v4.5 layer JSON. Supports custom technique sets, group-based layers, coverage snapshots, and gap analysis.', inputSchema: { mode: 'custom|group|coverage|gap', name: 'string', technique_ids: 'string[]?', group_id: 'string?', description: 'string?' } },
+  { name: 'analyze_coverage', description: 'Analyze detection coverage for a threat group or named threat profile. Returns per-tactic breakdown.', inputSchema: { group_id: 'string?', profile: 'string?', include_techniques: 'boolean (default true)' } },
+  { name: 'compare_detections', description: 'Compare detection coverage across sources (Sigma, ESCU, Elastic, KQL) for a technique or topic.', inputSchema: { technique_id: 'string?', query: 'string?' } },
+  { name: 'suggest_detections', description: 'Suggest detections for an uncovered technique based on rules from the same tactic family.', inputSchema: { technique_id: 'string (ATT&CK technique ID)' } },
+  { name: 'query_knowledge', description: 'Search the hunt knowledge graph for entities and their relationships.', inputSchema: { query: 'string', type: 'threat_actor|technique|detection|campaign|tool|vulnerability|data_source?', limit: 'number (1-50, default 10)' } },
+  { name: 'log_decision', description: 'Log a hunt decision with reasoning for future reference.', inputSchema: { case_slug: 'string', technique_id: 'string', decision: 'string', reasoning: 'string?', context: 'string?' } },
+  { name: 'log_learning', description: 'Log a hunt learning or pattern for future reference.', inputSchema: { topic: 'string', pattern: 'string', detail: 'string?', technique_ids: 'string?', case_slug: 'string?' } },
+];
+
 function safeCloseDb(db) {
   if (!db || typeof db.close !== 'function') {
     return;
@@ -55,7 +68,7 @@ if (process.argv.includes('--health')) {
 
     const result = {
       status: 'healthy',
-      toolCount: 10,
+      toolCount: TOOL_DEFINITIONS.length,
       dbSizeBytes: getMainDbSizeBytes(db),
       dbTableCount: tables.c,
       uptimeMs: Date.now() - startTime,
@@ -81,19 +94,7 @@ if (process.argv.includes('--health')) {
 
 // --- List tools mode (output tool metadata as JSON, no transport) ---
 if (process.argv.includes('--list-tools')) {
-  const tools = [
-    { name: 'lookup_technique', description: 'Look up an ATT&CK technique by ID (e.g., T1059.001). Returns technique name, description, tactics, platforms, data sources, and MITRE URL.', inputSchema: { technique_id: 'string (ATT&CK technique ID, e.g. T1059.001)' } },
-    { name: 'search_techniques', description: 'Full-text search across ATT&CK technique names and descriptions. Supports filtering by tactic and platform.', inputSchema: { query: 'string', tactic: 'string?', platform: 'string?', limit: 'number (1-100, default 20)' } },
-    { name: 'lookup_group', description: 'Look up an ATT&CK threat group by ID or name. Returns group details with associated techniques and software/malware.', inputSchema: { group_id: 'string (group ID e.g. G0007 or name)' } },
-    { name: 'generate_layer', description: 'Generate an ATT&CK Navigator v4.5 layer JSON. Supports custom technique sets, group-based layers, coverage snapshots, and gap analysis.', inputSchema: { mode: 'custom|group|coverage|gap', name: 'string', technique_ids: 'string[]?', group_id: 'string?', description: 'string?' } },
-    { name: 'analyze_coverage', description: 'Analyze detection coverage for a threat group or named threat profile. Returns per-tactic breakdown.', inputSchema: { group_id: 'string?', profile: 'string?', include_techniques: 'boolean (default true)' } },
-    { name: 'compare_detections', description: 'Compare detection coverage across sources (Sigma, ESCU, Elastic, KQL) for a technique or topic.', inputSchema: { technique_id: 'string?', query: 'string?' } },
-    { name: 'suggest_detections', description: 'Suggest detections for an uncovered technique based on rules from the same tactic family.', inputSchema: { technique_id: 'string (ATT&CK technique ID)' } },
-    { name: 'query_knowledge', description: 'Search the hunt knowledge graph for entities and their relationships.', inputSchema: { query: 'string', type: 'threat_actor|technique|detection|campaign|tool|vulnerability|data_source?', limit: 'number (1-50, default 10)' } },
-    { name: 'log_decision', description: 'Log a hunt decision with reasoning for future reference.', inputSchema: { case_slug: 'string', technique_id: 'string', decision: 'string', reasoning: 'string?', context: 'string?' } },
-    { name: 'log_learning', description: 'Log a hunt learning or pattern for future reference.', inputSchema: { topic: 'string', pattern: 'string', detail: 'string?', technique_ids: 'string?', case_slug: 'string?' } },
-  ];
-  process.stdout.write(JSON.stringify(tools) + '\n');
+  process.stdout.write(JSON.stringify(TOOL_DEFINITIONS) + '\n');
   process.exit(0);
 }
 

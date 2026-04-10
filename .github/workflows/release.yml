@@ -135,7 +135,10 @@ jobs:
           npm run build:hooks
           npm --prefix apps/vscode run package
           npm pack --json > pack-output.json
-          npm --prefix apps/mcp pack --json > apps/mcp/pack-output.json
+          (
+            cd apps/mcp
+            npm pack --json > pack-output.json
+          )
 
       - name: Check whether root package version already exists on npm
         id: root_npm_state
@@ -169,7 +172,9 @@ jobs:
         if: steps.mcp_npm_state.outputs.already_published != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm --prefix apps/mcp publish --access public --provenance
+        run: |
+          cd apps/mcp
+          npm publish --access public --provenance
 
       - name: Create or update GitHub release
         env:
