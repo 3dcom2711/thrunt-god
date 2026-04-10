@@ -3613,7 +3613,7 @@ function cmdCaseNew(cwd, name, options, raw) {
 
   // Create MISSION.md (required by VS Code store for case discovery).
   // parseMission requires bold metadata fields and ## Signal, ## Desired Outcome, ## Scope sections.
-  const missionContent = buildCaseMissionContent(name, today);
+  const missionContent = buildCaseMissionContent(name, today, { signal: options.signal });
   fs.writeFileSync(path.join(caseDir, 'MISSION.md'), missionContent, 'utf-8');
 
   const huntmapFm = `---\ntitle: ${name}\nstatus: active\ncreated: ${today}\n---\n\n`;
