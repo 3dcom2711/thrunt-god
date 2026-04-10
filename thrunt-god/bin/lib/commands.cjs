@@ -3514,16 +3514,34 @@ function getCaseActivityDate(caseStatePath, rosterEntry = {}) {
         return explicitDate;
       }
 
-      const stat = fs.statSync(caseStatePath);
-      if (!Number.isNaN(stat.mtime.getTime())) {
-        return stat.mtime;
+      // Use the most recent mtime from any file in the case directory as fallback
+      const caseDir = path.dirname(caseStatePath);
+      let latestMtime = null;
+      try {
+        const entries = fs.readdirSync(caseDir);
+        for (const entry of entries) {
+          try {
+            const entryPath = path.join(caseDir, entry);
+            const stat = fs.statSync(entryPath);
+            if (stat.isFile() && !Number.isNaN(stat.mtime.getTime())) {
+              if (!latestMtime || stat.mtime > latestMtime) {
+                latestMtime = stat.mtime;
+              }
+            }
+          } catch { /* skip unreadable entries */ }
+        }
+      } catch { /* fall through */ }
+      if (latestMtime) {
+        return latestMtime;
       }
     } catch {
       // Fall back to roster timestamps below.
     }
   }
 
-  return parseActivityDate(rosterEntry.last_activity || rosterEntry.opened_at);
+  // Guard against undefined roster values — prefer opened_at as a safe default
+  const rosterDate = (rosterEntry && rosterEntry.last_activity) || (rosterEntry && rosterEntry.opened_at) || null;
+  return parseActivityDate(rosterDate);
 }
 
 function replaceCaseStateLine(content, patterns, replacement) {
