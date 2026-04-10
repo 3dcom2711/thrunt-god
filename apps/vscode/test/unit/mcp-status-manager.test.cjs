@@ -6,7 +6,7 @@
  */
 'use strict';
 
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 
@@ -27,9 +27,16 @@ describe('MCPStatusManager', () => {
   let manager;
   const mockChannel = createMockOutputChannel();
   const mockServerPath = '/tmp/fake-server.cjs';
+  const realServerPath = path.join(__dirname, '..', '..', '..', 'mcp', 'bin', 'server.cjs');
 
   beforeEach(() => {
     manager = new ext.MCPStatusManager(mockChannel, mockServerPath);
+  });
+
+  afterEach(async () => {
+    if (manager) {
+      await manager.stop();
+    }
   });
 
   it('MCPStatusManager is exported from bundle', () => {
@@ -48,6 +55,14 @@ describe('MCPStatusManager', () => {
     const a = manager.getStatus();
     const b = manager.getStatus();
     assert.notStrictEqual(a, b);
+  });
+
+  it('getServerPath resolves from a live callback', () => {
+    let currentPath = '/tmp/one.cjs';
+    manager = new ext.MCPStatusManager(mockChannel, () => currentPath);
+    assert.equal(manager.getServerPath(), '/tmp/one.cjs');
+    currentPath = '/tmp/two.cjs';
+    assert.equal(manager.getServerPath(), '/tmp/two.cjs');
   });
 
   it('onDidChange is an event', () => {
@@ -110,5 +125,28 @@ describe('MCPStatusManager', () => {
 
   it('stop on idle manager does not throw', () => {
     assert.doesNotThrow(() => manager.stop());
+  });
+
+  it('start rejects when the server path is missing', async () => {
+    await assert.rejects(
+      manager.start(),
+      /MCP server not found/
+    );
+    assert.equal(manager.getStatus().connection, 'disconnected');
+  });
+
+  it('runHealthCheck reports unhealthy when the server path is missing', async () => {
+    const result = await manager.runHealthCheck();
+    assert.equal(result.status, 'unhealthy');
+    assert.match(result.error || '', /not found|not configured/);
+  });
+
+  it('start waits for the MCP server ready signal', async () => {
+    manager = new ext.MCPStatusManager(mockChannel, realServerPath);
+    await manager.start();
+
+    const status = manager.getStatus();
+    assert.equal(status.connection, 'connected');
+    assert.equal(status.hasError, false);
   });
 });

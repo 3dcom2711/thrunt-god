@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { HUNT_MARKERS, OUTPUT_CHANNEL_NAME } from './constants';
@@ -49,7 +49,12 @@ const CLI_OUTPUT_CHANNEL_NAME = `${OUTPUT_CHANNEL_NAME} CLI`;
 const LAST_CLI_COMMAND_KEY = 'thruntGod.lastCliCommand';
 const LAST_PHASE_COMMAND_KEY = 'thruntGod.lastPhaseCommand';
 const HAS_RUNNABLE_PHASES_CONTEXT = 'thruntGod.hasRunnablePhases';
+const MCP_AVAILABLE_CONTEXT = 'thruntGod.mcpAvailable';
 const DEFAULT_PHASE_COMMAND_TEMPLATE = 'runtime execute --pack {packId} --phase {phase}';
+const MANAGED_MCP_DIRNAME = 'mcp-runtime';
+const MANAGED_MCP_SERVER_RELATIVE_PATHS = [
+  path.join('node_modules', '@thrunt', 'mcp', 'bin', 'server.cjs'),
+] as const;
 
 interface RenderedMarkdownResult {
   rendered: string;
@@ -601,6 +606,189 @@ function resolveThruntCliPath(context: vscode.ExtensionContext): string {
   }
 
   throw new Error(`Unable to locate THRUNT CLI. Checked: ${candidates.join(', ')}`);
+}
+
+function resolveConfiguredPath(candidate: string, workspaceRoot?: string): string {
+  if (path.isAbsolute(candidate)) {
+    return candidate;
+  }
+  return workspaceRoot ? path.resolve(workspaceRoot, candidate) : path.resolve(candidate);
+}
+
+function getManagedMcpInstallRoot(context: vscode.ExtensionContext): string {
+  return path.join(context.globalStorageUri.fsPath, MANAGED_MCP_DIRNAME);
+}
+
+function getManagedMcpServerCandidates(context: vscode.ExtensionContext): string[] {
+  const installRoot = getManagedMcpInstallRoot(context);
+  return MANAGED_MCP_SERVER_RELATIVE_PATHS.map((relativePath) =>
+    path.join(installRoot, relativePath)
+  );
+}
+
+function resolveManagedMcpServerPath(context: vscode.ExtensionContext): string {
+  for (const candidate of getManagedMcpServerCandidates(context)) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+function resolveMcpServerPath(
+  context: vscode.ExtensionContext,
+  workspaceRoot?: string
+): string {
+  const override = process.env.THRUNT_TEST_MCP_SERVER_PATH?.trim();
+  if (override) {
+    return resolveConfiguredPath(override, workspaceRoot);
+  }
+
+  let configuredCandidate = '';
+  const configuredPath =
+    vscode.workspace.getConfiguration('thruntGod').get<string>('mcp.serverPath')?.trim() || '';
+  if (configuredPath) {
+    configuredCandidate = resolveConfiguredPath(configuredPath, workspaceRoot);
+    if (fs.existsSync(configuredCandidate)) {
+      return configuredCandidate;
+    }
+  }
+
+  const candidates = [
+    workspaceRoot ? path.join(workspaceRoot, 'apps', 'mcp', 'bin', 'server.cjs') : null,
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  const managedServerPath = resolveManagedMcpServerPath(context);
+  if (managedServerPath) {
+    return managedServerPath;
+  }
+
+  return configuredCandidate;
+}
+
+function hasResolvedMcpServer(
+  context: vscode.ExtensionContext,
+  workspaceRoot?: string
+): boolean {
+  const serverPath = resolveMcpServerPath(context, workspaceRoot);
+  return Boolean(serverPath && fs.existsSync(serverPath));
+}
+
+async function updateMcpAvailabilityContext(
+  context: vscode.ExtensionContext,
+  workspaceRoot?: string
+): Promise<void> {
+  await vscode.commands.executeCommand(
+    'setContext',
+    MCP_AVAILABLE_CONTEXT,
+    hasResolvedMcpServer(context, workspaceRoot)
+  );
+}
+
+function getNpmExecutable(): string {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+function ensureManagedMcpInstallRoot(context: vscode.ExtensionContext): string {
+  const installRoot = getManagedMcpInstallRoot(context);
+  fs.mkdirSync(installRoot, { recursive: true });
+  const packageJsonPath = path.join(installRoot, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    fs.writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify({ name: 'thrunt-god-mcp-runtime', private: true }, null, 2)}\n`
+    );
+  }
+  return installRoot;
+}
+
+async function runLoggedCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    child.stdout.on('data', (data: Buffer) => {
+      const text = data.toString();
+      stdout += text;
+      const trimmed = text.trimEnd();
+      if (trimmed) {
+        outputChannel.appendLine(trimmed);
+      }
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      const text = data.toString();
+      stderr += text;
+      const trimmed = text.trimEnd();
+      if (trimmed) {
+        outputChannel.appendLine(trimmed);
+      }
+    });
+
+    child.on('error', (err) => {
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const message = stderr.trim() || stdout.trim() || `${command} exited with code ${code ?? 'null'}`;
+      reject(new Error(message));
+    });
+  });
+}
+
+async function installManagedMcpRuntime(
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel,
+): Promise<string> {
+  const installRoot = ensureManagedMcpInstallRoot(context);
+  const installPackage =
+    vscode.workspace.getConfiguration('thruntGod').get<string>('mcp.installPackage')?.trim()
+    || '@thrunt/mcp';
+  outputChannel.show(true);
+  outputChannel.appendLine(`[MCP] Installing managed runtime into ${installRoot}`);
+  outputChannel.appendLine(`[MCP] Installing package spec ${installPackage}`);
+
+  try {
+    await runLoggedCommand(
+      getNpmExecutable(),
+      ['install', '--prefix', installRoot, '--no-audit', '--no-fund', installPackage],
+      installRoot,
+      outputChannel
+    );
+  } catch (err) {
+    throw err instanceof Error ? err : new Error(String(err));
+  }
+
+  const serverPath = resolveManagedMcpServerPath(context);
+  if (!serverPath) {
+    throw new Error(
+      `Install completed, but no MCP server entry was found under ${installRoot}. ` +
+      'Verify that the installed package exposes @thrunt/mcp/bin/server.cjs or configure thruntGod.mcp.serverPath.'
+    );
+  }
+
+  outputChannel.appendLine(`[MCP] Managed runtime ready at ${serverPath}`);
+  return serverPath;
 }
 
 async function runThruntCli(
@@ -1219,12 +1407,11 @@ export function activate(context: vscode.ExtensionContext): void {
     const mcpOutputChannel = vscode.window.createOutputChannel('THRUNT MCP');
     context.subscriptions.push(mcpOutputChannel);
 
-    // Resolve MCP server path: prefer workspace-local apps/mcp, fall back to setting
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const mcpServerPath = vscode.workspace.getConfiguration('thruntGod').get<string>('mcp.serverPath')
-      || (workspaceRoot ? path.join(workspaceRoot, 'apps', 'mcp', 'bin', 'server.cjs') : '');
+    const resolveCurrentMcpServerPath = () => resolveMcpServerPath(context, workspaceRoot);
+    void updateMcpAvailabilityContext(context, workspaceRoot);
 
-    const mcpStatus = new MCPStatusManager(mcpOutputChannel, mcpServerPath);
+    const mcpStatus = new MCPStatusManager(mcpOutputChannel, resolveCurrentMcpServerPath);
     context.subscriptions.push(mcpStatus);
 
     // Execution history logger
@@ -1252,7 +1439,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     const runbookEngine = new RunbookEngine(
       workspaceRoot || '',
-      mcpServerPath,
+      resolveCurrentMcpServerPath,
     );
 
     // Watch .planning/runbooks/ for YAML runbook files
@@ -1834,13 +2021,59 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       mcpStatus.onDidChange(() => automationProvider.refresh())
     );
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('thruntGod.mcp')) {
+          void updateMcpAvailabilityContext(context, workspaceRoot);
+          automationProvider.refresh();
+        }
+      })
+    );
 
     // MCP commands
+    context.subscriptions.push(
+      vscode.commands.registerCommand('thrunt-god.mcpInstall', async () => {
+        try {
+          const serverPath = await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Installing THRUNT MCP runtime',
+              cancellable: false,
+            },
+            async () => installManagedMcpRuntime(context, mcpOutputChannel)
+          );
+          await updateMcpAvailabilityContext(context, workspaceRoot);
+          const result = await mcpStatus.runHealthCheck();
+          automationProvider.refresh();
+          if (result.status === 'healthy') {
+            vscode.window.showInformationMessage(
+              `MCP runtime installed and verified at ${serverPath}`
+            );
+          } else {
+            vscode.window.showWarningMessage(
+              `MCP runtime installed, but health check ${result.status}: ${result.error || 'Unknown error'}`
+            );
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to install MCP runtime: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      })
+    );
+
     context.subscriptions.push(
       vscode.commands.registerCommand('thrunt-god.mcpStart', async () => {
         try {
           await mcpStatus.start();
-          vscode.window.showInformationMessage('MCP server started');
+          const result = await mcpStatus.runHealthCheck();
+          if (result.status === 'healthy') {
+            vscode.window.showInformationMessage('MCP server started and is healthy');
+          } else {
+            vscode.window.showWarningMessage(
+              `MCP server started, but health check ${result.status}: ${result.error || 'Unknown error'}`
+            );
+          }
         } catch (err) {
           vscode.window.showErrorMessage(`Failed to start MCP: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -1851,7 +2084,14 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('thrunt-god.mcpRestart', async () => {
         try {
           await mcpStatus.restart();
-          vscode.window.showInformationMessage('MCP server restarted');
+          const result = await mcpStatus.runHealthCheck();
+          if (result.status === 'healthy') {
+            vscode.window.showInformationMessage('MCP server restarted and is healthy');
+          } else {
+            vscode.window.showWarningMessage(
+              `MCP server restarted, but health check ${result.status}: ${result.error || 'Unknown error'}`
+            );
+          }
         } catch (err) {
           vscode.window.showErrorMessage(`Failed to restart MCP: ${err instanceof Error ? err.message : String(err)}`);
         }

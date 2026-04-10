@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { spawn } from 'child_process';
 import * as vscode from 'vscode';
 import type { MCPStatusManager } from './mcpStatusManager';
@@ -289,13 +291,25 @@ export class McpControlPanel implements vscode.Disposable {
     }
 
     const serverPath = this.mcpStatus.getServerPath();
+    const resolvedServerPath = serverPath.trim() ? path.resolve(serverPath) : '';
+    if (!resolvedServerPath || !fs.existsSync(resolvedServerPath)) {
+      this.postMessage({
+        type: 'toolResult',
+        toolName,
+        result: resolvedServerPath
+          ? `MCP server not found: ${resolvedServerPath}`
+          : 'MCP server path is not configured',
+        isError: true,
+      });
+      return;
+    }
 
     try {
       const result = await new Promise<string>((resolve, reject) => {
         let stdout = '';
         let settled = false;
 
-        const child = spawn(process.execPath, [serverPath, '--run-tool', toolName, '--input', input], {
+        const child = spawn(process.execPath, [resolvedServerPath, '--run-tool', toolName, '--input', input], {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
 

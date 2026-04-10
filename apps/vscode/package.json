@@ -2,7 +2,7 @@
   "name": "thrunt-god",
   "displayName": "THRUNT God",
   "description": "Hunt investigation dashboard for THRUNT God threat-hunting framework",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "backbay-labs",
   "license": "MIT",
   "repository": {
@@ -274,6 +274,11 @@
         "category": "THRUNT"
       },
       {
+        "command": "thrunt-god.mcpInstall",
+        "title": "Install MCP Runtime",
+        "category": "THRUNT"
+      },
+      {
         "command": "thrunt-god.mcpRestart",
         "title": "Restart MCP Server",
         "category": "THRUNT"
@@ -367,34 +372,39 @@
           "group": "navigation@3"
         },
         {
-          "command": "thrunt-god.mcpStart",
-          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "command": "thrunt-god.mcpInstall",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && !thruntGod.mcpAvailable",
           "group": "mcp@1"
         },
         {
-          "command": "thrunt-god.mcpRestart",
-          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "command": "thrunt-god.mcpStart",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
           "group": "mcp@2"
         },
         {
-          "command": "thrunt-god.mcpHealthCheck",
-          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "command": "thrunt-god.mcpRestart",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
           "group": "mcp@3"
         },
         {
-          "command": "thrunt-god.mcpListTools",
-          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "command": "thrunt-god.mcpHealthCheck",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
           "group": "mcp@4"
         },
         {
-          "command": "thrunt-god.mcpOpenLogs",
-          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "command": "thrunt-god.mcpListTools",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
           "group": "mcp@5"
         },
         {
-          "command": "thrunt-god.mcpOpenPanel",
-          "when": "view == thruntGod.automationTree && viewItem == automationMcp",
+          "command": "thrunt-god.mcpOpenLogs",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
           "group": "mcp@6"
+        },
+        {
+          "command": "thrunt-god.mcpOpenPanel",
+          "when": "view == thruntGod.automationTree && viewItem == automationMcp && thruntGod.mcpAvailable",
+          "group": "mcp@7"
         },
         {
           "command": "thrunt-god.openCommandDeck",
@@ -550,6 +560,21 @@
           "minimum": 10,
           "maximum": 10000,
           "description": "Maximum number of execution history entries to retain in .planning/.run-history.json."
+        },
+        "thruntGod.mcp.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute or workspace-relative path to the MCP server entry point. Leave empty to use the managed MCP runtime installed from the sidebar."
+        },
+        "thruntGod.mcp.installPackage": {
+          "type": "string",
+          "default": "@thrunt/mcp",
+          "description": "npm package spec used by the MCP sidebar install action. Override this for pre-release tarballs or internal registries."
+        },
+        "thruntGod.mcpProfile": {
+          "type": "string",
+          "default": "default",
+          "description": "Named MCP profile shown in the MCP UI when switching server configurations."
         }
       }
     }

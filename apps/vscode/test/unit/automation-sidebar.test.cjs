@@ -254,8 +254,11 @@ describe('AutomationTreeDataProvider', () => {
   });
 
   describe('MCP status rendering', () => {
-    function createMockMcpStatus(status) {
-      return { getStatus: () => ({ ...status }) };
+    function createMockMcpStatus(status, serverPath = __filename) {
+      return {
+        getStatus: () => ({ ...status }),
+        getServerPath: () => serverPath,
+      };
     }
 
     it('MCP node shows "Disconnected" when mcpStatus has disconnected connection', () => {
@@ -377,6 +380,43 @@ describe('AutomationTreeDataProvider', () => {
       assert.equal(children.length, 1);
       assert.equal(children[0].label, 'Run health check to see status');
       assert.equal(children[0].iconPath.id, 'info');
+      assert.equal(children[0].command.command, 'thrunt-god.mcpHealthCheck');
+    });
+
+    it('MCP children show install action when no server path is available', () => {
+      const mockStatus = createMockMcpStatus({
+        connection: 'disconnected',
+        profile: null,
+        lastHealthCheck: null,
+        hasError: false,
+      }, '');
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      assert.equal(roots[0].description, 'No MCP server configured');
+      const children = p.getChildren(roots[0]);
+
+      assert.equal(children.length, 1);
+      assert.equal(children[0].label, 'Install managed MCP runtime');
+      assert.equal(children[0].iconPath.id, 'cloud-download');
+      assert.equal(children[0].command.command, 'thrunt-god.mcpInstall');
+    });
+
+    it('MCP root shows setup required when configured path is missing', () => {
+      const missingPath = '/tmp/definitely-missing-thrunt-mcp.cjs';
+      const mockStatus = createMockMcpStatus({
+        connection: 'disconnected',
+        profile: null,
+        lastHealthCheck: null,
+        hasError: false,
+      }, missingPath);
+      const p = new ext.AutomationTreeDataProvider({ mcpStatus: mockStatus });
+      const roots = p.getChildren(undefined);
+      assert.equal(roots[0].description, 'Setup required');
+
+      const children = p.getChildren(roots[0]);
+      assert.equal(children[0].iconPath.id, 'warning');
+      assert.match(children[0].label, /Configured path missing/);
+      assert.equal(children[1].command.command, 'thrunt-god.mcpInstall');
     });
   });
 });

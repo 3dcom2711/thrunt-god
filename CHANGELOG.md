@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-10
+
+### Added
+- **Managed MCP setup flow in the VS Code extension** with an install action in the Automation sidebar and a configurable `thruntGod.mcp.installPackage` setting for pre-release/internal package sources
+
+### Changed
+- The VS Code extension no longer bundles the MCP runtime into the VSIX; MCP is now resolved from the workspace, an explicit server path, or a managed install under extension storage
+- MCP start/restart commands now wait for the server readiness signal and immediately verify health before showing success to the user
+
+### Fixed
+- Command Deck and Runbook items in the Automation sidebar now execute when clicked, and tree labels use plain text instead of codicon syntax
+- MCP startup no longer reports a false-positive "started" state when the server path is missing or the child exits before becoming ready
+- MCP control-panel tests, runbook MCP execution, and sidebar status rendering now handle missing runtime paths cleanly and surface setup-required states instead of disconnected dead ends
+
 ## [0.3.0] - 2026-04-03
 
 ### Added
@@ -1688,7 +1702,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - YOLO mode for autonomous execution
 - Interactive mode with checkpoints
 
-[Unreleased]: https://github.com/backbay-labs/thrunt-god/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/backbay-labs/thrunt-god/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/backbay-labs/thrunt-god/releases/tag/v0.3.1
 [0.3.0]: https://github.com/backbay-labs/thrunt-god/releases/tag/v0.3.0
 [1.28.0]: https://github.com/glittercowboy/thrunt-god/releases/tag/v1.28.0
 [1.27.0]: https://github.com/glittercowboy/thrunt-god/releases/tag/v1.27.0

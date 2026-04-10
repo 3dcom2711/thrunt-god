@@ -323,7 +323,7 @@ const MCP_KILL_GRACE_MS = 2_000;
 export class RunbookEngine {
   constructor(
     private readonly workspaceRoot: string,
-    private readonly mcpServerPath: string,
+    private readonly mcpServerPath: string | (() => string),
   ) {}
 
   async *executeRunbook(
@@ -572,6 +572,25 @@ export class RunbookEngine {
     toolName: string,
     input: string,
   ): Promise<{ output: string; success: boolean }> {
+    const configuredPath = typeof this.mcpServerPath === 'function'
+      ? this.mcpServerPath()
+      : this.mcpServerPath;
+    const serverPath = configuredPath.trim()
+      ? path.resolve(configuredPath)
+      : '';
+    if (!serverPath) {
+      return Promise.resolve({
+        output: 'MCP server path is not configured',
+        success: false,
+      });
+    }
+    if (!fs.existsSync(serverPath)) {
+      return Promise.resolve({
+        output: `MCP server not found: ${serverPath}`,
+        success: false,
+      });
+    }
+
     return new Promise((resolve) => {
       let stdout = '';
       let settled = false;
@@ -579,7 +598,7 @@ export class RunbookEngine {
 
       const child = spawn(
         process.execPath,
-        [this.mcpServerPath, '--run-tool', toolName, '--input', input],
+        [serverPath, '--run-tool', toolName, '--input', input],
         { stdio: ['pipe', 'pipe', 'pipe'] },
       );
 

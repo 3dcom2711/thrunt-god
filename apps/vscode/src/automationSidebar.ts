@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { MCPStatusManager } from './mcpStatusManager';
@@ -288,13 +289,22 @@ export class AutomationTreeDataProvider
 
   private getMcpRootNode(): AutomationTreeItem {
     const status = this.mcpStatus?.getStatus();
+    const serverPath =
+      typeof this.mcpStatus?.getServerPath === 'function'
+        ? this.mcpStatus.getServerPath().trim()
+        : null;
+    const hasServerPath = Boolean(serverPath);
+    const serverExists = Boolean(serverPath && fs.existsSync(serverPath));
 
     let icon: vscode.ThemeIcon;
     let description: string;
 
-    if (!status || !this.mcpStatus) {
+    if (!status || !this.mcpStatus || !hasServerPath) {
       icon = new vscode.ThemeIcon('plug');
       description = 'No MCP server configured';
+    } else if (!serverExists) {
+      icon = new vscode.ThemeIcon('plug', new vscode.ThemeColor('charts.yellow'));
+      description = 'Setup required';
     } else if (status.connection === 'checking') {
       icon = new vscode.ThemeIcon('sync~spin');
       description = 'Checking...';
@@ -322,14 +332,60 @@ export class AutomationTreeDataProvider
 
   private getMcpChildren(): AutomationTreeItem[] {
     const status = this.mcpStatus?.getStatus();
+    const serverPath =
+      typeof this.mcpStatus?.getServerPath === 'function'
+        ? this.mcpStatus.getServerPath().trim()
+        : '';
+    const serverExists = Boolean(serverPath && fs.existsSync(serverPath));
+
+    if (!serverPath || !serverExists) {
+      const items: AutomationTreeItem[] = [];
+      if (serverPath && !serverExists) {
+        items.push(new AutomationTreeItem(
+          `Configured path missing: ${serverPath}`,
+          vscode.TreeItemCollapsibleState.None,
+          {
+            iconPath: new vscode.ThemeIcon('warning'),
+            nodeType: 'mcp',
+            contextValue: 'automationMcpChild',
+            tooltip: serverPath,
+          }
+        ));
+      }
+
+      const installItem = new AutomationTreeItem(
+        'Install managed MCP runtime',
+        vscode.TreeItemCollapsibleState.None,
+        {
+          iconPath: new vscode.ThemeIcon('cloud-download'),
+          nodeType: 'mcp',
+          contextValue: 'automationMcpInstall',
+          tooltip: 'Install the THRUNT MCP runtime into extension storage',
+        }
+      );
+      installItem.command = {
+        command: 'thrunt-god.mcpInstall',
+        title: 'Install managed MCP runtime',
+      };
+      items.push(installItem);
+      return items;
+    }
+
     if (!status?.lastHealthCheck) {
-      return [
-        new AutomationTreeItem('Run health check to see status', vscode.TreeItemCollapsibleState.None, {
+      const healthCheckItem = new AutomationTreeItem(
+        'Run health check to see status',
+        vscode.TreeItemCollapsibleState.None,
+        {
           iconPath: new vscode.ThemeIcon('info'),
           nodeType: 'mcp',
           contextValue: 'automationMcpChild',
-        }),
-      ];
+        }
+      );
+      healthCheckItem.command = {
+        command: 'thrunt-god.mcpHealthCheck',
+        title: 'Run MCP Health Check',
+      };
+      return [healthCheckItem];
     }
 
     const hc = status.lastHealthCheck;

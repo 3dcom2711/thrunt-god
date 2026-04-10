@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as vscode from 'vscode';
 import type { McpToolInfo } from '../shared/mcp-control';
@@ -23,6 +25,8 @@ export interface MCPStatus {
 
 const HEALTH_CHECK_TIMEOUT_MS = 10_000;
 const KILL_GRACE_MS = 2_000;
+const READY_LOG_MARKER = 'MCP server started on stdio';
+type MCPServerPathResolver = string | (() => string);
 
 export class MCPStatusManager implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<MCPStatus>();
@@ -37,15 +41,18 @@ export class MCPStatusManager implements vscode.Disposable {
 
   private serverProcess: ChildProcessWithoutNullStreams | null = null;
   private expectedExitProcess: ChildProcessWithoutNullStreams | null = null;
+  private startPromise: Promise<void> | null = null;
   private stopPromise: Promise<void> | null = null;
 
   constructor(
     private readonly outputChannel: vscode.OutputChannel,
-    private readonly mcpServerPath: string
+    private readonly mcpServerPath: MCPServerPathResolver
   ) {}
 
   getServerPath(): string {
-    return this.mcpServerPath;
+    return typeof this.mcpServerPath === 'function'
+      ? this.mcpServerPath()
+      : this.mcpServerPath;
   }
 
   getStatus(): MCPStatus {
@@ -53,6 +60,15 @@ export class MCPStatusManager implements vscode.Disposable {
   }
 
   async runHealthCheck(): Promise<MCPHealthResult> {
+    let serverPath: string;
+    try {
+      serverPath = this.resolveServerPath();
+    } catch (err) {
+      const result = this.buildInvalidPathHealthResult(err);
+      this.applyHealthResult(result);
+      return result;
+    }
+
     this.status.connection = 'checking';
     this._onDidChange.fire(this.getStatus());
     this.outputChannel.appendLine('[MCP] Running health check...');
@@ -62,7 +78,7 @@ export class MCPStatusManager implements vscode.Disposable {
       let settled = false;
       let killTimer: ReturnType<typeof setTimeout> | null = null;
 
-      const child = spawn(process.execPath, [this.mcpServerPath, '--health'], {
+      const child = spawn(process.execPath, [serverPath, '--health'], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
@@ -151,12 +167,22 @@ export class MCPStatusManager implements vscode.Disposable {
   }
 
   async listTools(): Promise<McpToolInfo[]> {
+    let serverPath: string;
+    try {
+      serverPath = this.resolveServerPath();
+    } catch (err) {
+      this.outputChannel.appendLine(
+        `[MCP] List tools failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return [];
+    }
+
     return new Promise<McpToolInfo[]>((resolve) => {
       let stdout = '';
       let settled = false;
       let killTimer: ReturnType<typeof setTimeout> | null = null;
 
-      const child = spawn(process.execPath, [this.mcpServerPath, '--list-tools'], {
+      const child = spawn(process.execPath, [serverPath, '--list-tools'], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
@@ -206,50 +232,106 @@ export class MCPStatusManager implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    if (this.serverProcess || this.stopPromise) return;
+    if (this.serverProcess) return;
+    if (this.startPromise) return this.startPromise;
+    if (this.stopPromise) {
+      await this.stopPromise;
+    }
 
-    this.outputChannel.appendLine('[MCP] Starting server...');
-    const child = spawn(process.execPath, [this.mcpServerPath], {
+    const serverPath = this.resolveServerPath();
+    this.outputChannel.appendLine(`[MCP] Starting server from ${serverPath}...`);
+    this.status.connection = 'checking';
+    this.status.hasError = false;
+    this._onDidChange.fire(this.getStatus());
+
+    const child = spawn(process.execPath, [serverPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     this.serverProcess = child;
     this.expectedExitProcess = null;
 
-    child.stderr.on('data', (data: Buffer) => {
-      this.outputChannel.appendLine(`[MCP] ${data.toString().trimEnd()}`);
+    this.startPromise = new Promise<void>((resolve, reject) => {
+      let ready = false;
+      let settled = false;
+      let startupLog = '';
+      let startupFailureMessage: string | null = null;
+
+      const finishError = (message: string, error?: Error) => {
+        if (settled) return;
+        settled = true;
+        startupFailureMessage = message;
+        if (this.serverProcess === child) {
+          this.serverProcess = null;
+        }
+        this.status.connection = 'disconnected';
+        this.status.hasError = true;
+        this._onDidChange.fire(this.getStatus());
+        this.outputChannel.appendLine(`[MCP] ${message}`);
+        reject(error ?? new Error(message));
+      };
+
+      const startupTimer = setTimeout(() => {
+        startupFailureMessage = `MCP server did not report ready within ${HEALTH_CHECK_TIMEOUT_MS}ms`;
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // ignore; close/error handlers will settle
+        }
+      }, HEALTH_CHECK_TIMEOUT_MS);
+
+      child.stderr.on('data', (data: Buffer) => {
+        const text = data.toString();
+        startupLog += text;
+        const trimmed = text.trimEnd();
+        if (trimmed) {
+          this.outputChannel.appendLine(`[MCP] ${trimmed}`);
+        }
+
+        if (!ready && startupLog.includes(READY_LOG_MARKER)) {
+          ready = true;
+          settled = true;
+          clearTimeout(startupTimer);
+          this.status.connection = 'connected';
+          this.status.hasError = false;
+          this._onDidChange.fire(this.getStatus());
+          this.outputChannel.appendLine('[MCP] Server started');
+          resolve();
+        }
+      });
+
+      child.on('close', (code, signal) => {
+        clearTimeout(startupTimer);
+        const intentional = this.expectedExitProcess === child;
+        if (this.serverProcess === child) {
+          this.serverProcess = null;
+        }
+        if (intentional) {
+          this.expectedExitProcess = null;
+        }
+        this.status.connection = 'disconnected';
+        this.status.hasError = startupFailureMessage ? true : !intentional;
+        this._onDidChange.fire(this.getStatus());
+        this.outputChannel.appendLine(
+          `[MCP] Server exited (code ${code ?? 'null'}, signal ${signal ?? 'none'})`
+        );
+
+        if (!settled && !intentional) {
+          finishError(
+            this.formatStartupFailure(code, signal, startupFailureMessage, startupLog)
+          );
+        }
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(startupTimer);
+        finishError(`Server error: ${err.message}`, err);
+      });
+    }).finally(() => {
+      this.startPromise = null;
     });
 
-    child.on('spawn', () => {
-      this.status.connection = 'connected';
-      this.status.hasError = false;
-      this._onDidChange.fire(this.getStatus());
-      this.outputChannel.appendLine('[MCP] Server started');
-    });
-
-    child.on('close', (code, signal) => {
-      const intentional = this.expectedExitProcess === child;
-      if (this.serverProcess === child) {
-        this.serverProcess = null;
-      }
-      if (intentional) {
-        this.expectedExitProcess = null;
-      }
-      this.status.connection = 'disconnected';
-      this.status.hasError = !intentional && code !== 0 && signal !== 'SIGTERM';
-      this._onDidChange.fire(this.getStatus());
-      this.outputChannel.appendLine(`[MCP] Server exited (code ${code ?? 'null'}, signal ${signal ?? 'none'})`);
-    });
-
-    child.on('error', (err) => {
-      if (this.serverProcess === child) {
-        this.serverProcess = null;
-      }
-      this.status.connection = 'disconnected';
-      this.status.hasError = true;
-      this._onDidChange.fire(this.getStatus());
-      this.outputChannel.appendLine(`[MCP] Server error: ${err.message}`);
-    });
+    return this.startPromise;
   }
 
   async restart(): Promise<void> {
@@ -311,5 +393,52 @@ export class MCPStatusManager implements vscode.Disposable {
     this.status.hasError = result.status !== 'healthy';
     this.outputChannel.appendLine(`[MCP] Health check: ${result.status} (tools: ${result.toolCount}, db: ${result.dbSizeBytes} bytes)`);
     this._onDidChange.fire(this.getStatus());
+  }
+
+  private resolveServerPath(): string {
+    const configured = this.getServerPath().trim();
+    if (!configured) {
+      throw new Error('MCP server path is not configured');
+    }
+
+    const resolved = path.resolve(configured);
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`MCP server not found: ${resolved}`);
+    }
+
+    return resolved;
+  }
+
+  private buildInvalidPathHealthResult(err: unknown): MCPHealthResult {
+    return {
+      status: 'unhealthy',
+      toolCount: 0,
+      dbSizeBytes: 0,
+      dbTableCount: 0,
+      uptimeMs: 0,
+      timestamp: Date.now(),
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  private formatStartupFailure(
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    startupFailureMessage: string | null,
+    startupLog: string
+  ): string {
+    const details = startupLog
+      .trim()
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(-3)
+      .join(' | ');
+
+    const base =
+      startupFailureMessage
+      ?? `MCP server exited before reporting ready (code ${code ?? 'null'}, signal ${signal ?? 'none'})`;
+
+    return details ? `${base}: ${details}` : base;
   }
 }
