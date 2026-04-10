@@ -9,16 +9,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.3.1] - 2026-04-10
 
 ### Added
-- **Managed MCP setup flow in the VS Code extension** with an install action in the Automation sidebar and a configurable `thruntGod.mcp.installPackage` setting for pre-release/internal package sources
+- **v3.0 Hunt Program Intelligence release candidate** covering the full PR #5 scope: MCP-backed hunt intel, detection coverage analysis, knowledge persistence, agent workflow integration, and final VS Code release hardening
+- **New `@thrunt/mcp` package** under `apps/mcp/` with a stdio MCP server, ATT&CK/group lookup tools, detection comparison and suggestion flows, knowledge querying, and decision or learning capture prompts for hunts
+- **Detection rule ingestion and coverage analysis** for Sigma YAML, Splunk ESCU, Elastic TOML, and KQL content, including bundled ATT&CK intelligence plus Sigma core rules for local-first coverage and gap analysis
+- **Knowledge graph persistence for hunt programs** with entity and relation storage in `program.db`, decision logging, learning capture, and built-in threat-profile support wired into hunt workflows
+- **Managed MCP setup flow in the VS Code extension** with an install action in the Automation sidebar and a configurable `thruntGod.mcp.installPackage` setting for pre-release or internal package sources
 
 ### Changed
+- Core hunt workflows and agents now consume MCP intel surfaces directly, including automatic detection-coverage lookups during case creation and richer ATT&CK-aware investigation support in planner and query flows
 - The VS Code extension no longer bundles the MCP runtime into the VSIX; MCP is now resolved from the workspace, an explicit server path, or a managed install under extension storage
 - MCP start/restart commands now wait for the server readiness signal and immediately verify health before showing success to the user
+- CI and release validation now exercise the updated VS Code package, pack validation, security checks, and cross-platform test matrix against the release-candidate build
 
 ### Fixed
 - Command Deck and Runbook items in the Automation sidebar now execute when clicked, and tree labels use plain text instead of codicon syntax
 - MCP startup no longer reports a false-positive "started" state when the server path is missing or the child exits before becoming ready
 - MCP control-panel tests, runbook MCP execution, and sidebar status rendering now handle missing runtime paths cleanly and surface setup-required states instead of disconnected dead ends
+- Program and case intelligence flows are hardened for repeated use, including published-findings surfacing, artifact navigation, case-search normalization, and activity rollups across nested hunt artifacts
 
 ## [0.3.0] - 2026-04-03
 
