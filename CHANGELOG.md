@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-04-10
+
+### Fixed
+- VS Code now launches the managed MCP runtime with an external Node.js executable instead of VS Code's embedded Electron Node, preventing `better-sqlite3` native-module ABI mismatches after sidebar installs
+- MCP health checks, background startup, control-panel tool tests, and runbook MCP steps now use the same resolved Node runtime, so managed installs and live execution stay on one compatible ABI
+- Added `thruntGod.mcp.nodePath` for environments that need an explicit Node.js executable override
+
 ## [0.3.4] - 2026-04-10
 
 ### Changed

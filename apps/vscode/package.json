@@ -2,7 +2,7 @@
   "name": "thrunt-god",
   "displayName": "THRUNT God",
   "description": "Hunt investigation dashboard for THRUNT God threat-hunting framework",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "backbay-labs",
   "license": "MIT",
   "repository": {
